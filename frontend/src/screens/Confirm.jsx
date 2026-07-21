@@ -6,7 +6,7 @@ import { PREP, CONST } from '../i18n/dict.js';
 export default function Confirm({ c, lang, S, A }) {
   const dept = S.triage?.specialty || CONST.dept;
   return (
-    <div className="screen" style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 96px)' }}>
+    <div className="screen" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
       <div style={{ textAlign: 'center', marginTop: 12 }} role="status">
         <Pop className="checkdisc"><Check size={40} /></Pop>
         <h1 className="h1" style={{ marginTop: 18 }}>{c.confirmTitle}</h1>

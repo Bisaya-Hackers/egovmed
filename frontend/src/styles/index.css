@@ -55,7 +55,7 @@ input, textarea { font-family: inherit; }
 .device {
   width: 404px;
   max-width: 100vw;
-  min-height: 100vh;
+  height: 100vh;            /* pin to viewport so .scroll handles overflow inside, not the page */
   background: var(--canvas);
   display: flex;
   flex-direction: column;
@@ -85,7 +85,7 @@ input, textarea { font-family: inherit; }
 .iconbtn.active { border-color: var(--primary); color: var(--primary); }
 
 /* scroll region — holds the active screen */
-.scroll { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+.scroll { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; min-height: 0; }
 .screen { padding: 8px 22px 28px; font-size: 1em; }
 .screen.pad-lg { padding: 8px 24px 28px; }
 
@@ -178,7 +178,7 @@ input, textarea { font-family: inherit; }
 .spacer { flex: 1; }
 .stack > * + * { margin-top: 12px; }
 
-.screen-wrap { will-change: transform, opacity; }
+.screen-wrap { will-change: transform, opacity; flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
 /* overlay entrance animations */
 @keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }

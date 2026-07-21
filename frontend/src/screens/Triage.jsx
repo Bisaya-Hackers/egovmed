@@ -8,7 +8,7 @@ export default function Triage({ c, lang, S, A }) {
 
   if (S.emergency) {
     return (
-      <div className="screen" style={{ background: 'var(--red)', color: '#fff', margin: '-8px -22px -28px', padding: '32px 24px 28px', minHeight: 'calc(100vh - 96px)', display: 'flex', flexDirection: 'column' }}>
+      <div className="screen" style={{ background: 'var(--red)', color: '#fff', margin: '-8px -22px -28px', padding: '32px 24px 28px', flex: 1, display: 'flex', flexDirection: 'column' }}>
         <div className="pulse-red" style={{ width: 84, height: 84, borderRadius: '50%', background: 'rgba(255,255,255,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '18px auto 0' }}>
           <Warning size={44} color="#fff" />
         </div>
