@@ -52,12 +52,15 @@ const env = {
     baseUrl: process.env.EVERIFY_BASE_URL || 'https://hackathon-everify-api.e.gov.ph',
     clientId: process.env.EVERIFY_CLIENT_ID || '',
     clientSecret: process.env.EVERIFY_CLIENT_SECRET || '',
-    livenessPubKey: process.env.EVERIFY_LIVENESS_PUBKEY || '', // Face Liveness Web SDK public key (client-side)
   },
   faceLiveness: {
     mode: modeFor('FACE_LIVENESS'),
-    baseUrl: process.env.FACE_LIVENESS_BASE_URL || 'https://liveness.egov.ph',
+    // per apidocumentation/Face-Liveness-API.md: x-api-key auth, hosted session → result flow
+    baseUrl: process.env.FACE_LIVENESS_BASE_URL || 'https://hackathon-face-liveness-api.e.gov.ph',
     apiKey: process.env.FACE_LIVENESS_API_KEY || '',
+    action: process.env.FACE_LIVENESS_ACTION || 'redirect',
+    callbackUrl: process.env.FACE_LIVENESS_CALLBACK_URL || '',
+    minConfidence: int(process.env.FACE_LIVENESS_MIN_CONFIDENCE, 95),
   },
   eMessage: {
     mode: modeFor('EMESSAGE'),
