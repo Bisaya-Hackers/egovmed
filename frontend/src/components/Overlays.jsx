@@ -1,0 +1,54 @@
+import { Clock } from './Icons.jsx';
+import { Btn } from './ui.jsx';
+
+export function Toast({ msg, icon }) {
+  return (
+    <div className="toast" role="status">
+      <span style={{ color: 'var(--green)', display: 'flex' }}>{icon}</span>
+      <span>{msg}</span>
+    </div>
+  );
+}
+
+export function TimeoutModal({ c, A }) {
+  return (
+    <div className="scrim center" onClick={A.stayIn}>
+      <div className="modal" role="alertdialog" aria-label={c.timeoutTitle} onClick={(e) => e.stopPropagation()}>
+        <div className="icirc" style={{ background: 'var(--amber-50)', color: 'var(--amber)', width: 52, height: 52, margin: '0 auto 14px' }}>
+          <Clock size={26} />
+        </div>
+        <h2 className="h2" style={{ textAlign: 'center' }}>{c.timeoutTitle}</h2>
+        <p className="sub" style={{ textAlign: 'center' }}>{c.timeoutSub}</p>
+        <div className="stack" style={{ marginTop: 18 }}>
+          <Btn onClick={A.stayIn}>{c.stayIn}</Btn>
+          <button className="btn ghost" style={{ color: 'var(--red)' }} onClick={A.logout}>{c.logout}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const emgToggle = (on) => ({ width: 44, height: 26, borderRadius: 999, background: on ? 'var(--red)' : 'var(--line)', display: 'flex', alignItems: 'center', padding: 3, transition: '0.2s', border: 'none', flex: 'none' });
+const emgKnob = (on) => ({ width: 20, height: 20, borderRadius: '50%', background: '#fff', marginLeft: on ? 'auto' : 0 });
+const rowStyle = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '14px 2px', background: 'none', border: 'none', borderTop: '1px solid var(--line)', color: 'var(--ink)', fontWeight: 600, fontSize: '0.95em' };
+
+export function DemoSheet({ S, A }) {
+  return (
+    <div className="scrim" onClick={A.toggleDemo}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--line)', margin: '0 auto 14px' }} />
+        <div className="overline" style={{ marginBottom: 4 }}>Demo controls</div>
+        <p className="sub" style={{ marginTop: 0, marginBottom: 8 }}>Reviewer shortcuts — not part of the product UI.</p>
+        <div style={{ ...rowStyle, borderTop: 'none' }}>
+          <span>Emergency triage</span>
+          <button onClick={A.toggleEmergency} aria-pressed={S.emergency} aria-label="Toggle emergency triage" style={emgToggle(S.emergency)}>
+            <span style={emgKnob(S.emergency)} />
+          </button>
+        </div>
+        <button style={rowStyle} onClick={A.triggerTimeout}>Trigger session timeout</button>
+        <button style={rowStyle} onClick={A.openTokens}>Tokens &amp; components</button>
+        <button style={{ ...rowStyle, color: 'var(--red)' }} onClick={A.resetFlow}>Reset flow</button>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,63 @@
+import { ScreenHeader, Btn } from '../components/ui.jsx';
+import { HeartPulse, Warning, Phone, Pin, Dot } from '../components/Icons.jsx';
+import { WHY, CONST } from '../i18n/dict.js';
+
+export default function Triage({ c, lang, S, A }) {
+  const dept = S.triage?.specialty || CONST.dept;
+  const why = S.triage?.redFlags?.length ? S.triage.redFlags : WHY[lang];
+
+  if (S.emergency) {
+    return (
+      <div className="screen" style={{ background: 'var(--red)', color: '#fff', margin: '-8px -22px -28px', padding: '32px 24px 28px', minHeight: 'calc(100vh - 96px)', display: 'flex', flexDirection: 'column' }}>
+        <div className="pulse-red" style={{ width: 84, height: 84, borderRadius: '50%', background: 'rgba(255,255,255,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '18px auto 0' }}>
+          <Warning size={44} color="#fff" />
+        </div>
+        <h1 style={{ fontSize: '2em', fontWeight: 900, textAlign: 'center', margin: '22px 0 0' }}>{c.emergencyTitle}</h1>
+        <p style={{ textAlign: 'center', fontSize: '1.05em', lineHeight: 1.5, margin: '12px 0 0', opacity: 0.95 }}>{c.emergencyBanner}</p>
+        <div className="spacer" />
+        <a href="tel:911" className="btn" style={{ background: '#fff', color: 'var(--red)', textDecoration: 'none' }}>
+          <Phone size={20} /> {c.callER}
+        </a>
+        <a href="#" onClick={(e) => e.preventDefault()} className="btn" style={{ background: 'transparent', color: '#fff', border: '1.5px solid rgba(255,255,255,.6)', textDecoration: 'none', marginTop: 12 }}>
+          <Pin size={20} /> {c.findER}
+        </a>
+        <button onClick={A.continueTriage} style={{ background: 'none', border: 'none', color: '#fff', textDecoration: 'underline', marginTop: 18, fontSize: '0.9em' }}>{c.emgDemoContinue}</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="screen">
+      <ScreenHeader onBack={A.back} step={2} label={c.stepTriage} />
+      <h1 className="h1" data-stagger>{c.triageTitle}</h1>
+
+      <div className="card" data-stagger style={{ marginTop: 16 }}>
+        <div className="overline">{c.deptLabel}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+          <span className="icirc"><HeartPulse size={24} /></span>
+          <span style={{ fontSize: '1.4em', fontWeight: 800 }}>{dept}</span>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <span className="pill amber" style={{ fontSize: '0.85em' }}>
+            <Dot color="var(--amber)" /> {c.uUrgent}
+          </span>
+        </div>
+      </div>
+
+      <div className="card tint" data-stagger style={{ marginTop: 12 }}>
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>{c.triageWhy}</div>
+        <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink)', lineHeight: 1.6 }}>
+          {why.map((w, i) => <li key={i}>{w}</li>)}
+        </ul>
+      </div>
+
+      <div data-stagger style={{ display: 'flex', gap: 9, marginTop: 12, color: 'var(--amber)', background: 'var(--amber-50)', borderRadius: 14, padding: '12px 14px', fontSize: '0.85em', fontWeight: 600 }} role="note">
+        <Warning size={18} /> <span>{c.triageDisclaimer}</span>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <Btn onClick={A.continueTriage}>{c.continue}</Btn>
+      </div>
+    </div>
+  );
+}

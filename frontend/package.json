@@ -10,9 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "framer-motion": "^11.3.19",
+    "@gsap/react": "^2.1.1",
+    "gsap": "^3.12.5",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "reicon-react": "^1.1.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
