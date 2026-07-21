@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ScreenHeader, Btn } from '../components/ui.jsx';
 import { Check, ShieldTick, HeartPulse } from '../components/Icons.jsx';
 import { RECORDS } from '../i18n/dict.js';
@@ -159,7 +160,7 @@ function RecordSheet({ record, lang, c, onClose }) {
     ? Object.entries(detail.data)
     : [];
 
-  return (
+  const overlay = (
     <div className="scrim" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label={record.name} onClick={(e) => e.stopPropagation()} style={{ maxHeight: '85vh', overflowY: 'auto' }}>
         <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--line)', margin: '0 auto 14px' }} />
@@ -230,4 +231,7 @@ function RecordSheet({ record, lang, c, onClose }) {
       </div>
     </div>
   );
+
+  const host = typeof document !== 'undefined' ? document.querySelector('.device') : null;
+  return host ? createPortal(overlay, host) : overlay;
 }
