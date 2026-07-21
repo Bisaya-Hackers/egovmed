@@ -11,7 +11,6 @@ const BILL = 750; // consultation ₱600 + facility ₱150
 export default function Payment({ c, lang, S, A }) {
   const [benefitLines, setBenefitLines] = useState(() => BENEFIT_LINES[lang]);
   const [balance, setBalance] = useState(CONST.balance);
-  const [balanceNum, setBalanceNum] = useState(300);
 
   // Drive benefits + balance from the live eGovPay benefits quote; fall back to the designed values.
   useEffect(() => {
@@ -22,7 +21,6 @@ export default function Payment({ c, lang, S, A }) {
         if (alive && q && Array.isArray(q.applied)) {
           if (q.applied.length) setBenefitLines(q.applied.map((a) => ({ label: a.label, amount: '−₱' + a.amount })));
           setBalance('₱' + q.balance);
-          setBalanceNum(q.balance);
         }
       } catch { /* keep designed fallback */ }
     })();
@@ -94,7 +92,7 @@ export default function Payment({ c, lang, S, A }) {
       </div>
 
       <div style={{ marginTop: 20 }}>
-        <Btn disabled={S.channel == null || S.paying} onClick={() => A.doPay(balanceNum)}>
+        <Btn disabled={S.channel == null || S.paying} onClick={() => A.doPay(BILL)}>
           {S.paying ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}><span className="spinner white" /> {c.processing}</span> : `${c.payNow} · ${balance}`}
         </Btn>
         {S.flowError && <p role="alert" style={{ color: 'var(--red)', textAlign: 'center', fontWeight: 650, marginTop: 12 }}>{S.flowError}</p>}
