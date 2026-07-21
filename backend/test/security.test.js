@@ -13,6 +13,7 @@ const path = require('node:path');
 const app = require('../src/app');
 const { sign } = require('../src/lib/jwt');
 const { getStore, COLLECTIONS, seedDemoData } = require('../src/store');
+const { normalizePaymentStatus } = require('../src/integrations/egovPay');
 
 let server;
 let baseUrl;
@@ -36,11 +37,12 @@ async function json(response) {
 
 async function resetWithPatients() {
   await store.reset();
-  await seedDemoData();
+  const seeded = await seedDemoData();
   await store.create(COLLECTIONS.PATIENTS, {
     id: 'pat_attacker', egovSub: 'attacker-sub', firstName: 'Mallory', lastName: 'Test',
     identityVerified: true, benefits: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   });
+  return seeded.id;
 }
 
 test.before(async () => {
@@ -53,6 +55,13 @@ test.after(async () => {
 });
 
 test('security regression suite', async (t) => {
+  await t.test('eGovPay sandbox payment_status values are normalized', () => {
+    assert.equal(normalizePaymentStatus({ payment_status: 'PAID' }), 'paid');
+    assert.equal(normalizePaymentStatus({ status: 'SUCCESSFUL' }), 'successful');
+    assert.equal(normalizePaymentStatus({ state: 'completed' }), 'completed');
+    assert.equal(normalizePaymentStatus({}), 'pending');
+  });
+
   await t.test('security headers are present and framework disclosure is disabled', async () => {
     await resetWithPatients();
     const response = await request('/health');
@@ -96,8 +105,8 @@ test('security regression suite', async (t) => {
   });
 
   await t.test('cross-tenant appointment and payment IDs cannot be read or mutated', async () => {
-    await resetWithPatients();
-    const owner = sign({ sub: 'pat_demo_juan' });
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
     const attacker = sign({ sub: 'pat_attacker' });
 
     const booked = await json(await request('/appointments', {
@@ -120,8 +129,8 @@ test('security regression suite', async (t) => {
   });
 
   await t.test('triage symptoms and report narratives are encrypted at rest', async () => {
-    await resetWithPatients();
-    const owner = sign({ sub: 'pat_demo_juan' });
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
     const triage = await json(await request('/triage', {
       token: owner, method: 'POST', body: { text: 'I have a mild headache', language: 'en' },
     }));
@@ -142,8 +151,8 @@ test('security regression suite', async (t) => {
   });
 
   await t.test('new record PHI is encrypted at rest and accesses are audited', async () => {
-    await resetWithPatients();
-    const owner = sign({ sub: 'pat_demo_juan' });
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
     const created = await json(await request('/records', {
       token: owner,
       method: 'POST',
@@ -162,8 +171,8 @@ test('security regression suite', async (t) => {
   });
 
   await t.test('a liveness session can only be claimed once under concurrent replay', async () => {
-    await resetWithPatients();
-    const owner = sign({ sub: 'pat_demo_juan' });
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
     const started = await json(await request('/identity/liveness', { token: owner, method: 'POST' }));
     assert.equal(started.response.status, 200);
     const body = { consent: true, livenessSessionId: started.value.sessionId };

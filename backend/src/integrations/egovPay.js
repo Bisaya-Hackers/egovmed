@@ -12,6 +12,10 @@ const isLive = () => cfg.mode === 'live';
 // sandbox rejects the digest otherwise (unprocessable_entity "The digest is not valid.").
 const hmacKey = () => String(cfg.token || '').replace(/^(test_|live_)/, '');
 const digestFor = (amount, txnid) => crypto.createHmac('sha256', hmacKey()).update(`${amount}|${txnid}`).digest('hex');
+const normalizePaymentStatus = (data = {}) => {
+  const value = data.payment_status ?? data.status ?? data.state;
+  return value == null || String(value).trim() === '' ? 'pending' : String(value).trim().toLowerCase();
+};
 
 /**
  * Create a payment transaction and return a hosted payment-gateway link.
@@ -50,7 +54,7 @@ async function createCheckout({ amount, currency = 'PHP', description, items = [
     return {
       reference: data.uuid || data.transaction_uuid || txnid,
       checkoutUrl: data.url || data.payment_url || data.checkout_url || data.link,
-      status: data.status || 'pending',
+      status: normalizePaymentStatus(data),
       provider: 'egovpay',
     };
   }
@@ -70,9 +74,14 @@ async function getStatus(reference) {
       headers: { 'X-eGovPay-Token': cfg.token, 'Content-Type': 'application/json; charset=utf-8' },
     });
     const data = (res && (res.data || res)) || {};
-    return { reference, status: data.status, paidAt: data.paid_at || data.settled_at, provider: 'egovpay' };
+    return {
+      reference,
+      status: normalizePaymentStatus(data),
+      paidAt: data.paid_at || data.settled_at || data.completed_at,
+      provider: 'egovpay',
+    };
   }
   return { reference, status: 'paid', paidAt: new Date().toISOString(), provider: 'mock' };
 }
 
-module.exports = { createCheckout, getStatus };
+module.exports = { createCheckout, getStatus, normalizePaymentStatus };
