@@ -139,10 +139,10 @@ export default function App() {
     // Payment (eGovPay)
     goPayment: () => A.go('payment'),
     setChannel: (i) => set({ channel: i }),
-    doPay: async () => {
+    doPay: async (amount = 300) => {
       if (S.channel == null || S.paying) return;
       set({ paying: true });
-      await Promise.all([tryApi(api.pay(300)), delay(1900)]);
+      await Promise.all([tryApi(api.pay(amount)), delay(1900)]);
       set({ paying: false, paid: true });
       toast(S.lang === 'tl' ? 'Ipinadala ang resibo sa SMS' : 'Receipt texted to you');
     },

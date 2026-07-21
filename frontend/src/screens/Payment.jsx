@@ -1,15 +1,39 @@
+import { useEffect, useState } from 'react';
 import { ScreenHeader, Btn } from '../components/ui.jsx';
 import { Check } from '../components/Icons.jsx';
 import { Pop } from '../components/anim.jsx';
 import { PAY_ITEMS, BENEFIT_LINES, CHANNELS, CONST } from '../i18n/dict.js';
+import { api } from '../lib/api.js';
+
+const BILL = 750; // consultation ₱600 + facility ₱150
 
 export default function Payment({ c, lang, S, A }) {
+  const [benefitLines, setBenefitLines] = useState(() => BENEFIT_LINES[lang]);
+  const [balance, setBalance] = useState(CONST.balance);
+  const [balanceNum, setBalanceNum] = useState(300);
+
+  // Drive benefits + balance from the live eGovPay benefits quote; fall back to the designed values.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const q = await api.quote(BILL);
+        if (alive && q && Array.isArray(q.applied)) {
+          if (q.applied.length) setBenefitLines(q.applied.map((a) => ({ label: a.label, amount: '−₱' + a.amount })));
+          setBalance('₱' + q.balance);
+          setBalanceNum(q.balance);
+        }
+      } catch { /* keep designed fallback */ }
+    })();
+    return () => { alive = false; };
+  }, [lang]);
+
   if (S.paid) {
     return (
       <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 'calc(100vh - 96px)', justifyContent: 'center', textAlign: 'center' }} role="status">
         <Pop className="checkdisc"><Check size={40} /></Pop>
         <h1 className="h1" style={{ marginTop: 18 }}>{c.settled}</h1>
-        <div className="mono" style={{ fontSize: '1.6em', fontWeight: 700, margin: '8px 0' }}>{CONST.balance}</div>
+        <div className="mono" style={{ fontSize: '1.6em', fontWeight: 700, margin: '8px 0' }}>{balance}</div>
         <p className="sub">{c.settledSub}</p>
         <div style={{ minHeight: 20 }} />
         <Btn variant="secondary" onClick={A.resetToHome} style={{ maxWidth: 220 }}>{c.backHome}</Btn>
@@ -34,7 +58,7 @@ export default function Payment({ c, lang, S, A }) {
           <span className="overline" style={{ color: 'var(--green)' }}>{c.benefits}</span>
           <span className="pill amber" style={{ fontSize: '0.66em', padding: '3px 8px' }}>{c.mockTag}</span>
         </div>
-        {BENEFIT_LINES[lang].map((b, i) => (
+        {benefitLines.map((b, i) => (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: 'var(--green)', fontSize: '0.95em' }}>
             <span>{b.label}</span><span style={{ fontWeight: 700 }}>{b.amount}</span>
           </div>
@@ -42,7 +66,7 @@ export default function Payment({ c, lang, S, A }) {
         <div className="rowsep" />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <span style={{ fontWeight: 700 }}>{c.balance}</span>
-          <span style={{ fontSize: '1.5em', fontWeight: 900 }}>{CONST.balance}</span>
+          <span style={{ fontSize: '1.5em', fontWeight: 900 }}>{balance}</span>
         </div>
       </div>
 
@@ -69,8 +93,8 @@ export default function Payment({ c, lang, S, A }) {
       </div>
 
       <div style={{ marginTop: 20 }}>
-        <Btn disabled={S.channel == null || S.paying} onClick={A.doPay}>
-          {S.paying ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}><span className="spinner white" /> {c.processing}</span> : `${c.payNow} · ${CONST.balance}`}
+        <Btn disabled={S.channel == null || S.paying} onClick={() => A.doPay(balanceNum)}>
+          {S.paying ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}><span className="spinner white" /> {c.processing}</span> : `${c.payNow} · ${balance}`}
         </Btn>
       </div>
     </div>
