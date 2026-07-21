@@ -44,6 +44,7 @@ export default function App() {
   const [S, setS] = useState(initial);
   const timers = useRef([]);
   const recTimer = useRef(null);
+  const recognizer = useRef(null); // Web Speech API instance
   const scrollRef = useRef(null);
   const contentRef = useRef(null);
   const resumeStarted = useRef(false);
@@ -171,8 +172,10 @@ export default function App() {
     toggleRec: () => {
       if (S.recording) {
         if (recTimer.current) { clearInterval(recTimer.current); recTimer.current = null; }
+        if (recognizer.current) { try { recognizer.current.stop(); } catch { /* already stopped */ } recognizer.current = null; }
         set({ recording: false });
-        after(350, () => set((p) => {
+        // Only inject the scripted sample if the real recognizer produced nothing (offline / permission denied / no SR support).
+        after(400, () => set((p) => {
           if (p.symptom.trim()) return {};
           const sample = p.lang === 'tl'
             ? 'Sumasakit ang dibdib ko at medyo hirap huminga mula kaninang umaga.'
@@ -182,6 +185,26 @@ export default function App() {
       } else {
         set({ recording: true, recSec: 0 });
         recTimer.current = setInterval(() => set((p) => ({ recSec: p.recSec + 1 })), 1000);
+        // Real Web Speech API when the browser supports it (Chrome/Edge on desktop, most modern mobiles).
+        const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+        if (SR) {
+          try {
+            const rec = new SR();
+            rec.lang = S.lang === 'tl' ? 'fil-PH' : 'en-PH';
+            rec.interimResults = true;
+            rec.continuous = true;
+            const baseText = S.symptom.trim();
+            rec.onresult = (e) => {
+              let transcript = '';
+              for (let i = 0; i < e.results.length; i += 1) transcript += e.results[i][0].transcript;
+              set({ symptom: (baseText ? baseText + ' ' : '') + transcript.trim() });
+            };
+            rec.onerror = (e) => { if (e.error !== 'aborted' && e.error !== 'no-speech') console.warn('speech recognition error:', e.error); };
+            rec.onend = () => { recognizer.current = null; };
+            rec.start();
+            recognizer.current = rec;
+          } catch { /* fall through — sample injection on stop will cover it */ }
+        }
       }
     },
     // eGovAI triage

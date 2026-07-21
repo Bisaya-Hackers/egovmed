@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { ScreenHeader, Btn } from '../components/ui.jsx';
 import { User, Check } from '../components/Icons.jsx';
 import { Pop } from '../components/anim.jsx';
@@ -6,9 +7,31 @@ export default function Liveness({ c, S, A }) {
   const verified = S.liveness === 'verified';
   const verifying = S.liveness === 'verifying';
   const failed = S.liveness === 'failed';
+  const videoRef = useRef(null);
+  const [camera, setCamera] = useState('idle'); // 'idle' | 'live' | 'denied' | 'unavailable'
+
+  // Real camera preview during the liveness capture (works in mock too, so the flow feels live).
+  // In LIVE Face Liveness mode the browser will instead redirect to Amazon's hosted UI which
+  // opens its own camera — this preview short-circuits before that redirect anyway.
+  useEffect(() => {
+    if (S.liveness !== 'capturing' && S.liveness !== 'verifying') return undefined;
+    if (!navigator.mediaDevices?.getUserMedia) { setCamera('unavailable'); return undefined; }
+    let stream, cancelled = false;
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } }, audio: false });
+        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        setCamera('live');
+      } catch (err) {
+        setCamera(err && err.name === 'NotAllowedError' ? 'denied' : 'unavailable');
+      }
+    })();
+    return () => { cancelled = true; if (stream) stream.getTracks().forEach((t) => t.stop()); setCamera('idle'); };
+  }, [S.liveness]);
 
   return (
-    <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 'calc(100vh - 96px)' }}>
+    <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
       <div style={{ width: '100%' }}>
         <ScreenHeader onBack={A.back} step={3} label={c.stepVerify} />
       </div>
@@ -36,13 +59,22 @@ export default function Liveness({ c, S, A }) {
         </div>
       ) : (
         <div role="status" aria-live="polite" style={{ position: 'relative', width: 230, height: 230, borderRadius: '50%', background: '#D3E0F5', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: `0 0 0 4px ${verifying ? 'var(--blue-50)' : 'var(--teal-50)'}` }}>
-          <User size={120} color="#9db6da" />
+          {camera === 'live' ? (
+            <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
+          ) : (
+            <User size={120} color="#9db6da" />
+          )}
           {verifying ? (
             <span className="spinner lg" style={{ position: 'absolute' }} />
           ) : (
             <span style={{ position: 'absolute', left: '8%', right: '8%', height: 3, background: 'var(--teal)', borderRadius: 3, boxShadow: '0 0 12px var(--teal)', animation: 'scanline 1.6s ease-in-out infinite alternate' }} />
           )}
         </div>
+      )}
+      {camera === 'denied' && !verified && !failed && (
+        <p className="sub" style={{ textAlign: 'center', marginTop: 8, fontSize: '0.85em', color: 'var(--amber)' }}>
+          Camera permission was blocked — the flow will continue in demo mode.
+        </p>
       )}
 
       {!verified && !failed && (

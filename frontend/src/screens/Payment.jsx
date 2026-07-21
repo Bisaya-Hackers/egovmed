@@ -31,7 +31,7 @@ export default function Payment({ c, lang, S, A }) {
 
   if (S.paid) {
     return (
-      <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 'calc(100vh - 96px)', justifyContent: 'center', textAlign: 'center' }} role="status">
+      <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, justifyContent: 'center', textAlign: 'center' }} role="status">
         <Pop className="checkdisc"><Check size={40} /></Pop>
         <h1 className="h1" style={{ marginTop: 18 }}>{c.settled}</h1>
         <div className="mono" style={{ fontSize: '1.6em', fontWeight: 700, margin: '8px 0' }}>{balance}</div>

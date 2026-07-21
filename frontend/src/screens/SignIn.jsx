@@ -14,7 +14,7 @@ export default function SignIn({ c, S, A }) {
   };
 
   return (
-    <div className="screen" style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 96px)' }}>
+    <div className="screen" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
       <div style={{ textAlign: 'center', marginTop: 6 }}>
         <span className="wm" style={{ fontSize: 26 }}>eGOV<span className="med">MED</span></span>
       </div>
