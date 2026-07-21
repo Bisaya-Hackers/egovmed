@@ -133,7 +133,14 @@ export default function App() {
           set({ screen: 'home', stack: [] });
         }
       } catch (err) {
-        set({ signingIn: false, signinErr: true, liveness: 'failed', paying: false, flowError: err.message || 'The live flow failed' });
+        set((p) => ({
+          authMode: p.authMode === 'loading' ? 'mock' : p.authMode,
+          signingIn: false,
+          signinErr: true,
+          liveness: 'failed',
+          paying: false,
+          flowError: err.message || 'The live flow failed',
+        }));
       }
     })();
   }, [set]);
@@ -160,6 +167,10 @@ export default function App() {
       const [res] = await Promise.all([tryApi(api.login('demo')), delay(900)]);
       if (res?.token) {
         setToken(res.token);
+        set({ signingIn: false, screen: 'home', stack: [], flowError: null });
+      } else if (S.authMode === 'mock') {
+        // Keep the hackathon demo usable during a backend outage without minting a
+        // fake session: protected API calls remain unauthenticated and use UI fallbacks.
         set({ signingIn: false, screen: 'home', stack: [], flowError: null });
       } else {
         set({ signingIn: false, signinErr: true, flowError: 'Unable to sign in.' });
