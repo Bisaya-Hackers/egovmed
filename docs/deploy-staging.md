@@ -117,6 +117,44 @@ For each **live** integration, tell the provider the callback URL is now HTTPS +
 5. `EMESSAGE_MODE=live`, `EGOV_AI_MODE=live`, `EREPORT_MODE=live` — safe to flip in any order.
 6. `EGOVCHAIN_MODE=live` — deploy anchoring contract first (see backend README §eGovChain).
 
+## 7 · Final tripwire — flip `ALLOW_MOCK_IN_PRODUCTION` off
+
+**MUST DO once every citizen-facing integration is `live` above.** While `ALLOW_MOCK_IN_PRODUCTION=true`, the `warnIfMisconfigured` fail-hard for missed live flips is bypassed — so a silent mock could serve fake triage/payment/records data to real users.
+
+```bash
+cd backend
+vercel env rm ALLOW_MOCK_IN_PRODUCTION production --yes
+printf 'false' | vercel env add ALLOW_MOCK_IN_PRODUCTION production
+vercel --prod --yes --force
+curl -sS https://egovmed-backend.vercel.app/health   # must return {"status":"ok"}
+```
+
+If `/health` returns 500 after this, the log will name the integration still in mock — flip it to `live` and redeploy.
+
+---
+
+## Deployment security posture (as of first go-live)
+
+### Currently in place
+- **Preview scope hardened**: eGov integration secrets (partner-code/secret, client-id/secret, pubkey, API keys, tokens, contract private key) removed from Preview environment scope. Also, `JWT_SECRET` and `PHI_ENCRYPTION_KEY` were rotated at deploy time and only added back to Production scope — meaning **preview deployments intentionally cannot boot**. This is safe because no git-connected auto-deploy is enabled; deployments happen manually via `vercel --prod`.
+- **Sensitive typed env vars**: All secrets marked Sensitive in Vercel — CLI `env pull` returns `"[SENSITIVE]"` placeholders, only runtime + dashboard-with-explicit-reveal can see values.
+- **HTTPS everywhere**: Vercel edge terminates TLS, redirect/callback URLs verified HTTPS at boot.
+- **CORS locked** to `APP_URL` (the exact production frontend origin) with credentials. Preview frontend URLs cannot hit prod backend.
+- **Rate limiting active** (Upstash-backed, cross-instance): global 300/min + tighter per-route auth/callback limits.
+- **Security headers on every response** (CSP, HSTS, X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy, Permissions-Policy).
+
+### Enabling preview deploys later (if wanted)
+Preview deploys currently fail-fast at boot. To enable them safely:
+1. Generate distinct **test** JWT/PHI secrets (different from prod).
+2. Add them + Upstash + fresh test versions of the eGov `*_MODE=mock` overrides scoped to `preview` only.
+3. Add a preview-only `ALLOW_MOCK_IN_PRODUCTION=true` so warnings don't fire.
+Never share prod secrets or the prod Upstash DB with preview deployments.
+
+### Known deferred items (post-hackathon)
+- **`PHI_ENCRYPTION_KEY` has no key versioning.** `crypto.js` resolves exactly one key; a future rotation with real PHI in Upstash would permanently orphan the data. Fix later: extend the `v1:` envelope to `v2:<keyId>:iv:tag:ct` with a keyring, or migrate/re-encrypt during rotation.
+- **No PHI-access audit log rotation/retention policy** (Codex's `auditService` writes to Upstash; grows forever without an eviction/export policy).
+- **Vercel Hobby single region** — backend is pinned to `sin1`. If Vercel-sin1 goes down, the app goes down. Multi-region requires Pro.
+
 Between each flip, redeploy backend and hit `/health` + one real request through the impacted flow.
 
 ## Troubleshooting
