@@ -34,8 +34,8 @@ const env = {
 
   egovph: {
     mode: modeFor('EGOVPH'),
-    // Unified eGov OAuth host. Token endpoint: {baseUrl}/api/token
-    baseUrl: process.env.EGOVPH_BASE_URL || 'https://oauth.e.gov.ph',
+    // SSO host (per apidocumentation/eGovPH-SSO-API.md). Token endpoint: {baseUrl}/api/token
+    baseUrl: process.env.EGOVPH_BASE_URL || 'https://hackathon-sso.e.gov.ph',
     partnerCode: process.env.EGOVPH_PARTNER_CODE || process.env.EGOVPH_CLIENT_ID || '',
     partnerSecret: process.env.EGOVPH_PARTNER_SECRET || process.env.EGOVPH_CLIENT_SECRET || '',
     scope: process.env.EGOVPH_SCOPE || 'SSO_AUTHENTICATION',
@@ -48,8 +48,11 @@ const env = {
   },
   everify: {
     mode: modeFor('EVERIFY'),
-    baseUrl: process.env.EVERIFY_BASE_URL || 'https://everify.egov.ph',
-    apiKey: process.env.EVERIFY_API_KEY || '',
+    // NIDAS eVerify (per apidocumentation/eVerify-NationalID-API.md): /api/auth → /api/query
+    baseUrl: process.env.EVERIFY_BASE_URL || 'https://hackathon-everify-api.e.gov.ph',
+    clientId: process.env.EVERIFY_CLIENT_ID || '',
+    clientSecret: process.env.EVERIFY_CLIENT_SECRET || '',
+    livenessPubKey: process.env.EVERIFY_LIVENESS_PUBKEY || '', // Face Liveness Web SDK public key (client-side)
   },
   faceLiveness: {
     mode: modeFor('FACE_LIVENESS'),
@@ -71,9 +74,13 @@ const env = {
   },
   egovPay: {
     mode: modeFor('EGOVPAY'),
-    baseUrl: process.env.EGOVPAY_BASE_URL || 'https://pay.egov.ph',
+    // per apidocumentation/eGovPay-API.md: POST /api/v1/transaction with X-eGovPay-Token + HMAC digest
+    baseUrl: process.env.EGOVPAY_BASE_URL || 'https://pay.egov.ph', // set to the eGovPay host from onboarding
+    token: process.env.EGOVPAY_TOKEN || process.env.EGOVPAY_API_KEY || '', // X-eGovPay-Token (test_-prefixed in test mode)
+    settlementTemplateUuid: process.env.EGOVPAY_SETTLEMENT_TEMPLATE_UUID || '',
+    redirectUrl: process.env.EGOVPAY_REDIRECT_URL || '',
+    callbackUrl: process.env.EGOVPAY_CALLBACK_URL || '',
     merchantId: process.env.EGOVPAY_MERCHANT_ID || '',
-    apiKey: process.env.EGOVPAY_API_KEY || '',
   },
   eReport: {
     mode: modeFor('EREPORT'),
