@@ -188,7 +188,11 @@ async function summarizeHistory({ records = [], triage = [] }) {
         prompt, category: cfg.category,
       }, { headers: { Authorization: `Bearer ${token}` }, timeoutMs: 20000 });
       const text = res && res.data;
-      return typeof text === 'string' && text.trim() ? text : fallbackSummary(records, triage);
+      // eGovAI's safety filter refuses medical prompts with variants of "I cannot provide medical…"
+      // Detect those and fall back to the clinician-authored summaries instead of surfacing the refusal.
+      const refused = typeof text === 'string' && /^(i\s*(cannot|can'?t|am\s+not\s+able)|as\s+an\s+ai)|consult\s+(a|your)\s+(qualified\s+)?(medical|health)/i.test(text.trim());
+      if (typeof text === 'string' && text.trim() && !refused) return text;
+      if (refused) logger.info('eGovAI declined medical summary — using clinician-authored fallback');
     } catch (err) {
       logger.warn('history summary live call failed', { err: err.message });
     }
@@ -196,14 +200,39 @@ async function summarizeHistory({ records = [], triage = [] }) {
   return fallbackSummary(records, triage);
 }
 
+/**
+ * Deterministic, non-AI history brief that leans on each record's clinician-authored `summary`
+ * field. Used when eGovAI is unavailable OR refuses the prompt (its safety filter declines
+ * medical summarization). Better than a raw record count — it surfaces the actual clinical notes.
+ */
 function fallbackSummary(records, triage) {
-  const labs = records.filter((r) => r.type === 'lab').map((r) => `${r.title} (${r.sourceFacility})`);
-  const lastTriage = triage[triage.length - 1];
-  return [
-    `Records on file: ${records.length}`,
-    labs.length ? `Verified labs: ${labs.join('; ')}` : 'No verified labs on file.',
-    lastTriage ? `Latest triage: ${lastTriage.specialty} / ${lastTriage.urgency}` : 'No prior triage.',
-  ].join('\n• ');
+  const labs = records.filter((r) => r.type === 'lab');
+  const bullets = [];
+
+  // Per-lab clinical notes (up to 5 most recent). Uses each record's own summary field which
+  // was written by the source facility's clinician when the lab was created.
+  const sortedLabs = labs.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  sortedLabs.slice(0, 5).forEach((r) => {
+    const when = r.createdAt ? String(r.createdAt).slice(0, 10) : '';
+    const note = r.summary ? ` — ${r.summary}` : '';
+    bullets.push(`${r.title} (${r.sourceFacility}${when ? ', ' + when : ''})${note}`);
+  });
+  if (labs.length > 5) bullets.push(`…and ${labs.length - 5} older lab${labs.length - 5 === 1 ? '' : 's'} on file.`);
+
+  // Triage: latest specialty/urgency + a note if the trend keeps hitting the same specialty
+  if (triage.length) {
+    const last = triage[triage.length - 1];
+    const specialties = triage.map((t) => t.specialty).filter(Boolean);
+    const mostCommon = specialties.reduce((acc, s) => (acc[s] = (acc[s] || 0) + 1, acc), {});
+    const [topSpec, topCount] = Object.entries(mostCommon).sort((a, b) => b[1] - a[1])[0] || [];
+    bullets.push(`Latest triage on ${String(last.createdAt || '').slice(0, 10)}: ${last.specialty || 'General Medicine'} / ${last.urgency || 'routine'}.`);
+    if (topCount >= 3 && topSpec) bullets.push(`Recurring routing to ${topSpec} (${topCount} of ${triage.length} triage visits) — worth a focused follow-up.`);
+  } else {
+    bullets.push('No prior triage.');
+  }
+
+  if (!bullets.length) return 'No records on file.';
+  return bullets.join('\n• ');
 }
 
 module.exports = { classifySymptoms, summarizeHistory, SPECIALTIES };
