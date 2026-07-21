@@ -4,6 +4,7 @@ import { Check } from '../components/Icons.jsx';
 import { Pop } from '../components/anim.jsx';
 import { PAY_ITEMS, BENEFIT_LINES, CHANNELS, CONST } from '../i18n/dict.js';
 import { api } from '../lib/api.js';
+import PaymentLogo from '../components/PaymentLogos.jsx';
 
 const BILL = 750; // consultation ₱600 + facility ₱150
 
@@ -83,7 +84,7 @@ export default function Payment({ c, lang, S, A }) {
               style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, padding: '13px 15px', minHeight: 60, background: 'var(--surface)', border: sel ? '2px solid var(--primary)' : '1.5px solid var(--line)' }}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ width: 38, height: 38, borderRadius: 10, background: ch[2], color: ch[3], display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13, flex: 'none' }}>{ch[0]}</span>
+                <PaymentLogo abbr={ch[0]} />
                 <span style={{ fontWeight: 700 }}>{ch[1]}</span>
               </span>
               <span style={{ width: 22, height: 22, borderRadius: '50%', flex: 'none', border: sel ? '6px solid var(--primary)' : '2px solid var(--line)' }} />

@@ -6,7 +6,8 @@ const { notFound } = require('../lib/errors');
 
 async function fileReport({ patientId, category, description, contact }) {
   const store = getStore();
-  const filed = await eReport.fileReport({ category, description, patientId, contact });
+  const patient = patientId ? await store.findById(COLLECTIONS.PATIENTS, patientId) : null;
+  const filed = await eReport.fileReport({ category, description, patient: patient || {}, contact: contact || patient?.phone });
   const report = {
     id: randomId('rep_'),
     patientId: patientId || null,
