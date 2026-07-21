@@ -45,14 +45,45 @@ function getStore() {
 const DEMO_EGOV_SUB = 'MVPCBEUVCGPZR'; // must match egovph.js mock profile uniqid
 const patientIdFor = (egovSub) => 'pat_' + sha256Hex('egovsub:' + egovSub).slice(2, 22);
 const DEMO_PATIENT_ID = patientIdFor(DEMO_EGOV_SUB);
-const DEMO_RECORD_ID = 'rec_demo_cbc';
+
+// Three cross-hospital labs (matches the design's Records screen) — real values so the doctor-summary
+// endpoint has meaningful clinical context to summarize. `id` is stable so seeds are idempotent.
+const DEMO_RECORDS = [
+  {
+    id: 'rec_demo_cbc',
+    type: 'lab',
+    title: 'Complete Blood Count (CBC)',
+    sourceFacility: 'Ospital ng Maynila',
+    createdAt: '2026-06-12T09:15:00.000Z',
+    summary: 'CBC within normal limits; mild anemia noted.',
+    data: { hemoglobin: '11.2 g/dL', wbc: '7.5 x10^9/L', platelets: '250 x10^9/L', interpretation: 'Mild anemia; otherwise within normal limits' },
+  },
+  {
+    id: 'rec_demo_lipid',
+    type: 'lab',
+    title: 'Lipid Panel',
+    sourceFacility: 'Makati Medical Center',
+    createdAt: '2026-05-03T10:40:00.000Z',
+    summary: 'Borderline LDL; recommend dietary review at follow-up.',
+    data: { total_cholesterol: '215 mg/dL', ldl: '138 mg/dL', hdl: '48 mg/dL', triglycerides: '150 mg/dL', interpretation: 'Borderline high LDL; other lipids within normal range' },
+  },
+  {
+    id: 'rec_demo_ecg',
+    type: 'lab',
+    title: 'ECG Report',
+    sourceFacility: 'Philippine Heart Center',
+    createdAt: '2026-04-21T14:20:00.000Z',
+    summary: 'Normal sinus rhythm; no acute abnormalities.',
+    data: { rhythm: 'Normal sinus rhythm', rate_bpm: 72, pr_interval_ms: 160, qrs_duration_ms: 92, qt_interval_ms: 380, interpretation: 'Normal ECG; no ischemic changes' },
+  },
+];
 
 /**
  * Idempotent, self-healing demo seed:
  *   1. Guarantees the demo patient has demo benefits + identityVerified — creates the patient if
  *      absent, updates in place if the demo fields are missing (e.g. a prior SSO login pre-created
  *      the row without benefits).
- *   2. Guarantees the cross-hospital lab record exists exactly once — keyed by DEMO_RECORD_ID.
+ *   2. Guarantees each demo lab record exists exactly once — keyed by its stable id.
  * Safe to call on every cold start; only touches demo fields, never overwrites real user activity.
  */
 async function seedDemoData() {
@@ -78,27 +109,27 @@ async function seedDemoData() {
     ? await s.update(COLLECTIONS.PATIENTS, DEMO_PATIENT_ID, demoFields)
     : await s.create(COLLECTIONS.PATIENTS, { id: DEMO_PATIENT_ID, ...demoFields, createdAt: now, updatedAt: now });
 
-  // Lab record from ANOTHER hospital, encrypted off-chain with a REAL anchored fingerprint.
-  // Idempotent: only create if the demo record id isn't already there.
-  const existingRecord = await s.findById(COLLECTIONS.RECORDS, DEMO_RECORD_ID);
-  if (!existingRecord) {
-    const cbcData = { hemoglobin: '11.2 g/dL', wbc: '7.5 x10^9/L', platelets: '250 x10^9/L', interpretation: 'Mild anemia; otherwise within normal limits' };
-    const cbcHash = sha256Hex({ patientId: patient.id, type: 'lab', title: 'Complete Blood Count (CBC)', sourceFacility: 'Ospital ng Maynila', data: cbcData });
+  // Seed each demo lab if it isn't already present — encrypted off-chain with a real content hash.
+  const seededRecords = [];
+  for (const spec of DEMO_RECORDS) {
+    if (await s.findById(COLLECTIONS.RECORDS, spec.id)) { seededRecords.push({ id: spec.id, action: 'kept' }); continue; }
+    const hash = sha256Hex({ patientId: patient.id, type: spec.type, title: spec.title, sourceFacility: spec.sourceFacility, data: spec.data });
     await s.create(COLLECTIONS.RECORDS, {
-      id: DEMO_RECORD_ID,
+      id: spec.id,
       patientId: patient.id,
-      type: 'lab',
-      title: 'Complete Blood Count (CBC)',
-      sourceFacility: 'Ospital ng Maynila',
-      encrypted: encryptJson(cbcData),
-      summary: 'CBC within normal limits; mild anemia noted.',
-      anchor: { hash: cbcHash, txHash: sha256Hex('tx:' + cbcHash), blockNumber: null, anchoredAt: now, verified: true, provider: 'mock' },
-      createdAt: now,
-      updatedAt: now,
+      type: spec.type,
+      title: spec.title,
+      sourceFacility: spec.sourceFacility,
+      encrypted: encryptJson(spec.data),
+      summary: spec.summary,
+      anchor: { hash, txHash: sha256Hex('tx:' + hash), blockNumber: null, anchoredAt: spec.createdAt, verified: true, provider: 'mock' },
+      createdAt: spec.createdAt,
+      updatedAt: spec.createdAt,
     });
+    seededRecords.push({ id: spec.id, action: 'created' });
   }
 
-  logger.info('demo data seeded', { patientId: patient.id, action: existing ? 'updated' : 'created', record: existingRecord ? 'kept' : 'created' });
+  logger.info('demo data seeded', { patientId: patient.id, patient: existing ? 'updated' : 'created', records: seededRecords });
   return patient;
 }
 
