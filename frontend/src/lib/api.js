@@ -54,6 +54,8 @@ export const api = {
   paymentStatus: (billId) => req(`/payments/${encodeURIComponent(billId)}/status`),
   // eGovChain-anchored records
   records: () => req('/records'),
+  getRecord: (id) => req(`/records/${encodeURIComponent(id)}`),
+  verifyRecord: (id) => req(`/records/${encodeURIComponent(id)}/verify`),
   // eReport
   fileReport: (category, description) => req('/reports', { method: 'POST', body: { category, description } }),
   trackCase: (caseNumber) => req(`/reports/${encodeURIComponent(caseNumber)}`),

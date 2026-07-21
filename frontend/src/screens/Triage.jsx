@@ -2,9 +2,19 @@ import { ScreenHeader, Btn } from '../components/ui.jsx';
 import { HeartPulse, Warning, Phone, Pin, Dot } from '../components/Icons.jsx';
 import { WHY, CONST } from '../i18n/dict.js';
 
+// True on touch-primary devices (mobile/tablet). Desktop returns false so tel: doesn't
+// leave a "failed" entry in the DevTools network panel when there's no phone handler.
+const isPhoneCapable = () => typeof window !== 'undefined'
+  && (('ontouchstart' in window) || navigator.maxTouchPoints > 0 || window.matchMedia?.('(hover: none)').matches);
+
 export default function Triage({ c, lang, S, A }) {
   const dept = S.triage?.specialty || CONST.dept;
   const why = S.triage?.redFlags?.length ? S.triage.redFlags : WHY[lang];
+
+  const callEmergency = () => {
+    if (isPhoneCapable()) { window.location.href = 'tel:911'; return; }
+    A.toast(lang === 'tl' ? 'Tumawag ng 911 mula sa telepono' : 'Please dial 911 from a phone');
+  };
 
   if (S.emergency) {
     return (
@@ -15,12 +25,12 @@ export default function Triage({ c, lang, S, A }) {
         <h1 style={{ fontSize: '2em', fontWeight: 900, textAlign: 'center', margin: '22px 0 0' }}>{c.emergencyTitle}</h1>
         <p style={{ textAlign: 'center', fontSize: '1.05em', lineHeight: 1.5, margin: '12px 0 0', opacity: 0.95 }}>{c.emergencyBanner}</p>
         <div className="spacer" />
-        <a href="tel:911" className="btn" style={{ background: '#fff', color: 'var(--red)', textDecoration: 'none' }}>
+        <button type="button" onClick={callEmergency} className="btn" style={{ background: '#fff', color: 'var(--red)' }}>
           <Phone size={20} /> {c.callER}
-        </a>
-        <a href="#" onClick={(e) => e.preventDefault()} className="btn" style={{ background: 'transparent', color: '#fff', border: '1.5px solid rgba(255,255,255,.6)', textDecoration: 'none', marginTop: 12 }}>
+        </button>
+        <button type="button" onClick={() => A.toast(lang === 'tl' ? 'Buksan ang mapa para hanapin ang pinakamalapit na ER' : 'Open your maps to find the nearest ER')} className="btn" style={{ background: 'transparent', color: '#fff', border: '1.5px solid rgba(255,255,255,.6)', marginTop: 12 }}>
           <Pin size={20} /> {c.findER}
-        </a>
+        </button>
         <button onClick={A.continueTriage} style={{ background: 'none', border: 'none', color: '#fff', textDecoration: 'underline', marginTop: 18, fontSize: '0.9em' }}>{c.emgDemoContinue}</button>
       </div>
     );
