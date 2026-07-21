@@ -7,31 +7,27 @@ const cfg = env.egovph;
 const isLive = () => cfg.mode === 'live';
 
 /**
- * eGov App SSO (v2) — real flow, per https://e.gov.ph/developers
+ * eGovPH SSO — real flow, per apidocumentation/eGovPH-SSO-API.md
  *
- *  Step 1  POST {baseUrl}/api/token           (multipart form-data)
- *            partner_code, partner_secret, scope=SSO_AUTHENTICATION, exchange_code
+ *  Step 1  POST {baseUrl}/api/token           (JSON body)
+ *            { exchange_code, scope: "SSO_AUTHENTICATION", partner_code, partner_secret }
  *          → { access_token }
- *          The exchange_code originates in the eGov super app and is handed to the
- *          partner app. (Sandbox lets you simulate it with your registered eGov account.)
+ *          The exchange_code is single-use, originates in the eGov super app, and is
+ *          appended to the partner's redirect URL (?exchange_code=...).
  *
- *  Step 2  POST {baseUrl}/api/partner/sso_authentication   (Bearer access_token)
- *          → { status, message, data: { uniqid, first_name, ... } }  ← the citizen profile
+ *  Step 2  POST {baseUrl}/api/partner/sso_authentication   (Bearer access_token, no body)
+ *          → the citizen profile (uniqid, name, birthdate, contact, address, …)
  */
 
 /** Step 1: exchange an eGov exchange_code for a scoped access token. */
 async function generateAccessToken(exchangeCode, scope = cfg.scope) {
   if (!isLive()) return { access_token: `mock-access-${exchangeCode || 'demo'}` };
 
-  const form = new URLSearchParams({
+  const res = await http.post(`${cfg.baseUrl}/api/token`, {
+    exchange_code: exchangeCode,
+    scope,
     partner_code: cfg.partnerCode,
     partner_secret: cfg.partnerSecret,
-    scope,
-  });
-  if (exchangeCode) form.set('exchange_code', exchangeCode);
-
-  const res = await http.post(`${cfg.baseUrl}/api/token`, form.toString(), {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   });
   if (!res || !res.access_token) throw upstream('eGov token endpoint returned no access_token', res);
   return res;

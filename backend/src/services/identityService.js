@@ -55,10 +55,12 @@ async function verifyIdentity({ patientId, philsysId, consent, livenessSessionId
   await store.create(COLLECTIONS.CONSENTS, consentRecord);
 
   const result = await identity.verifyPhilSys({
-    philsysId: philsysId || patient.philsysId,
     firstName: patient.firstName,
+    middleName: patient.middleName,
     lastName: patient.lastName,
-    birthDate: patient.birthDate,
+    suffix: patient.suffix,
+    birthDate: patient.birthDate,          // YYYY-MM-DD
+    faceLivenessSessionId: livenessSessionId,
     consent,
   });
 
