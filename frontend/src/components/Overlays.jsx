@@ -1,5 +1,16 @@
+import { useEffect, useRef } from 'react';
 import { Clock } from './Icons.jsx';
 import { Btn } from './ui.jsx';
+
+// Escape-to-close + move focus into the dialog on open (basic modal a11y).
+function useDismissable(onClose, ref) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    if (ref.current) ref.current.focus();
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose, ref]);
+}
 
 export function Toast({ msg, icon }) {
   return (
@@ -11,9 +22,11 @@ export function Toast({ msg, icon }) {
 }
 
 export function TimeoutModal({ c, A }) {
+  const ref = useRef(null);
+  useDismissable(A.stayIn, ref);
   return (
     <div className="scrim center" onClick={A.stayIn}>
-      <div className="modal" role="alertdialog" aria-label={c.timeoutTitle} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" role="alertdialog" aria-modal="true" aria-label={c.timeoutTitle} tabIndex={-1} ref={ref} onClick={(e) => e.stopPropagation()}>
         <div className="icirc" style={{ background: 'var(--amber-50)', color: 'var(--amber)', width: 52, height: 52, margin: '0 auto 14px' }}>
           <Clock size={26} />
         </div>
@@ -33,9 +46,11 @@ const emgKnob = (on) => ({ width: 20, height: 20, borderRadius: '50%', backgroun
 const rowStyle = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '14px 2px', background: 'none', border: 'none', borderTop: '1px solid var(--line)', color: 'var(--ink)', fontWeight: 600, fontSize: '0.95em' };
 
 export function DemoSheet({ S, A }) {
+  const ref = useRef(null);
+  useDismissable(A.toggleDemo, ref);
   return (
     <div className="scrim" onClick={A.toggleDemo}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="Demo controls" tabIndex={-1} ref={ref} onClick={(e) => e.stopPropagation()}>
         <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--line)', margin: '0 auto 14px' }} />
         <div className="overline" style={{ marginBottom: 4 }}>Demo controls</div>
         <p className="sub" style={{ marginTop: 0, marginBottom: 8 }}>Reviewer shortcuts — not part of the product UI.</p>
