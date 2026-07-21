@@ -14,7 +14,6 @@ async function startLiveness(patientId) {
 }
 
 const LIVENESS_MAX_AGE_MS = 10 * 60 * 1000; // a captured liveness session is valid for 10 minutes
-const LIVENESS_MIN_CONFIDENCE = 0.8;
 
 /** Verify PhilSys identity (with consent + a fresh, single-use liveness session) and flip patient.identityVerified. */
 async function verifyIdentity({ patientId, philsysId, consent, livenessSessionId, requestMeta = {} }) {
@@ -34,8 +33,8 @@ async function verifyIdentity({ patientId, philsysId, consent, livenessSessionId
   }
 
   const liveness = await identity.getLivenessResult(livenessSessionId);
-  const confidenceOk = typeof liveness.confidence !== 'number' || liveness.confidence >= LIVENESS_MIN_CONFIDENCE;
-  if (!liveness.live || !confidenceOk) {
+  // getLivenessResult already enforces "SUCCEEDED" + confidence >= threshold in live mode.
+  if (!liveness.live) {
     await store.update(COLLECTIONS.LIVENESS, livenessSessionId, { status: 'failed' });
     throw badRequest('Face-liveness check failed');
   }

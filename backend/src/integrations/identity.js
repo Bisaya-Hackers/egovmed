@@ -51,23 +51,37 @@ async function verifyPhilSys({ firstName, middleName, lastName, suffix, birthDat
   return { verified: ok, score: ok ? 0.99 : 0, reference: randomId('ref_'), provider: 'mock' };
 }
 
-/* ── Face Liveness (eVerify Web SDK) ───────────────────────────
- * In live mode the CLIENT runs the eVerify Face Liveness Web SDK with `pubKey` and obtains a
- * session_id; the backend only hands over the pubKey and later consumes that id in /api/query.
- * (There is no server-side "create liveness session" endpoint in the eVerify API.)
+/* ── Face Liveness (separate hosted service) ───────────────────
+ * per apidocumentation/Face-Liveness-API.md (x-api-key auth):
+ *   POST /v1/liveness/session          → { token, url }
+ *   GET  /v1/liveness/result/{token}   → { status, confidence_score, reference_image_url }
+ * The user completes the check at `url`; accept only status "SUCCEEDED" && confidence >= minConfidence.
+ * The session `token` is what gets passed to eVerify /api/query as face_liveness_session_id.
  */
+const faceLiveness = env.faceLiveness;
+const isLivenessLive = () => faceLiveness.mode === 'live' && faceLiveness.apiKey;
+
 async function createLivenessSession() {
-  const live = everify.mode === 'live' && everify.livenessPubKey;
-  return {
-    sessionId: randomId('live_'),           // demo id (live: client SDK provides the real one)
-    pubKey: live ? everify.livenessPubKey : null,
-    provider: live ? 'everify-liveness' : 'mock',
-  };
+  if (isLivenessLive()) {
+    const res = await http.post(`${faceLiveness.baseUrl}/v1/liveness/session`, {
+      action: faceLiveness.action,
+      callback_url: faceLiveness.callbackUrl || undefined,
+    }, { headers: { 'x-api-key': faceLiveness.apiKey, 'Content-Type': 'application/json' } });
+    return { sessionId: res.token, url: res.url, provider: 'face-liveness' }; // frontend sends the user to `url`
+  }
+  return { sessionId: randomId('live_'), url: null, provider: 'mock' };
 }
 
-// Liveness is validated by eVerify during /api/query. This keeps the demo's capture→verify UX offline.
 async function getLivenessResult(sessionId) {
-  return { sessionId, live: true, confidence: 0.97, provider: everify.mode === 'live' ? 'everify-liveness' : 'mock' };
+  if (isLivenessLive()) {
+    const res = await http.get(`${faceLiveness.baseUrl}/v1/liveness/result/${sessionId}`, {
+      headers: { 'x-api-key': faceLiveness.apiKey },
+    });
+    const confidence = typeof res.confidence_score === 'number' ? res.confidence_score : 0;
+    const live = res.status === 'SUCCEEDED' && confidence >= faceLiveness.minConfidence;
+    return { sessionId, live, confidence, status: res.status, provider: 'face-liveness' };
+  }
+  return { sessionId, live: true, confidence: 97, provider: 'mock' }; // 0–100 scale
 }
 
 module.exports = { verifyPhilSys, createLivenessSession, getLivenessResult };
