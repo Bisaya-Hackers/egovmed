@@ -3,6 +3,7 @@ const egovph = require('../integrations/egovph');
 const { getStore, COLLECTIONS } = require('../store');
 const { sign } = require('../lib/jwt');
 const { sha256Hex } = require('../lib/crypto');
+const { publicPatient } = require('../lib/presenters');
 
 // Deterministic patient id from the eGov uniqid → a concurrent first login can't create two rows.
 const patientIdFor = (egovSub) => 'pat_' + sha256Hex('egovsub:' + egovSub).slice(2, 22);
@@ -41,8 +42,6 @@ async function upsertAndIssue(profile) {
     sex: profile.sex,
     email: profile.email,
     phone: profile.phone,
-    address: profile.address,
-    photo: profile.photo,
     nationality: profile.nationality,
   };
   // Don't overwrite previously-good fields with blanks/nulls from a thinner SSO payload.
@@ -55,7 +54,6 @@ async function upsertAndIssue(profile) {
       id: patientIdFor(profile.egovSub),
       egovSub: profile.egovSub,
       ...fields,
-      philsysId: null,          // set later by eVerify
       identityVerified: false,  // flips true after eVerify + liveness
       benefits: { philhealth: { active: false }, whiteCard: { active: false }, sss: { active: false } },
       createdAt: now,
@@ -63,8 +61,8 @@ async function upsertAndIssue(profile) {
     });
   }
 
-  const token = sign({ sub: patient.id, egovSub: patient.egovSub, name: `${patient.firstName || ''} ${patient.lastName || ''}`.trim() });
-  return { token, patient };
+  const token = sign({ sub: patient.id });
+  return { token, patient: publicPatient(patient) };
 }
 
 module.exports = { loginWithExchangeCode, loginWithAccessToken };

@@ -42,8 +42,7 @@ async function createBill({ patientId, billAmount, description = 'Hospital servi
 
   const { applied, coveredTotal, balance } = computeBenefits(billAmount, patient.benefits);
   const checkout = await egovPay.createCheckout({
-    patientId, amount: balance, description, channel,
-    metadata: { billAmount, benefitsApplied: applied },
+    amount: balance, description, channel,
   });
 
   const payment = {
@@ -57,16 +56,17 @@ async function createBill({ patientId, billAmount, description = 'Hospital servi
     reference: checkout.reference,
     checkoutUrl: checkout.checkoutUrl,
     status: checkout.status,
+    provider: checkout.provider,
     createdAt: new Date().toISOString(),
   };
   await store.create(COLLECTIONS.PAYMENTS, payment);
   return payment;
 }
 
-async function refreshStatus(billId) {
+async function refreshStatus(billId, patientId) {
   const store = getStore();
   const payment = await store.findById(COLLECTIONS.PAYMENTS, billId);
-  if (!payment) throw notFound('Bill not found');
+  if (!payment || payment.patientId !== patientId) throw notFound('Bill not found');
   const status = await egovPay.getStatus(payment.reference);
   return store.update(COLLECTIONS.PAYMENTS, billId, { status: status.status, paidAt: status.paidAt });
 }

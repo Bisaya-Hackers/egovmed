@@ -3,11 +3,12 @@ const { env } = require('../config/env');
 const http = require('../lib/http');
 
 const cfg = env.eReport;
-const isLive = () => cfg.mode === 'live' && !!cfg.accessCode && !!cfg.baseUrl;
+const isLive = () => cfg.mode === 'live';
 
 // per apidocumentation/eReport-API.md — POST /api/integration/token { access_code } → Bearer.
 let tokenCache = null;
 async function ereportToken() {
+  if (!cfg.accessCode || !cfg.baseUrl) throw new Error('eReport live mode requires base URL and access code');
   if (tokenCache && tokenCache.expiresAt > Date.now() + 5000) return tokenCache.token;
   const res = await http.post(`${cfg.baseUrl}/api/integration/token`, { access_code: cfg.accessCode });
   const token = res && res.access_token;

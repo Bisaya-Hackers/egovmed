@@ -1,5 +1,8 @@
 import { HeartPulse, FileText, Card, Flag, Chat, ChevronRight } from '../components/Icons.jsx';
 import { CONST } from '../i18n/dict.js';
+import rosaAvatar from '../assets/home-avatar-rosa.png';
+import digitalIdArt from '../assets/home-digital-id.png';
+import verifiedLabsArt from '../assets/home-verified-labs.png';
 
 function Service({ icon, label, color, badge, onClick }) {
   return (
@@ -21,12 +24,12 @@ export default function Home({ c, lang, S, A }) {
     <div className="screen">
       {/* greeting */}
       <div data-stagger style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
-        <span className="img-slot" style={{ width: 56, height: 56, borderRadius: '50%', flex: 'none' }} aria-hidden="true" />
+        <img src={rosaAvatar} alt="" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', flex: 'none' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={{ fontSize: '1.3em', fontWeight: 800, color: 'var(--primary)', lineHeight: 1.1, margin: 0 }}>{c.greeting}</h1>
           <div className="sub" style={{ margin: '3px 0 0' }}>{CONST.phone}</div>
         </div>
-        <span className="img-slot" style={{ width: 92, height: 58, borderRadius: 14, flex: 'none' }} aria-hidden="true" />
+        <img src={digitalIdArt} alt="Secure digital health identity" style={{ width: 92, height: 58, borderRadius: 14, objectFit: 'contain', flex: 'none' }} />
       </div>
 
       {/* hero — start a visit */}
@@ -87,7 +90,7 @@ export default function Home({ c, lang, S, A }) {
           <div style={{ fontWeight: 800 }}>{c.featuredTitle}</div>
           <p className="sub" style={{ margin: '5px 0 0' }}>{c.featuredSub}</p>
         </div>
-        <span className="img-slot" style={{ width: 76, height: 60, borderRadius: 12, flex: 'none' }} aria-hidden="true" />
+        <img src={verifiedLabsArt} alt="Verified lab records shared across hospitals" style={{ width: 76, height: 60, borderRadius: 12, objectFit: 'contain', flex: 'none' }} />
       </div>
     </div>
   );

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
-import { DICT, CONST } from './i18n/dict.js';
-import { api, setToken } from './lib/api.js';
+import { DICT, CONST, CHANNELS } from './i18n/dict.js';
+import { api, getToken, setToken } from './lib/api.js';
 import { Gear, Bell, Check } from './components/Icons.jsx';
 
 import SignIn from './screens/SignIn.jsx';
@@ -24,11 +24,12 @@ const FONT = { 0: 17, 1: 19, 2: 21 };
 const initial = () => ({
   lang: 'en', screen: 'signin', stack: [], textScale: 0,
   signingIn: false, signinErr: false,
+  authMode: 'loading', authLaunchUrl: null, authCallbackUrl: null, flowError: null,
   symptom: '', recording: false, recSec: 0, thinking: false,
   emergency: false, liveness: 'idle', livenessSessionId: null,
   triage: null,
   slotsLoading: false, selectedSlot: null, booking: false, booked: false, slotLabel: '', refNo: CONST.refNo,
-  channel: null, paying: false, paid: false,
+  channel: null, paying: false, paid: false, paymentStatus: null,
   reportStage: 'form', reportCat: null, reportDesc: '', caseNo: CONST.caseNo,
   showDemo: false, showTimeout: false, toast: null,
 });
@@ -45,6 +46,7 @@ export default function App() {
   const recTimer = useRef(null);
   const scrollRef = useRef(null);
   const contentRef = useRef(null);
+  const resumeStarted = useRef(false);
 
   const set = useCallback((patch) => setS((p) => ({ ...p, ...(typeof patch === 'function' ? patch(p) : patch) })), []);
   const after = useCallback((ms, fn) => { const id = setTimeout(fn, ms); timers.current.push(id); return id; }, []);
@@ -66,6 +68,75 @@ export default function App() {
   // Keep the document language in sync so screen readers use the right pronunciation for EN/TL.
   useEffect(() => { document.documentElement.lang = S.lang === 'tl' ? 'fil' : 'en'; }, [S.lang]);
 
+  // Resume eGovPH, hosted-liveness, and eGovPay redirects. Session JWTs live in
+  // sessionStorage so they survive same-tab provider redirects but disappear when the tab closes.
+  useEffect(() => {
+    if (resumeStarted.current) return;
+    resumeStarted.current = true;
+    const cleanUrl = () => window.history.replaceState({}, '', '/');
+    const finishPayment = async (billId) => {
+      let latest = null;
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        latest = await api.paymentStatus(billId);
+        const status = String(latest?.status || '').toLowerCase();
+        if (['paid', 'settled', 'success', 'successful', 'completed', 'failed', 'voided'].includes(status)) break;
+        await delay(1500);
+      }
+      return latest;
+    };
+
+    (async () => {
+      try {
+        const auth = await api.authConfig();
+        set({ authMode: auth?.mode || 'mock', authLaunchUrl: auth?.launchUrl || null, authCallbackUrl: auth?.callbackUrl || null });
+
+        const current = new URL(window.location.href);
+        const exchangeCode = current.searchParams.get('exchange_code') || current.searchParams.get('exchangeCode');
+        if (exchangeCode) {
+          cleanUrl();
+          set({ signingIn: true, signinErr: false, flowError: null });
+          const result = await api.login(exchangeCode);
+          if (!result?.token) throw new Error('eGovPH returned no session token');
+          setToken(result.token);
+          set({ signingIn: false, screen: 'home', stack: [] });
+          return;
+        }
+
+        if (current.pathname.endsWith('/liveness/callback')) {
+          cleanUrl();
+          const sessionId = window.sessionStorage.getItem('egovmed.livenessSessionId');
+          if (!getToken() || !sessionId) throw new Error('The liveness session could not be resumed');
+          set({ screen: 'liveness', stack: ['consent'], liveness: 'verifying', livenessSessionId: sessionId, flowError: null });
+          const result = await api.verifyIdentity(sessionId);
+          window.sessionStorage.removeItem('egovmed.livenessSessionId');
+          if (!result?.verified) throw new Error('Identity verification did not pass');
+          set({ liveness: 'verified' });
+          return;
+        }
+
+        if (current.pathname.endsWith('/payment/return')) {
+          cleanUrl();
+          const billId = window.sessionStorage.getItem('egovmed.pendingBillId');
+          if (!getToken() || !billId) throw new Error('The payment session could not be resumed');
+          set({ screen: 'payment', stack: ['home'], paying: true, channel: 0, flowError: null });
+          const payment = await finishPayment(billId);
+          window.sessionStorage.removeItem('egovmed.pendingBillId');
+          const status = String(payment?.status || '').toLowerCase();
+          const paid = ['paid', 'settled', 'success', 'successful', 'completed'].includes(status);
+          set({ paying: false, paid, paymentStatus: status, flowError: paid ? null : `Payment status: ${status || 'pending'}` });
+          return;
+        }
+
+        if (getToken()) {
+          await api.me();
+          set({ screen: 'home', stack: [] });
+        }
+      } catch (err) {
+        set({ signingIn: false, signinErr: true, liveness: 'failed', paying: false, flowError: err.message || 'The live flow failed' });
+      }
+    })();
+  }, [set]);
+
   const A = {
     setLang: (l) => set({ lang: l }),
     cycleText: () => set((p) => ({ textScale: (p.textScale + 1) % 3 })),
@@ -73,12 +144,25 @@ export default function App() {
     back: () => set((p) => { const k = [...p.stack]; const prev = k.pop() || 'home'; return { screen: prev, stack: k }; }),
     toast,
 
-    // Sign in (eGovPH SSO — mock exchange-code login)
+    // Mock mode exchanges a demo code. Live mode starts the partner-provided eGovPH launch URL;
+    // eGovPH returns to /egovph/sso?exchange_code=... and the mount effect above completes login.
     doSignIn: async () => {
+      if (S.authMode === 'live') {
+        if (S.authLaunchUrl && /^https:\/\//i.test(S.authLaunchUrl)) {
+          window.location.assign(S.authLaunchUrl);
+        } else {
+          set({ signinErr: true, flowError: 'Open eGovMed from the eGovPH app, or configure EGOVPH_LAUNCH_URL.' });
+        }
+        return;
+      }
       set({ signingIn: true, signinErr: false });
-      const [res] = await Promise.all([tryApi(api.login()), delay(1500)]);
-      if (res && res.token) setToken(res.token);
-      set({ signingIn: false, screen: 'home', stack: [] });
+      const [res] = await Promise.all([tryApi(api.login('demo')), delay(900)]);
+      if (res?.token) {
+        setToken(res.token);
+        set({ signingIn: false, screen: 'home', stack: [], flowError: null });
+      } else {
+        set({ signingIn: false, signinErr: true, flowError: 'Unable to sign in.' });
+      }
     },
 
     // Symptom intake
@@ -119,13 +203,29 @@ export default function App() {
     // Consent + Face Liveness (National ID eVerify)
     declineConsent: () => A.back(),
     acceptConsent: async () => {
-      set((p) => ({ screen: 'liveness', stack: [...p.stack, 'consent'], liveness: 'capturing' }));
-      const sess = await tryApi(api.startLiveness());
-      const sid = sess?.sessionId || sess?.session_id || null;
-      set({ livenessSessionId: sid });
-      after(1600, () => { set({ liveness: 'verifying' }); if (sid) tryApi(api.verifyIdentity(sid)); });
-      after(3300, () => set({ liveness: 'verified' }));
+      set((p) => ({ screen: 'liveness', stack: [...p.stack, 'consent'], liveness: 'capturing', flowError: null }));
+      try {
+        const sess = await api.startLiveness();
+        const sid = sess?.sessionId || sess?.session_id || null;
+        if (!sid) throw new Error('Face Liveness returned no session ID');
+        set({ livenessSessionId: sid });
+        if (sess?.url) {
+          const hosted = new URL(sess.url);
+          if (hosted.protocol !== 'https:') throw new Error('Face Liveness returned an insecure URL');
+          window.sessionStorage.setItem('egovmed.livenessSessionId', sid);
+          window.location.assign(hosted.href);
+          return;
+        }
+        await delay(900);
+        set({ liveness: 'verifying' });
+        const result = await api.verifyIdentity(sid);
+        if (!result?.verified) throw new Error('Identity verification did not pass');
+        set({ liveness: 'verified' });
+      } catch (err) {
+        set({ liveness: 'failed', flowError: err.message || 'Identity verification failed' });
+      }
     },
+    retryLiveness: () => A.acceptConsent(),
 
     // Booking + eMessage
     goBook: () => { A.go('book'); set({ slotsLoading: true, selectedSlot: null }); after(1100, () => set({ slotsLoading: false })); },
@@ -134,7 +234,7 @@ export default function App() {
       if (S.selectedSlot == null || S.booking) return;
       set({ booking: true });
       const specialty = S.triage?.specialty || CONST.dept;
-      const [res] = await Promise.all([tryApi(api.book(specialty, slotLabel, S.triage?.id)), delay(1500)]);
+      const [res] = await Promise.all([tryApi(api.book(specialty, undefined, S.triage?.id)), delay(1500)]);
       set((p) => ({ booking: false, booked: true, slotLabel, refNo: res?.appointment?.reference_no || p.refNo, screen: 'confirm', stack: ['home'] }));
       toast(S.lang === 'tl' ? 'Ipinadala ang kumpirmasyon sa SMS' : 'Confirmation texted to you');
     },
@@ -144,10 +244,24 @@ export default function App() {
     setChannel: (i) => set({ channel: i }),
     doPay: async (amount = 300) => {
       if (S.channel == null || S.paying) return;
-      set({ paying: true });
-      await Promise.all([tryApi(api.pay(amount)), delay(1900)]);
-      set({ paying: false, paid: true });
-      toast(S.lang === 'tl' ? 'Ipinadala ang resibo sa SMS' : 'Receipt texted to you');
+      set({ paying: true, flowError: null });
+      try {
+        const payment = await api.pay(amount, CHANNELS[S.channel]?.[0] || 'card');
+        if (payment?.provider !== 'mock' && payment?.checkoutUrl) {
+          const checkout = new URL(payment.checkoutUrl);
+          if (checkout.protocol !== 'https:') throw new Error('Payment provider returned an insecure checkout URL');
+          window.sessionStorage.setItem('egovmed.pendingBillId', payment.id);
+          window.location.assign(checkout.href);
+          return;
+        }
+        const refreshed = payment?.id ? await api.paymentStatus(payment.id) : payment;
+        const status = String(refreshed?.status || '').toLowerCase();
+        const paid = ['paid', 'settled', 'success', 'successful', 'completed'].includes(status);
+        set({ paying: false, paid, paymentStatus: status, flowError: paid ? null : `Payment status: ${status || 'pending'}` });
+        if (paid) toast(S.lang === 'tl' ? 'Ipinadala ang resibo sa SMS' : 'Receipt texted to you');
+      } catch (err) {
+        set({ paying: false, flowError: err.message || 'Payment failed' });
+      }
     },
 
     // Records + Report
@@ -169,7 +283,7 @@ export default function App() {
     toggleEmergency: () => set((p) => ({ emergency: !p.emergency })),
     triggerTimeout: () => set({ showDemo: false, showTimeout: true }),
     stayIn: () => set({ showTimeout: false }),
-    logout: () => { clearTimers(); setToken(null); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
+    logout: () => { clearTimers(); setToken(null); window.sessionStorage.removeItem('egovmed.livenessSessionId'); window.sessionStorage.removeItem('egovmed.pendingBillId'); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
     openTokens: () => { set({ showDemo: false }); A.go('tokens'); },
     resetFlow: () => { clearTimers(); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
   };
@@ -179,14 +293,6 @@ export default function App() {
 
   return (
     <div className="device" style={{ fontSize: FONT[S.textScale] }}>
-      {/* status bar (decorative chrome) */}
-      <div className="statusbar" aria-hidden="true">
-        <span>9:41</span>
-        <span className="glyphs">
-          <Signal /><Wifi /><Battery />
-        </span>
-      </div>
-
       {/* utility strip */}
       <header className="util">
         <span className="wm">eGOV<span className="med">MED</span></span>
@@ -229,7 +335,3 @@ function SegBtn({ on, children, ...p }) {
     : { border: 'none', background: 'transparent', color: 'var(--muted)', fontWeight: 700, borderRadius: 999, padding: '5px 13px', fontSize: 13 };
   return <button aria-pressed={on} style={style} {...p}>{children}</button>;
 }
-
-const Signal = () => <svg width="17" height="12" viewBox="0 0 17 12" aria-hidden="true"><g fill="currentColor">{[0, 1, 2, 3].map((i) => <rect key={i} x={i * 4.5} y={8 - i * 2.4} width="3" height={4 + i * 2.4} rx="1" />)}</g></svg>;
-const Wifi = () => <svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M1 4a10 10 0 0114 0M3.5 6.6a6.5 6.5 0 019 0" /><circle cx="8" cy="10" r="1" fill="currentColor" stroke="none" /></svg>;
-const Battery = () => <svg width="24" height="12" viewBox="0 0 24 12" aria-hidden="true"><rect x="1" y="1.5" width="20" height="9" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.5" /><rect x="2.5" y="3" width="15" height="6" rx="1.2" fill="currentColor" /><rect x="22" y="4" width="1.6" height="4" rx="0.8" fill="currentColor" opacity="0.5" /></svg>;

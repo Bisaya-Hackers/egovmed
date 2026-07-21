@@ -3,29 +3,9 @@ const { Router } = require('express');
 const { requireAuth, asyncHandler } = require('../middleware');
 const { getStore, COLLECTIONS } = require('../store');
 const { notFound } = require('../lib/errors');
+const { publicPatient } = require('../lib/presenters');
 
 const router = Router();
-
-// Whitelist the fields the client needs — never auto-expose the whole stored doc
-// (keeps philsysId and benefit member IDs off the wire; masks sensitive identifiers).
-const publicPatient = (p) => ({
-  id: p.id,
-  firstName: p.firstName,
-  middleName: p.middleName,
-  lastName: p.lastName,
-  suffix: p.suffix,
-  sex: p.sex,
-  birthDate: p.birthDate,
-  email: p.email,
-  phone: p.phone,
-  nationality: p.nationality,
-  identityVerified: !!p.identityVerified,
-  benefits: {
-    philhealth: !!p.benefits?.philhealth?.active,
-    whiteCard: !!p.benefits?.whiteCard?.active,
-    sss: !!p.benefits?.sss?.active,
-  },
-});
 
 // GET /patients/me → the authenticated patient's profile
 router.get('/me', requireAuth, asyncHandler(async (req, res) => {

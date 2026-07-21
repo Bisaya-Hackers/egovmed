@@ -1,15 +1,22 @@
 'use strict';
 const { Router } = require('express');
 const { z } = require('zod');
-const { requireAuth, validate, asyncHandler } = require('../middleware');
+const { rateLimit, requireAuth, validate, asyncHandler } = require('../middleware');
 const paymentService = require('../services/paymentService');
 const { getStore, COLLECTIONS } = require('../store');
 
 const router = Router();
+const idParams = z.object({ id: z.string().regex(/^bill_[A-Za-z0-9_-]{1,100}$/) }).strict();
+
+// eGovPay's supplied docs do not define a callback signature. Acknowledge notifications,
+// but never trust callback fields to mark a bill paid; the authenticated status endpoint polls eGovPay.
+router.post('/callback',
+  rateLimit({ scope: 'payment-callback', max: 60, windowMs: 60_000, key: (req) => req.ip }),
+  (_req, res) => res.status(202).json({ accepted: true }));
 
 // POST /payments/quote  { billAmount } → preview benefits without creating a bill
 router.post('/quote', requireAuth,
-  validate(z.object({ billAmount: z.number().positive() })),
+  validate(z.object({ billAmount: z.number().finite().positive().max(10_000_000) }).strict()),
   asyncHandler(async (req, res) => {
     const store = getStore();
     const patient = await store.findById(COLLECTIONS.PATIENTS, req.user.sub);
@@ -19,10 +26,10 @@ router.post('/quote', requireAuth,
 // POST /payments  { billAmount, description?, channel? } → create bill + eGovPay checkout
 router.post('/', requireAuth,
   validate(z.object({
-    billAmount: z.number().positive(),
-    description: z.string().optional(),
-    channel: z.string().optional(),
-  })),
+    billAmount: z.number().finite().positive().max(10_000_000),
+    description: z.string().trim().min(1).max(500).optional(),
+    channel: z.string().trim().min(1).max(50).optional(),
+  }).strict()),
   asyncHandler(async (req, res) => {
     res.status(201).json(await paymentService.createBill({ patientId: req.user.sub, ...req.body }));
   }));
@@ -33,8 +40,10 @@ router.get('/', requireAuth, asyncHandler(async (req, res) => {
 }));
 
 // GET /payments/:id/status → refresh checkout status
-router.get('/:id/status', requireAuth, asyncHandler(async (req, res) => {
-  res.json(await paymentService.refreshStatus(req.params.id));
+router.get('/:id/status', requireAuth,
+  rateLimit({ scope: 'payment-status', max: 30, windowMs: 10 * 60_000 }),
+  validate(idParams, 'params'), asyncHandler(async (req, res) => {
+  res.json(await paymentService.refreshStatus(req.params.id, req.user.sub));
 }));
 
 module.exports = router;

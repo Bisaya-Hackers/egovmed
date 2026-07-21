@@ -17,6 +17,7 @@ const COLLECTIONS = {
   LIVENESS: 'livenessSessions',
   MESSAGES: 'messages',
   OAUTH_STATE: 'oauthState',
+  AUDIT_LOGS: 'auditLogs',
 };
 
 let store;
@@ -46,7 +47,6 @@ async function seedDemoData() {
   const patient = {
     id: 'pat_demo_juan',
     egovSub: 'MVPCBEUVCGPZR', // matches the mock SSO profile uniqid → login links to this patient
-    philsysId: '1234-5678-9012',
     identityVerified: true,
     firstName: 'Juan',
     lastName: 'Dela Cruz',

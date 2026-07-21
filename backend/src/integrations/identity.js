@@ -1,5 +1,5 @@
 'use strict';
-const { env } = require('../config/env');
+const { env, publicUrl } = require('../config/env');
 const http = require('../lib/http');
 const { randomId } = require('../lib/crypto');
 
@@ -13,16 +13,18 @@ const { randomId } = require('../lib/crypto');
  * client (window.eKYC().start({ pubKey }) → result.session_id) and passed through here.
  */
 const everify = env.everify;
-const isEverifyLive = () => everify.mode === 'live' && everify.clientId && everify.clientSecret;
+const isEverifyLive = () => everify.mode === 'live';
 
 let tokenCache = null; // { token, expiresAt }
 async function everifyToken() {
+  if (!everify.clientId || !everify.clientSecret) throw new Error('eVerify live mode requires client credentials');
   if (tokenCache && tokenCache.expiresAt > Date.now() + 5000) return tokenCache.token;
   const res = await http.post(`${everify.baseUrl}/api/auth`, {
     client_id: everify.clientId,
     client_secret: everify.clientSecret,
   });
-  const token = res && (res.access_token || res.token);
+  const data = res && (res.data || res);
+  const token = data && (data.access_token || data.token);
   if (!token) throw new Error('eVerify /api/auth returned no access_token');
   tokenCache = { token, expiresAt: Date.now() + 50 * 60 * 1000 };
   return token;
@@ -59,13 +61,17 @@ async function verifyPhilSys({ firstName, middleName, lastName, suffix, birthDat
  * The session `token` is what gets passed to eVerify /api/query as face_liveness_session_id.
  */
 const faceLiveness = env.faceLiveness;
-const isLivenessLive = () => faceLiveness.mode === 'live' && faceLiveness.apiKey;
+const isLivenessLive = () => faceLiveness.mode === 'live';
 
 async function createLivenessSession() {
   if (isLivenessLive()) {
+    if (!faceLiveness.apiKey) throw new Error('Face Liveness live mode requires FACE_LIVENESS_API_KEY');
+    const callbackUrl = faceLiveness.callbackUrl || publicUrl(env.appUrl, '/liveness/callback');
+    if (!/^https:\/\//i.test(callbackUrl)) throw new Error('Face Liveness live mode requires an HTTPS callback URL');
     const res = await http.post(`${faceLiveness.baseUrl}/v1/liveness/session`, {
       action: faceLiveness.action,
-      callback_url: faceLiveness.callbackUrl || undefined,
+      callback_url: callbackUrl,
+      delay: 1200,
     }, { headers: { 'x-api-key': faceLiveness.apiKey, 'Content-Type': 'application/json' } });
     return { sessionId: res.token, url: res.url, provider: 'face-liveness' }; // frontend sends the user to `url`
   }
@@ -74,6 +80,7 @@ async function createLivenessSession() {
 
 async function getLivenessResult(sessionId) {
   if (isLivenessLive()) {
+    if (!faceLiveness.apiKey) throw new Error('Face Liveness live mode requires FACE_LIVENESS_API_KEY');
     const res = await http.get(`${faceLiveness.baseUrl}/v1/liveness/result/${sessionId}`, {
       headers: { 'x-api-key': faceLiveness.apiKey },
     });

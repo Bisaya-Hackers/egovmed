@@ -16,10 +16,10 @@ npm install
 npm run dev                # http://localhost:3000
 ```
 
-The dev server proxies `/api` → the backend (default `http://localhost:4000`, override with `VITE_API_PROXY`). Start the backend separately (`cd ../backend && npm run dev`) to exercise real API calls; **without it the app still runs** — every backend call falls back to the designed demo data, so the whole flow works offline.
+The dev server listens on all local interfaces and proxies `/api` → the backend (default `http://localhost:4000`, override with `VITE_API_PROXY`). Start the backend separately (`cd ../backend && npm run dev`). From another device on the same Wi-Fi, open `http://<PC-LAN-IP>:3000`.
 
 ## Backend wiring
-`src/lib/api.js` calls the eGovMed API for: SSO login, eGovAI triage, eVerify + Face Liveness, appointment booking, eGovPay, records, and eReport. Each call is wrapped so a failure degrades gracefully to the prototype's demo content (the designed timings are preserved for the intended feel).
+`src/lib/api.js` calls the eGovMed API for SSO login, eGovAI triage, eVerify + Face Liveness, appointment booking, eGovPay, records, and eReport. Authentication, identity, and payment flows fail visibly and never advance on a timer. The live SSO, liveness, and payment flows preserve state across same-tab provider redirects using `sessionStorage` and confirm results with the backend.
 
 ## Structure
 ```
@@ -33,6 +33,6 @@ src/
 ```
 
 ## Notes
-- Illustration/photo areas are placeholders (`.img-slot`) awaiting official eGovPH art.
+- Patient-facing illustrations live in `src/assets/`; GCash and Maya marks come from their current App Store artwork and should be replaced with licensed partner assets before production if required by the partnership agreement.
 - The gear (⚙) opens **demo controls** (emergency toggle, session-timeout, tokens screen, reset) — reviewer shortcuts, not product UI.
 - Design source: Claude Design project `686ddf28-…`, file `eGovMed v2.dc.html` (see `docs/design-handoff.md`).

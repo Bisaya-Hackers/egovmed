@@ -2,7 +2,17 @@
 const eMessage = require('../integrations/eMessage');
 const { getStore, COLLECTIONS } = require('../store');
 const { randomId } = require('../lib/crypto');
-const { notFound } = require('../lib/errors');
+const { notFound, conflict } = require('../lib/errors');
+
+const messageAudit = (notification, patientId, kind) => ({
+  id: notification.id,
+  patientId,
+  kind,
+  status: notification.status,
+  channel: notification.channel,
+  provider: notification.provider,
+  createdAt: new Date().toISOString(),
+});
 
 async function book({ patientId, specialty, hospital = 'PGH', scheduledFor, triageId }) {
   const store = getStore();
@@ -39,12 +49,16 @@ async function book({ patientId, specialty, hospital = 'PGH', scheduledFor, tria
         subject: 'eGovMed appointment confirmed',
         body: `Hi ${patient.firstName}, your ${specialty} appointment at ${hospital} is booked. Queue #${queueNumber}.`,
       });
-      await store.create(COLLECTIONS.MESSAGES, { id: notification.id, patientId, kind: 'confirmation', ...notification, createdAt: new Date().toISOString() });
+      await store.create(COLLECTIONS.MESSAGES, messageAudit(notification, patientId, 'confirmation'));
     } catch (err) {
-      notification = { status: 'failed', reason: err.message };
+      notification = { status: 'failed', reason: 'notification_failed' };
     }
   }
 
+  if (notification.id) {
+    const { id, status, channel, provider } = notification;
+    notification = { id, status, channel, provider };
+  }
   return { appointment: appt, notification };
 }
 
@@ -54,10 +68,10 @@ async function listForPatient(patientId) {
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
-async function sendReminder(appointmentId) {
+async function sendReminder(appointmentId, patientId) {
   const store = getStore();
   const appt = await store.findById(COLLECTIONS.APPOINTMENTS, appointmentId);
-  if (!appt) throw notFound('Appointment not found');
+  if (!appt || appt.patientId !== patientId) throw notFound('Appointment not found');
   const patient = await store.findById(COLLECTIONS.PATIENTS, appt.patientId);
   if (!patient) throw notFound('Patient not found');
   const to = patient.phone || patient.email;
@@ -68,15 +82,19 @@ async function sendReminder(appointmentId) {
     subject: 'Appointment reminder',
     body: `Reminder: your ${appt.specialty} appointment at ${appt.hospital}. Queue #${appt.queueNumber}.`,
   });
-  await store.create(COLLECTIONS.MESSAGES, { id: notification.id, patientId: appt.patientId, kind: 'reminder', ...notification, createdAt: new Date().toISOString() });
-  return notification;
+  await store.create(COLLECTIONS.MESSAGES, messageAudit(notification, appt.patientId, 'reminder'));
+  const { id, status, channel, provider } = notification;
+  return { id, status, channel, provider };
 }
 
-async function updateStatus(appointmentId, status) {
+async function updateStatus(appointmentId, status, patientId) {
   const store = getStore();
-  const appt = await store.update(COLLECTIONS.APPOINTMENTS, appointmentId, { status });
-  if (!appt) throw notFound('Appointment not found');
-  return appt;
+  const appt = await store.findById(COLLECTIONS.APPOINTMENTS, appointmentId);
+  if (!appt || appt.patientId !== patientId) throw notFound('Appointment not found');
+  if (status !== 'cancelled' || appt.status !== 'booked') {
+    throw conflict(`Cannot transition appointment from ${appt.status} to ${status}`);
+  }
+  return store.update(COLLECTIONS.APPOINTMENTS, appointmentId, { status });
 }
 
 module.exports = { book, listForPatient, sendReminder, updateStatus };

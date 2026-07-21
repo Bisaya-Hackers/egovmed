@@ -23,6 +23,7 @@ const env = {
   sessionTtl: Math.max(1, int(process.env.SESSION_TTL, 86400)), // must be positive → valid jwt expiresIn
   phiKey: process.env.PHI_ENCRYPTION_KEY || '',
   adminKey: process.env.ADMIN_KEY || '', // gates operational routes (escalation sweep, insights)
+  allowMockInProduction: bool(process.env.ALLOW_MOCK_IN_PRODUCTION, false),
 
   store: {
     driver: (process.env.STORE_DRIVER || 'memory').toLowerCase(),
@@ -39,6 +40,7 @@ const env = {
     partnerCode: process.env.EGOVPH_PARTNER_CODE || process.env.EGOVPH_CLIENT_ID || '',
     partnerSecret: process.env.EGOVPH_PARTNER_SECRET || process.env.EGOVPH_CLIENT_SECRET || '',
     scope: process.env.EGOVPH_SCOPE || 'SSO_AUTHENTICATION',
+    launchUrl: process.env.EGOVPH_LAUNCH_URL || '',
   },
   egovAi: {
     mode: modeFor('EGOV_AI'),
@@ -53,6 +55,7 @@ const env = {
     baseUrl: process.env.EVERIFY_BASE_URL || 'https://hackathon-everify-api.e.gov.ph',
     clientId: process.env.EVERIFY_CLIENT_ID || '',
     clientSecret: process.env.EVERIFY_CLIENT_SECRET || '',
+    pubKey: process.env.EVERIFY_PUBKEY || '', // eVerify liveness widget public key (client-side; optional)
   },
   faceLiveness: {
     mode: modeFor('FACE_LIVENESS'),
@@ -106,16 +109,45 @@ const env = {
 };
 
 function warnIfMisconfigured(log) {
-  if (env.isProd && env.jwtSecret === 'dev-insecure-secret-change-me') {
-    // Forgeable tokens = full account/PHI takeover. Refuse to start rather than warn.
-    throw new Error('JWT_SECRET must be set to a strong secret in production (refusing to start with the insecure default).');
+  const weakJwtSecrets = new Set(['dev-insecure-secret-change-me', 'change-me-to-a-long-random-string']);
+  if (env.isProd && (weakJwtSecrets.has(env.jwtSecret) || env.jwtSecret.length < 32)) {
+    throw new Error('JWT_SECRET must be a unique secret of at least 32 characters in production.');
   }
-  if (!env.phiKey) {
+  if (env.isProd && env.phiKey.length < 32) {
+    throw new Error('PHI_ENCRYPTION_KEY must be a stable secret of at least 32 characters in production.');
+  } else if (!env.phiKey) {
     log.warn('PHI_ENCRYPTION_KEY is not set — health records will use an ephemeral key (records will not decrypt across restarts).');
   }
-  if (env.store.driver === 'memory') {
+  if (env.isProd && env.store.driver !== 'kv') {
+    throw new Error('STORE_DRIVER=kv is required in production so PHI and rate limits persist across instances.');
+  } else if (env.store.driver === 'memory') {
     log.warn('STORE_DRIVER=memory — data will NOT persist across serverless invocations. Use STORE_DRIVER=kv on Vercel.');
+  }
+  if (env.isProd && env.store.driver === 'kv' && (!env.store.upstashUrl || !env.store.upstashToken)) {
+    throw new Error('Upstash credentials are required when STORE_DRIVER=kv in production.');
+  }
+  if (env.isProd && env.appUrl === '*') {
+    throw new Error('APP_URL must be an explicit trusted origin in production.');
+  }
+  if (env.isProd && env.adminKey && env.adminKey.length < 32) {
+    throw new Error('ADMIN_KEY must be at least 32 characters when configured in production.');
+  }
+  if (env.isProd && !env.allowMockInProduction) {
+    const requirements = [
+      [env.egovph.mode === 'live' && env.egovph.partnerCode && env.egovph.partnerSecret, 'eGovPH SSO'],
+      [env.everify.mode === 'live' && env.everify.clientId && env.everify.clientSecret, 'eVerify'],
+      [env.faceLiveness.mode === 'live' && env.faceLiveness.apiKey, 'Face Liveness'],
+      [env.egovPay.mode === 'live' && env.egovPay.token, 'eGovPay'],
+    ];
+    const missing = requirements.filter(([ok]) => !ok).map(([, name]) => name);
+    if (missing.length) {
+      throw new Error(`Production cannot use mock or uncredentialed security/payment integrations: ${missing.join(', ')}. Set ALLOW_MOCK_IN_PRODUCTION=true only for an explicit non-live demo.`);
+    }
   }
 }
 
-module.exports = { env, bool, int, warnIfMisconfigured };
+function publicUrl(base, path) {
+  return `${String(base || '').replace(/\/$/, '')}/${String(path || '').replace(/^\//, '')}`;
+}
+
+module.exports = { env, bool, int, publicUrl, warnIfMisconfigured };

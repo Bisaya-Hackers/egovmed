@@ -50,10 +50,43 @@ This resolves a scope conflict between the two handoff docs — see [Decisions &
 ```bash
 git clone git@github.com:Bisaya-Hackers/egovmed.git
 cd egovmed
-cp .env.example .env   # fill in API keys — .env is gitignored
+cd backend
+copy .env.example .env   # fill in API keys — .env is gitignored
+npm install
+npm run dev
+
+# in a second terminal
+cd ..\frontend
+npm install
+npm run dev
 ```
 
-Stack (from the dev handoff, may be substituted): React web front end + Node/Express or Python/FastAPI backend; eGovChain anchoring via JSON-RPC (Hyperledger Besu).
+Open `http://localhost:3000` on the PC. For a phone on the same Wi-Fi, open
+`http://<PC-LAN-IP>:3000` (for example `http://192.168.1.9:3000`). Vite listens on
+all local interfaces and proxies `/api` to the backend, so the phone only needs port 3000.
+
+If Windows marks Wi-Fi as Public, run this once from **PowerShell as Administrator**:
+
+```powershell
+New-NetFirewallRule -DisplayName 'eGovMed local phone testing' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3000 -RemoteAddress LocalSubnet -Profile Public,Private
+```
+
+Remove the development rule when finished with:
+
+```powershell
+Remove-NetFirewallRule -DisplayName 'eGovMed local phone testing'
+```
+
+### Real provider callbacks
+
+Same-Wi-Fi HTTP is enough for the application and mock adapters, but it is not enough for
+eGovPH SSO, hosted Face Liveness, or eGovPay. Those providers require a public HTTPS origin.
+Set `APP_URL` to the public frontend origin, `API_PUBLIC_URL` to the public backend origin,
+register the documented callback URLs with each provider, and set only the corresponding
+`*_MODE=live` after its credentials and base URL are present. Do not set the global mode to
+`live` while an integration is incomplete.
+
+Stack: React/Vite frontend + Node/Express backend; eGovChain anchoring via JSON-RPC (Hyperledger Besu).
 
 ---
 

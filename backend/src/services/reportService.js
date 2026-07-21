@@ -1,7 +1,7 @@
 'use strict';
 const eReport = require('../integrations/eReport');
 const { getStore, COLLECTIONS } = require('../store');
-const { randomId } = require('../lib/crypto');
+const { randomId, encryptJson, decryptJson } = require('../lib/crypto');
 const { notFound } = require('../lib/errors');
 
 async function fileReport({ patientId, category, description, contact }) {
@@ -12,7 +12,8 @@ async function fileReport({ patientId, category, description, contact }) {
     id: randomId('rep_'),
     patientId: patientId || null,
     category,
-    description,
+    encryptedVersion: 1,
+    encrypted: encryptJson({ description }),
     caseNumber: filed.caseNumber,
     status: filed.status,
     escalated: false,
@@ -20,7 +21,7 @@ async function fileReport({ patientId, category, description, contact }) {
     createdAt: new Date().toISOString(),
   };
   await store.create(COLLECTIONS.REPORTS, report);
-  return report;
+  return present(report);
 }
 
 async function getByCase(caseNumber, requesterId) {
@@ -30,9 +31,9 @@ async function getByCase(caseNumber, requesterId) {
   if (!report || (requesterId && report.patientId !== requesterId)) throw notFound('Case not found');
   const upstream = await eReport.getStatus(caseNumber).catch(() => null);
   if (upstream && upstream.status && upstream.status !== report.status) {
-    return store.update(COLLECTIONS.REPORTS, report.id, { status: upstream.status });
+    return present(await store.update(COLLECTIONS.REPORTS, report.id, { status: upstream.status }));
   }
-  return report;
+  return present(report);
 }
 
 /** Auto-escalate any open case past its time threshold. Call from a cron / scheduled function. */
@@ -59,6 +60,14 @@ async function recurringErrors() {
   return Object.entries(counts)
     .map(([category, count]) => ({ category, count }))
     .sort((a, b) => b.count - a.count);
+}
+
+function present(report) {
+  if (report?.encryptedVersion === 1 && report.encrypted) {
+    const { encrypted, encryptedVersion, ...rest } = report;
+    return { ...rest, ...decryptJson(encrypted) };
+  }
+  return report;
 }
 
 module.exports = { fileReport, getByCase, escalateStale, recurringErrors };
