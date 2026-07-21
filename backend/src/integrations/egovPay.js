@@ -49,7 +49,7 @@ async function createCheckout({ amount, currency = 'PHP', description, items = [
     const data = (res && (res.data || res)) || {};
     return {
       reference: data.uuid || data.transaction_uuid || txnid,
-      checkoutUrl: data.payment_url || data.checkout_url || data.link,
+      checkoutUrl: data.url || data.payment_url || data.checkout_url || data.link,
       status: data.status || 'pending',
       provider: 'egovpay',
     };
