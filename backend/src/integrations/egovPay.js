@@ -7,8 +7,11 @@ const { randomId } = require('../lib/crypto');
 const cfg = env.egovPay;
 const isLive = () => cfg.mode === 'live';
 
-// digest = HMAC-SHA256("amount|txnid", token)  — binds amount+txnid to the merchant token (per eGovPay docs).
-const digestFor = (amount, txnid) => crypto.createHmac('sha256', cfg.token).update(`${amount}|${txnid}`).digest('hex');
+// digest = HMAC-SHA256("amount|txnid", secret)  — binds amount+txnid to the merchant token.
+// The mode-prefix (`test_` / `live_`) on the API token is NOT part of the HMAC key; the eGovPay
+// sandbox rejects the digest otherwise (unprocessable_entity "The digest is not valid.").
+const hmacKey = () => String(cfg.token || '').replace(/^(test_|live_)/, '');
+const digestFor = (amount, txnid) => crypto.createHmac('sha256', hmacKey()).update(`${amount}|${txnid}`).digest('hex');
 
 /**
  * Create a payment transaction and return a hosted payment-gateway link.
