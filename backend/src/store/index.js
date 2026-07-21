@@ -40,13 +40,27 @@ function getStore() {
   return store;
 }
 
+// Derives the same patient id authService uses (sha256(egovsub:<uniqid>)) so a seeded demo patient
+// and one created via SSO login collapse to the same record — no orphan duplicates on cold start.
+const DEMO_EGOV_SUB = 'MVPCBEUVCGPZR'; // must match egovph.js mock profile uniqid
+const patientIdFor = (egovSub) => 'pat_' + sha256Hex('egovsub:' + egovSub).slice(2, 22);
+const DEMO_PATIENT_ID = patientIdFor(DEMO_EGOV_SUB);
+const DEMO_RECORD_ID = 'rec_demo_cbc';
+
+/**
+ * Idempotent demo seed: the demo patient's benefits + a cross-hospital lab record. Runs safely on
+ * every cold start (skips if the patient already exists so we don't stomp on real user activity).
+ */
 async function seedDemoData() {
   const s = getStore();
   const now = new Date().toISOString();
 
+  const existing = await s.findById(COLLECTIONS.PATIENTS, DEMO_PATIENT_ID);
+  if (existing) return existing; // already seeded — leave alone
+
   const patient = {
-    id: 'pat_demo_juan',
-    egovSub: 'MVPCBEUVCGPZR', // matches the mock SSO profile uniqid → login links to this patient
+    id: DEMO_PATIENT_ID,
+    egovSub: DEMO_EGOV_SUB,
     identityVerified: true,
     firstName: 'Juan',
     lastName: 'Dela Cruz',
@@ -67,7 +81,7 @@ async function seedDemoData() {
   const cbcData = { hemoglobin: '11.2 g/dL', wbc: '7.5 x10^9/L', platelets: '250 x10^9/L', interpretation: 'Mild anemia; otherwise within normal limits' };
   const cbcHash = sha256Hex({ patientId: patient.id, type: 'lab', title: 'Complete Blood Count (CBC)', sourceFacility: 'Ospital ng Maynila', data: cbcData });
   await s.create(COLLECTIONS.RECORDS, {
-    id: 'rec_demo_cbc',
+    id: DEMO_RECORD_ID,
     patientId: patient.id,
     type: 'lab',
     title: 'Complete Blood Count (CBC)',
