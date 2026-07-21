@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ScreenHeader, Btn } from '../components/ui.jsx';
-import { Check, ShieldTick } from '../components/Icons.jsx';
+import { Check, ShieldTick, HeartPulse } from '../components/Icons.jsx';
 import { RECORDS } from '../i18n/dict.js';
 import { api } from '../lib/api.js';
 
@@ -12,18 +12,28 @@ const formatDate = (iso, lang) => (iso
   ? new Date(iso).toLocaleDateString(lang === 'tl' ? 'fil-PH' : 'en-PH', { day: '2-digit', month: 'short', year: 'numeric' })
   : '');
 
+// Split an AI-generated multi-line summary into bullet items. eGovAI returns either markdown-style
+// dashes/asterisks or the fallback's newline-joined bullets — accept both.
+const splitBullets = (text) => String(text || '')
+  .split(/\r?\n/)
+  .map((l) => l.replace(/^\s*[-*•·]\s*/, '').trim())
+  .filter(Boolean);
+
 export default function Records({ c, lang, A }) {
   const [records, setRecords] = useState(() => demo(lang));
   const [openId, setOpenId] = useState(null); // record id whose detail sheet is open
+  const [summary, setSummary] = useState(null); // { summary: string, verifiedLabs: [], recordCount, triageCount }
+  const [summaryLoading, setSummaryLoading] = useState(true);
 
-  // Upgrade to live eGovChain-anchored records if the backend is reachable; otherwise keep the demo set.
+  // Upgrade to live eGovChain-anchored records + fetch the AI doctor summary in parallel.
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const res = await api.records();
-        if (alive && Array.isArray(res) && res.length) {
-          setRecords(res.map((r) => ({
+        const [list, sum] = await Promise.all([api.records(), api.doctorSummary().catch(() => null)]);
+        if (!alive) return;
+        if (Array.isArray(list) && list.length) {
+          setRecords(list.map((r) => ({
             id: r.id,
             name: r.title,
             date: formatDate(r.createdAt, lang),
@@ -34,7 +44,9 @@ export default function Records({ c, lang, A }) {
             isDemo: false,
           })));
         }
+        setSummary(sum);
       } catch { /* keep demo fallback */ }
+      if (alive) setSummaryLoading(false);
     })();
     return () => { alive = false; };
   }, [lang]);
@@ -44,6 +56,31 @@ export default function Records({ c, lang, A }) {
       <ScreenHeader onBack={A.back} label={c.recordsTitle} />
       <h1 className="h1" data-stagger>{c.recordsTitle}</h1>
       <p className="sub" data-stagger>{c.recordsSub}</p>
+
+      {(summary || summaryLoading) && (
+        <div data-stagger className="card tint" style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <span className="icirc" style={{ width: 32, height: 32, background: 'rgba(20,82,240,.14)' }}><HeartPulse size={18} color="var(--primary)" /></span>
+            <span className="overline" style={{ color: 'var(--primary)' }}>{lang === 'tl' ? 'Buod ng iyong kalusugan' : 'Your health summary'}</span>
+          </div>
+          {summaryLoading ? (
+            <div className="sub">{lang === 'tl' ? 'Sinusuri ang iyong rekord…' : 'Reviewing your records…'}</div>
+          ) : (
+            <>
+              <ul style={{ margin: '4px 0 8px', paddingLeft: 18, lineHeight: 1.5, fontSize: '0.95em' }}>
+                {splitBullets(summary.summary).slice(0, 4).map((line, i) => (
+                  <li key={i} style={{ marginTop: i === 0 ? 0 : 4 }}>{line}</li>
+                ))}
+              </ul>
+              <div style={{ fontSize: '0.78em', color: 'var(--muted)', fontWeight: 600, marginTop: 6 }}>
+                {lang === 'tl'
+                  ? `Batay sa ${summary.recordCount} rekord${summary.recordCount === 1 ? '' : 's'} at ${summary.triageCount} triage · AI, kailangan pa ring i-confirm ng doktor`
+                  : `From ${summary.recordCount} record${summary.recordCount === 1 ? '' : 's'} and ${summary.triageCount} triage · AI, still needs doctor confirmation`}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="stack" style={{ marginTop: 18 }}>
         {records.map((r) => (
