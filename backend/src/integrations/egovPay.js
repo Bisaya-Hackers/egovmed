@@ -1,11 +1,11 @@
 'use strict';
 const crypto = require('crypto');
-const { env } = require('../config/env');
+const { env, publicUrl } = require('../config/env');
 const http = require('../lib/http');
 const { randomId } = require('../lib/crypto');
 
 const cfg = env.egovPay;
-const isLive = () => cfg.mode === 'live' && cfg.token;
+const isLive = () => cfg.mode === 'live';
 
 // digest = HMAC-SHA256("amount|txnid", token)  — binds amount+txnid to the merchant token (per eGovPay docs).
 const digestFor = (amount, txnid) => crypto.createHmac('sha256', cfg.token).update(`${amount}|${txnid}`).digest('hex');
@@ -15,22 +15,30 @@ const digestFor = (amount, txnid) => crypto.createHmac('sha256', cfg.token).upda
  * live: POST {baseUrl}/api/v1/transaction with X-eGovPay-Token + digest.
  * mock: returns a fake checkout URL + reference (demo).
  */
-async function createCheckout({ patientId, amount, currency = 'PHP', description, items = [], mobile, email, name, metadata = {} }) {
+async function createCheckout({ amount, currency = 'PHP', description, items = [], mobile, email, name }) {
   if (isLive()) {
+    if (!cfg.token || !cfg.settlementTemplateUuid) throw new Error('eGovPay live mode requires token and settlement template');
+    const redirectUrl = cfg.redirectUrl || publicUrl(env.appUrl, '/payment/return');
+    const callbackUrl = cfg.callbackUrl || publicUrl(env.apiPublicUrl, '/payments/callback');
+    if (!/^https:\/\//i.test(redirectUrl) || !/^https:\/\//i.test(callbackUrl)) {
+      throw new Error('eGovPay live mode requires HTTPS redirect and callback URLs');
+    }
     const txnid = randomId('txn_');
     const body = {
       items: items.length ? items : [{ name: description || 'Hospital services', amount }],
       amount,
       settlement_template_uuid: cfg.settlementTemplateUuid,
-      redirect_url: cfg.redirectUrl,
-      callback_url: cfg.callbackUrl,
+      redirect_url: redirectUrl,
+      callback_url: callbackUrl,
       txnid,
       digest: digestFor(amount, txnid),
       currency,
       mobile,
       email,
       name,
-      description: { patientId, ...metadata },
+      // The partner schema defines description as an object. Keep it generic so
+      // medical details and patient identifiers never leave through the payment API.
+      description: { purpose: description || 'Hospital services' },
     };
     const res = await http.post(`${cfg.baseUrl}/api/v1/transaction`, body, {
       headers: { 'X-eGovPay-Token': cfg.token, 'Content-Type': 'application/json; charset=utf-8' },
@@ -54,6 +62,7 @@ async function createCheckout({ patientId, amount, currency = 'PHP', description
 
 async function getStatus(reference) {
   if (isLive()) {
+    if (!cfg.token) throw new Error('eGovPay live mode requires EGOVPAY_TOKEN');
     const res = await http.get(`${cfg.baseUrl}/api/v1/transaction/${reference}`, {
       headers: { 'X-eGovPay-Token': cfg.token, 'Content-Type': 'application/json; charset=utf-8' },
     });

@@ -2,8 +2,14 @@
 // The session token from login is attached as a Bearer on every authed call.
 const BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
-let token = null;
-export function setToken(t) { token = t; }
+const SESSION_KEY = 'egovmed.session';
+let token = typeof window !== 'undefined' ? window.sessionStorage.getItem(SESSION_KEY) : null;
+export function setToken(t) {
+  token = t || null;
+  if (typeof window === 'undefined') return;
+  if (token) window.sessionStorage.setItem(SESSION_KEY, token);
+  else window.sessionStorage.removeItem(SESSION_KEY);
+}
 export function getToken() { return token; }
 
 async function req(path, { method = 'GET', body } = {}) {
@@ -28,8 +34,9 @@ async function req(path, { method = 'GET', body } = {}) {
 }
 
 export const api = {
-  // eGovPH SSO — mock exchange-code login (backend runs in mock mode → returns a seeded patient + JWT).
-  login: () => req('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo' } }),
+  authConfig: () => req('/auth/config'),
+  // In live mode the exchange code comes from the eGovPH redirect query string.
+  login: (exchangeCode = 'demo') => req('/auth/egov/exchange', { method: 'POST', body: { exchangeCode } }),
   me: () => req('/patients/me'),
   // eGovAI triage
   triage: (text, language) => req('/triage', { method: 'POST', body: { text, language: language === 'tl' ? 'tl' : 'en' } }),
@@ -37,11 +44,14 @@ export const api = {
   startLiveness: () => req('/identity/liveness', { method: 'POST', body: {} }),
   verifyIdentity: (livenessSessionId) => req('/identity/verify', { method: 'POST', body: { consent: true, livenessSessionId } }),
   // Appointments + eMessage
-  book: (specialty, scheduledFor, triageId) => req('/appointments', { method: 'POST', body: { specialty, scheduledFor, triageId } }),
+  book: (specialty, scheduledFor, triageId) => req('/appointments', {
+    method: 'POST', body: { specialty, ...(scheduledFor ? { scheduledFor } : {}), ...(triageId ? { triageId } : {}) },
+  }),
   appointments: () => req('/appointments'),
   // eGovPay (benefits mock-labeled by the backend)
   quote: (billAmount) => req('/payments/quote', { method: 'POST', body: { billAmount } }),
-  pay: (billAmount) => req('/payments', { method: 'POST', body: { billAmount } }),
+  pay: (billAmount, channel) => req('/payments', { method: 'POST', body: { billAmount, channel } }),
+  paymentStatus: (billId) => req(`/payments/${encodeURIComponent(billId)}/status`),
   // eGovChain-anchored records
   records: () => req('/records'),
   // eReport

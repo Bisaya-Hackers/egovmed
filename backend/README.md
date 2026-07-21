@@ -55,11 +55,12 @@ These currently authenticate with per-service API keys. eGov most likely exposes
 
 ## API surface
 
-All routes except `/auth/*`, `/`, `/health` require `Authorization: Bearer <session-jwt>`.
+All routes except `/auth/*`, `/payments/callback`, `/`, and `/health` require `Authorization: Bearer <session-jwt>`.
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/` , `/health` | Service info / health |
+| GET | `/auth/config` | Safe public SSO mode/callback metadata (no credentials) |
 | POST | `/auth/egov/exchange` | SSO login with an eGov `exchangeCode` → session |
 | POST | `/auth/token` | Login with an eGov SSO `accessToken` → session |
 | GET | `/patients/me` | Authenticated patient profile (auto-filled from SSO) |
@@ -78,6 +79,7 @@ All routes except `/auth/*`, `/`, `/health` require `Authorization: Bearer <sess
 | PATCH | `/appointments/:id` | Update status |
 | POST | `/payments/quote` | Preview benefit auto-apply (PhilHealth/White Card/SSS) |
 | POST | `/payments` | Create bill + eGovPay checkout |
+| POST | `/payments/callback` | Acknowledge provider notification; never marks paid without server-side status polling |
 | GET | `/payments/:id/status` | Refresh payment status |
 | POST | `/reports` | File an issue → case number |
 | GET | `/reports/:caseNumber` | Track a case |

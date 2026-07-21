@@ -2,8 +2,11 @@ import { useState } from 'react';
 import PinInput from '../components/PinInput.jsx';
 import { Fingerprint, Phone } from '../components/Icons.jsx';
 import { CONST } from '../i18n/dict.js';
+import communityArt from '../assets/signin-filipino-community.png';
 
 export default function SignIn({ c, S, A }) {
+  const live = S.authMode === 'live';
+  const loading = S.authMode === 'loading';
   const [mpin, setMpin] = useState(['', '', '', '', '', '']);
   const onChange = (arr) => {
     setMpin(arr);
@@ -17,47 +20,69 @@ export default function SignIn({ c, S, A }) {
       </div>
 
       <h1 className="h1" style={{ marginTop: 20 }} data-stagger>{c.welcomeBack}</h1>
-      <p className="sub" data-stagger>{c.mpinPrompt}</p>
+      <p className="sub" data-stagger>
+        {live ? 'Continue securely through your eGovPH account.' : c.mpinPrompt}
+      </p>
 
-      <div data-stagger style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 22, marginBottom: 10 }}>
-        <span style={{ fontWeight: 700, fontSize: '0.92em' }}>{c.mpinLabel}</span>
-        <button className="btn ghost" style={{ width: 'auto' }} onClick={() => setMpin(['', '', '', '', '', ''])}>{c.clearLabel}</button>
-      </div>
-      <div data-stagger>
-        <PinInput values={mpin} onChange={onChange} masked autoFocus ariaLabel={c.mpinLabel} />
-      </div>
+      {!live && !loading && (
+        <>
+          <div data-stagger style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 22, marginBottom: 10 }}>
+            <span style={{ fontWeight: 700, fontSize: '0.92em' }}>{c.mpinLabel}</span>
+            <button className="btn ghost" style={{ width: 'auto' }} onClick={() => setMpin(['', '', '', '', '', ''])}>{c.clearLabel}</button>
+          </div>
+          <div data-stagger>
+            <PinInput values={mpin} onChange={onChange} masked autoFocus ariaLabel={c.mpinLabel} />
+          </div>
+        </>
+      )}
 
       {S.signingIn ? (
         <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center', marginTop: 18, color: 'var(--muted)', fontWeight: 600 }}>
           <span className="spinner" /> <span>{c.signingIn}</span>
         </div>
-      ) : (
+      ) : !live && !loading ? (
         <button className="btn ghost" style={{ marginTop: 14 }} onClick={() => A.toast(c.forgotMpin)}>{c.forgotMpin}</button>
-      )}
+      ) : null}
 
       <div className="rowsep" style={{ margin: '20px 0' }} />
 
       <button
         data-stagger
         onClick={A.doSignIn}
+        disabled={loading || S.signingIn}
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', minHeight: 56, border: '1.5px solid var(--line)', background: 'var(--canvas)', color: 'var(--ink)', borderRadius: 16, fontWeight: 700 }}
       >
-        <Fingerprint size={22} color="var(--primary)" /> <span>{c.fingerprint}</span>
+        {loading || S.signingIn ? <span className="spinner" /> : <Fingerprint size={22} color="var(--primary)" />}
+        <span>{loading ? 'Checking eGovPH…' : live ? 'Continue with eGovPH' : c.fingerprint}</span>
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, color: 'var(--muted)' }}>
+      {S.flowError && (
+        <div role="alert" className="card" style={{ marginTop: 14, color: 'var(--red)', fontWeight: 650, fontSize: '0.9em' }}>
+          {S.flowError}
+        </div>
+      )}
+
+      {live && !S.authLaunchUrl && !S.flowError && (
+        <p className="sub" style={{ textAlign: 'center', marginTop: 14 }}>
+          Launch eGovMed from the eGovPH app to sign in.
+        </p>
+      )}
+
+      {!live && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, color: 'var(--muted)' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: '1px solid var(--line)', borderRadius: 999, padding: '7px 14px', fontSize: '0.9em', fontWeight: 600 }}>
           <Phone size={16} /> {CONST.phone}
         </span>
-      </div>
-      <button className="btn ghost" style={{ marginTop: 10 }} onClick={() => A.toast(c.switchAccount)}>
+      </div>}
+      {!live && <button className="btn ghost" style={{ marginTop: 10 }} onClick={() => A.toast(c.switchAccount)}>
         {c.notYou} {c.switchAccount}
-      </button>
+      </button>}
 
       <div className="spacer" style={{ minHeight: 16 }} />
-      <div className="img-slot" style={{ height: 150, margin: '0 -22px -28px', background: 'var(--sun)', color: '#8a6d00' }} aria-hidden="true">
-        Filipino illustration
-      </div>
+      <img
+        src={communityArt}
+        alt=""
+        style={{ width: 'calc(100% + 44px)', height: 150, margin: '0 -22px -28px', objectFit: 'cover', display: 'block' }}
+      />
     </div>
   );
 }

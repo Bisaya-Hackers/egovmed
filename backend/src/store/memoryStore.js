@@ -7,6 +7,7 @@
 function createMemoryStore() {
   const db = new Map(); // collection -> Map(id -> doc)
   const counters = new Map(); // key -> number
+  const rateLimits = new Map(); // key -> { count, expiresAt }
   const col = (name) => {
     if (!db.has(name)) db.set(name, new Map());
     return db.get(name);
@@ -20,6 +21,15 @@ function createMemoryStore() {
       const n = (counters.get(key) || 0) + 1;
       counters.set(key, n);
       return n;
+    },
+    async fixedWindowIncrement(key, windowMs) {
+      const now = Date.now();
+      const current = rateLimits.get(key);
+      const entry = !current || current.expiresAt <= now
+        ? { count: 1, expiresAt: now + windowMs }
+        : { count: current.count + 1, expiresAt: current.expiresAt };
+      rateLimits.set(key, entry);
+      return { count: entry.count, resetAt: entry.expiresAt };
     },
     async create(collection, doc) {
       col(collection).set(doc.id, clone(doc));
@@ -43,11 +53,20 @@ function createMemoryStore() {
       col(collection).set(id, next);
       return clone(next);
     },
+    async claimStatus(collection, id, expectedStatus, patch) {
+      const cur = col(collection).get(id);
+      if (!cur || cur.status !== expectedStatus) return null;
+      const next = { ...cur, ...patch, id, updatedAt: new Date().toISOString() };
+      col(collection).set(id, next);
+      return clone(next);
+    },
     async remove(collection, id) {
       return col(collection).delete(id);
     },
     async reset() {
       db.clear();
+      counters.clear();
+      rateLimits.clear();
     },
   };
 }

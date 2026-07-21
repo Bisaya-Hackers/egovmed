@@ -8,6 +8,17 @@ const { notFound } = require('../lib/errors');
 
 /** Canonical content hash of a record — recomputed at verify time to prove the off-chain data is untampered. */
 function contentHash(record, data) {
+  if (record.encryptedVersion === 2) {
+    const payload = decryptJson(record.encrypted);
+    return sha256Hex({
+      patientId: record.patientId,
+      type: payload.type,
+      title: payload.title,
+      sourceFacility: payload.sourceFacility,
+      data: data === undefined ? payload.data : data,
+      summary: payload.summary,
+    });
+  }
   return sha256Hex({
     patientId: record.patientId,
     type: record.type,
@@ -24,18 +35,17 @@ function contentHash(record, data) {
 async function createRecord({ patientId, type, title, sourceFacility, data, summary }) {
   const store = getStore();
   const now = new Date().toISOString();
-  const hash = sha256Hex({ patientId, type, title, sourceFacility: sourceFacility || 'PGH', data: data ?? null });
+  const payload = { type, title, sourceFacility: sourceFacility || 'PGH', data: data ?? null, summary: summary || null };
+  const hash = sha256Hex({ patientId, ...payload });
   // Only a non-identifying record-type tag goes to the anchor — never patientId/title (see egovChain.js).
   const anchor = await chain.anchorHash(hash, { type });
 
   const record = {
     id: randomId('rec_'),
     patientId,
-    type, // 'lab' | 'vitals' | 'history' | 'imaging' | ...
-    title,
-    sourceFacility: sourceFacility || 'PGH',
-    encrypted: data ? encryptJson(data) : null,
-    summary: summary || null,
+    // v2 encrypts clinical metadata as well as the structured payload. Legacy records remain readable.
+    encryptedVersion: 2,
+    encrypted: encryptJson(payload),
     anchor,
     createdAt: now,
     updatedAt: now,
@@ -57,7 +67,10 @@ async function getRecord(id, { includeData = false, patientId } = {}) {
   if (!record) throw notFound('Record not found');
   if (patientId && record.patientId !== patientId) throw notFound('Record not found');
   const view = present(record);
-  if (includeData && record.encrypted) view.data = decryptJson(record.encrypted);
+  if (includeData && record.encrypted) {
+    const payload = decryptJson(record.encrypted);
+    view.data = record.encryptedVersion === 2 ? payload.data : payload;
+  }
   return view;
 }
 
@@ -79,14 +92,15 @@ async function verifyRecord(id, patientId) {
   const onChain = await chain.verifyAnchor(record.anchor?.hash, record.anchor?.txHash);
   const verified = integrityOk && onChain.verified;
 
+  const view = present(record);
   return {
     recordId: id,
-    title: record.title,
-    sourceFacility: record.sourceFacility,
+    title: view.title,
+    sourceFacility: view.sourceFacility,
     verified,
     integrityOk,
     anchoredOnChain: onChain.verified,
-    badge: verified ? `Lab result verified from ${record.sourceFacility} ✓` : 'Unverified',
+    badge: verified ? `Lab result verified from ${view.sourceFacility} ✓` : 'Unverified',
     anchor: record.anchor,
   };
 }
@@ -107,7 +121,11 @@ async function buildDoctorSummary(patientId) {
 }
 
 function present(r) {
-  const { encrypted, ...rest } = r;
+  const { encrypted, encryptedVersion, ...rest } = r;
+  if (r.encryptedVersion === 2 && encrypted) {
+    const payload = decryptJson(encrypted);
+    return { ...rest, ...payload, data: undefined, hasData: payload.data !== null && payload.data !== undefined };
+  }
   return { ...rest, hasData: !!encrypted };
 }
 

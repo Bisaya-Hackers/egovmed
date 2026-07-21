@@ -8,7 +8,8 @@ const cfg = env.eMessage;
 
 /** channel: 'sms' | 'email' | 'inapp'. The documented eMessage API covers SMS push. */
 async function send({ to, channel = 'sms', subject, body }) {
-  if (cfg.mode === 'live' && cfg.authToken && channel === 'sms') {
+  if (cfg.mode === 'live' && channel === 'sms') {
+    if (!cfg.authToken) throw new Error('eMessage live mode requires EMESSAGE_AUTH_TOKEN');
     // per apidocumentation/eMessage-API.md — POST /messaging/v1/sms/push { number, message }
     const res = await http.post(`${cfg.baseUrl}/messaging/v1/sms/push`, {
       number: to, message: body,
@@ -17,7 +18,7 @@ async function send({ to, channel = 'sms', subject, body }) {
     return { id: randomId('msg_'), status: data.message ? 'created' : 'sent', channel: 'sms', to, provider: 'emessage' };
   }
   // mock (and non-SMS channels, which the documented hackathon API doesn't cover)
-  logger.info('eMessage mock send', { to, channel, subject });
+  logger.info('eMessage mock send', { channel, subject });
   return { id: randomId('msg_'), status: 'sent', channel, to, provider: 'mock', body };
 }
 

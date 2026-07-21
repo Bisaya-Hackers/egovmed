@@ -97,6 +97,7 @@ export default function Payment({ c, lang, S, A }) {
         <Btn disabled={S.channel == null || S.paying} onClick={() => A.doPay(balanceNum)}>
           {S.paying ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}><span className="spinner white" /> {c.processing}</span> : `${c.payNow} · ${balance}`}
         </Btn>
+        {S.flowError && <p role="alert" style={{ color: 'var(--red)', textAlign: 'center', fontWeight: 650, marginTop: 12 }}>{S.flowError}</p>}
       </div>
     </div>
   );

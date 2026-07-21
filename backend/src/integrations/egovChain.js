@@ -19,7 +19,8 @@ async function anchorHash(recordHash, meta = {}) {
     try {
       return await anchorLive(recordHash, meta);
     } catch (err) {
-      logger.error('eGovChain live anchor failed — falling back to mock anchor', { err: err.message });
+      logger.error('eGovChain live anchor failed', { err: err.message });
+      throw err;
     }
   }
   return mockAnchor(recordHash);
@@ -60,9 +61,10 @@ async function verifyAnchor(recordHash, txHash) {
       return { verified: !!(res && res.result), recordHash, txHash };
     } catch (err) {
       logger.warn('anchor verify RPC failed', { err: err.message });
+      return { verified: false, recordHash, txHash, error: 'rpc_unavailable' };
     }
   }
-  return { verified: !!txHash, recordHash, txHash };
+  return { verified: cfg.mode !== 'live' && !!txHash, recordHash, txHash };
 }
 
 module.exports = { anchorHash, verifyAnchor };

@@ -8,7 +8,9 @@ export default defineConfig(() => {
   return {
     plugins: [react()],
     server: {
+      host: '0.0.0.0',
       port: 3000,
+      strictPort: true,
       proxy: { '/api': { target, changeOrigin: true, rewrite: (p) => p.replace(/^\/api/, '') } },
     },
   };

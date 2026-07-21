@@ -1,35 +1,13 @@
 import { Card } from './Icons.jsx';
-
-// Original, brand-coloured payment badges (not the trademarked GCash/Maya artwork) — swap for
-// licensed brand assets in production, same as the illustration placeholders.
-function Badge({ bg, color = '#fff', size, children }) {
-  return (
-    <span style={{ width: size, height: size, borderRadius: 10, background: bg, color, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', fontWeight: 800, lineHeight: 1 }}>
-      {children}
-    </span>
-  );
-}
+import gcashLogo from '../assets/payment-gcash.png';
+import mayaLogo from '../assets/payment-maya.png';
 
 export function GCashLogo({ size = 38 }) {
-  // GCash blue + a coin motif
-  return (
-    <Badge bg="#0057FF" size={size}>
-      <svg width={size * 0.6} height={size * 0.6} viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="8.5" fill="none" stroke="#fff" strokeWidth="2.3" />
-        <path d="M16 9.2a5 5 0 10.001 5.6" fill="none" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" />
-        <path d="M12 12h4.2" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" />
-      </svg>
-    </Badge>
-  );
+  return <img src={gcashLogo} alt="" width={size} height={size} style={{ borderRadius: 10, display: 'block', flex: 'none' }} />;
 }
 
 export function MayaLogo({ size = 38 }) {
-  // Maya green wordmark initial
-  return (
-    <Badge bg="#12C785" size={size}>
-      <span style={{ fontSize: size * 0.5 }}>m</span>
-    </Badge>
-  );
+  return <img src={mayaLogo} alt="" width={size} height={size} style={{ borderRadius: 10, display: 'block', flex: 'none' }} />;
 }
 
 export function CardLogo({ size = 38 }) {

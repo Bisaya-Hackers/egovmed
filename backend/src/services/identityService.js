@@ -16,7 +16,7 @@ async function startLiveness(patientId) {
 const LIVENESS_MAX_AGE_MS = 10 * 60 * 1000; // a captured liveness session is valid for 10 minutes
 
 /** Verify PhilSys identity (with consent + a fresh, single-use liveness session) and flip patient.identityVerified. */
-async function verifyIdentity({ patientId, philsysId, consent, livenessSessionId, requestMeta = {} }) {
+async function verifyIdentity({ patientId, consent, livenessSessionId, requestMeta = {} }) {
   const store = getStore();
   const patient = await store.findById(COLLECTIONS.PATIENTS, patientId);
   if (!patient) throw notFound('Patient not found');
@@ -32,15 +32,21 @@ async function verifyIdentity({ patientId, philsysId, consent, livenessSessionId
     throw badRequest('Liveness session expired — please re-capture');
   }
 
-  const liveness = await identity.getLivenessResult(livenessSessionId);
+  // Atomically claim the capture before any upstream calls so concurrent replays cannot both pass.
+  const claimed = await store.claimStatus(COLLECTIONS.LIVENESS, livenessSessionId, 'created', {
+    status: 'verifying', claimedAt: new Date().toISOString(),
+  });
+  if (!claimed) throw badRequest('Liveness session already used — please re-capture');
+
+  const liveness = await identity.getLivenessResult(livenessSessionId).catch(async (err) => {
+    await store.update(COLLECTIONS.LIVENESS, livenessSessionId, { status: 'failed' });
+    throw err;
+  });
   // getLivenessResult already enforces "SUCCEEDED" + confidence >= threshold in live mode.
   if (!liveness.live) {
     await store.update(COLLECTIONS.LIVENESS, livenessSessionId, { status: 'failed' });
     throw badRequest('Face-liveness check failed');
   }
-  // Consume the session so a passed capture can't be replayed.
-  await store.update(COLLECTIONS.LIVENESS, livenessSessionId, { status: 'consumed', consumedAt: new Date().toISOString() });
-
   // Persist an auditable consent receipt (Data Privacy Act 2012).
   const consentRecord = {
     id: randomId('con_'),
@@ -61,6 +67,12 @@ async function verifyIdentity({ patientId, philsysId, consent, livenessSessionId
     birthDate: patient.birthDate,          // YYYY-MM-DD
     faceLivenessSessionId: livenessSessionId,
     consent,
+  }).catch(async (err) => {
+    await store.update(COLLECTIONS.LIVENESS, livenessSessionId, { status: 'failed' });
+    throw err;
+  });
+  await store.update(COLLECTIONS.LIVENESS, livenessSessionId, {
+    status: 'consumed', consumedAt: new Date().toISOString(),
   });
 
   const verification = {
@@ -78,9 +90,7 @@ async function verifyIdentity({ patientId, philsysId, consent, livenessSessionId
   await store.create(COLLECTIONS.VERIFICATIONS, verification);
 
   if (result.verified) {
-    await store.update(COLLECTIONS.PATIENTS, patientId, {
-      identityVerified: true, philsysId: philsysId || patient.philsysId,
-    });
+    await store.update(COLLECTIONS.PATIENTS, patientId, { identityVerified: true });
   }
   return { verified: result.verified, verification, consentId: consentRecord.id };
 }
