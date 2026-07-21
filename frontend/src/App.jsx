@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { useGSAP } from '@gsap/react';
+import gsap from 'gsap';
 import { DICT, CONST } from './i18n/dict.js';
 import { api, setToken } from './lib/api.js';
 import { Gear, Bell, Check } from './components/Icons.jsx';
@@ -43,6 +44,7 @@ export default function App() {
   const timers = useRef([]);
   const recTimer = useRef(null);
   const scrollRef = useRef(null);
+  const contentRef = useRef(null);
 
   const set = useCallback((patch) => setS((p) => ({ ...p, ...(typeof patch === 'function' ? patch(p) : patch) })), []);
   const after = useCallback((ms, fn) => { const id = setTimeout(fn, ms); timers.current.push(id); return id; }, []);
@@ -51,6 +53,15 @@ export default function App() {
 
   const c = DICT[S.lang];
   const toast = (m) => { set({ toast: m }); after(2600, () => set({ toast: null })); };
+
+  // Screen transition (GSAP): fade/slide the content in, then stagger [data-stagger] cards.
+  useGSAP(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    gsap.fromTo(el, { autoAlpha: 0.35, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.4, ease: 'power3.out' });
+    const cards = el.querySelectorAll('[data-stagger]');
+    if (cards.length) gsap.fromTo(cards, { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.42, stagger: 0.06, ease: 'power2.out', delay: 0.04 });
+  }, { dependencies: [S.screen], scope: contentRef });
 
   const A = {
     setLang: (l) => set({ lang: l }),
@@ -194,25 +205,17 @@ export default function App() {
 
       {/* active screen */}
       <div className="scroll" ref={scrollRef}>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={S.screen}
-            initial={{ opacity: 0.35, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <Screen c={c} lang={S.lang} S={S} set={set} A={A} />
-          </motion.div>
-        </AnimatePresence>
+        <div className="screen-wrap" ref={contentRef}>
+          <Screen c={c} lang={S.lang} S={S} set={set} A={A} />
+        </div>
       </div>
 
       {showNav && <BottomNav c={c} S={S} A={A} />}
 
       {/* overlays */}
-      <AnimatePresence>{S.toast && <Toast key="toast" msg={S.toast} icon={<Check size={16} />} />}</AnimatePresence>
-      <AnimatePresence>{S.showTimeout && <TimeoutModal key="to" c={c} A={A} />}</AnimatePresence>
-      <AnimatePresence>{S.showDemo && <DemoSheet key="demo" c={c} S={S} A={A} />}</AnimatePresence>
+      {S.toast && <Toast msg={S.toast} icon={<Check size={16} />} />}
+      {S.showTimeout && <TimeoutModal c={c} A={A} />}
+      {S.showDemo && <DemoSheet c={c} S={S} A={A} />}
     </div>
   );
 }

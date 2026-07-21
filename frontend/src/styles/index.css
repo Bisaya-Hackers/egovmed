@@ -131,6 +131,15 @@ input, textarea { font-family: inherit; }
 }
 .field:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px var(--blue-50); }
 
+/* pin / otp boxes */
+.pin-row { display: flex; gap: 8px; }
+.pin-box {
+  flex: 1; min-width: 0; height: 54px; text-align: center; font-size: 1.3em; font-weight: 800;
+  border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink);
+}
+.pin-box.masked { -webkit-text-security: disc; text-security: disc; }
+.pin-box:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px var(--blue-50); }
+
 /* focus ring for interactive elements (accessibility — keep) */
 :where(button, a, [tabindex], input, textarea):focus-visible {
   outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px var(--blue-50);
@@ -183,3 +192,42 @@ input, textarea { font-family: inherit; }
 .rowsep { height: 1px; background: var(--line); border: none; margin: 14px 0; }
 .spacer { flex: 1; }
 .stack > * + * { margin-top: 12px; }
+
+.screen-wrap { will-change: transform, opacity; }
+
+/* overlay entrance animations */
+@keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes modal-in { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes toast-in { from { transform: translate(-50%, 12px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+.scrim { animation: scrim-in 0.22s ease-out; }
+.sheet { animation: sheet-in 0.34s cubic-bezier(0.16, 1, 0.3, 1); }
+.modal { animation: modal-in 0.34s cubic-bezier(0.16, 1, 0.3, 1); }
+.toast { animation: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .scrim, .sheet, .modal, .toast, .screen-wrap * { animation: none !important; }
+}
+
+/* animation / loading utilities */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid var(--blue-50); border-top-color: var(--primary); animation: spin 0.8s linear infinite; flex: none; }
+.spinner.lg { width: 40px; height: 40px; border-width: 3.5px; }
+.spinner.white { border-color: rgba(255, 255, 255, 0.4); border-top-color: #fff; }
+
+@keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: 0.5; } 40% { transform: translateY(-6px); opacity: 1; } }
+.bounce-dots { display: inline-flex; gap: 5px; align-items: center; }
+.bounce-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); display: block; animation: bounce 1s infinite; }
+.bounce-dots i:nth-child(2) { animation-delay: 0.15s; }
+.bounce-dots i:nth-child(3) { animation-delay: 0.3s; }
+
+/* image placeholder (image-slot — awaiting real eGovPH art) */
+.img-slot { background: repeating-linear-gradient(45deg, #eef2f8, #eef2f8 10px, #e7ecf5 10px, #e7ecf5 20px); color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 0.72em; font-weight: 700; }
+
+@keyframes shimmer { 100% { background-position: -200% 0; } }
+.skeleton { background: linear-gradient(90deg, var(--line-2) 25%, #eef1f7 37%, var(--line-2) 63%); background-size: 200% 100%; animation: shimmer 1.3s infinite; border-radius: 12px; }
+
+@keyframes pulsering { 0% { box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.45); } 70% { box-shadow: 0 0 0 16px rgba(229, 72, 77, 0); } 100% { box-shadow: 0 0 0 0 rgba(229, 72, 77, 0); } }
+.pulse-red { animation: pulsering 1.5s infinite; }
+@keyframes scanline { 0% { top: 8%; } 100% { top: 92%; } }
+
