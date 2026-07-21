@@ -27,8 +27,19 @@ const env = {
 
   store: {
     driver: (process.env.STORE_DRIVER || 'memory').toLowerCase(),
-    upstashUrl: process.env.UPSTASH_REDIS_REST_URL || '',
-    upstashToken: process.env.UPSTASH_REDIS_REST_TOKEN || '',
+    // Accept either Upstash-standard names or the Vercel-KV-marketplace variants (with an optional
+    // integration prefix like UPSTASH_REDIS_REST_) so `vercel-add-integration` "just works" without
+    // manual env-var renaming.
+    upstashUrl:
+      process.env.UPSTASH_REDIS_REST_URL
+      || process.env.UPSTASH_REDIS_REST_KV_REST_API_URL
+      || process.env.KV_REST_API_URL
+      || '',
+    upstashToken:
+      process.env.UPSTASH_REDIS_REST_TOKEN
+      || process.env.UPSTASH_REDIS_REST_KV_REST_API_TOKEN
+      || process.env.KV_REST_API_TOKEN
+      || '',
   },
 
   globalMode: GLOBAL_MODE,
