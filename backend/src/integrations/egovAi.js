@@ -162,11 +162,33 @@ async function summarizeHistory({ records = [], triage = [] }) {
   if (isAiLive()) {
     try {
       const token = await egovAiToken();
-      const prompt = `Summarize this patient history for a clinician in 4-6 concise English bullet points.\n${JSON.stringify({ records, triage })}`;
+      // eGovAI expects natural-language prompts, not raw JSON (rejects with 422). Build a compact
+      // human-readable brief with only titles/dates/facility/summary — NO raw PHI values.
+      const labLines = records.filter((r) => r.type === 'lab').slice(-8).map((r) => {
+        const date = r.createdAt ? String(r.createdAt).slice(0, 10) : 'unknown date';
+        const src = r.sourceFacility || 'unknown facility';
+        const note = r.summary ? ` — ${String(r.summary).slice(0, 160)}` : '';
+        return `- ${r.title} at ${src} on ${date}${note}`;
+      });
+      const triageLines = triage.slice(-5).map((t) => {
+        const when = t.createdAt ? String(t.createdAt).slice(0, 10) : 'recent';
+        return `- ${when}: routed to ${t.specialty || 'General Medicine'} (${t.urgency || 'routine'})`;
+      });
+      const prompt = [
+        'Summarize this Filipino patient\'s medical history for a clinician in 4-6 concise English bullet points.',
+        'Note trends, risk flags, and follow-up items. Do not invent data.',
+        '',
+        labLines.length ? `Labs on file (${records.filter((r) => r.type === 'lab').length}):` : 'No labs on file.',
+        ...labLines,
+        '',
+        triageLines.length ? `Recent triage results (${triage.length}):` : 'No prior triage.',
+        ...triageLines,
+      ].join('\n');
       const res = await http.post(`${cfg.baseUrl}/api/v1/egov/integration/ai_assistant/generate`, {
         prompt, category: cfg.category,
-      }, { headers: { Authorization: `Bearer ${token}` } });
-      return res?.data || fallbackSummary(records, triage);
+      }, { headers: { Authorization: `Bearer ${token}` }, timeoutMs: 20000 });
+      const text = res && res.data;
+      return typeof text === 'string' && text.trim() ? text : fallbackSummary(records, triage);
     } catch (err) {
       logger.warn('history summary live call failed', { err: err.message });
     }
