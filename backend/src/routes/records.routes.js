@@ -50,4 +50,12 @@ router.get('/doctor-summary', requireAuth, asyncHandler(async (req, res) => {
   res.json(summary);
 }));
 
+// GET /records/:id → single record incl. decrypted PHI values (ownership-scoped, 404 on mismatch)
+router.get('/:id', requireAuth, validate(idParams, 'params'), asyncHandler(async (req, res) => {
+  await identityService.assertVerified(req.user.sub);
+  const record = await recordService.getRecord(req.params.id, { includeData: true, patientId: req.user.sub });
+  await auditService.log({ actorId: req.user.sub, patientId: req.user.sub, action: 'records.read', resourceType: 'health_record', resourceId: req.params.id, requestMeta: requestMeta(req) });
+  res.json(record);
+}));
+
 module.exports = router;
