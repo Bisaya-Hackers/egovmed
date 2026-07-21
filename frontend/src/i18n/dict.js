@@ -1,0 +1,148 @@
+// Content source of truth — transcribed verbatim from the design handoff (eGovMed v2.dc.html).
+// TL is natural Filipino, not literal. Every UI string must resolve here in both languages.
+
+export const DICT = {
+  en: {
+    textSize: 'Text size', appTagline: 'Your government health rail',
+    signInTitle: 'Sign in to eGovMed', signInSub: 'Use your eGovPH account to continue.',
+    signInBtn: 'Sign in with eGovPH', signInSecure: 'Secure single sign-on', signingIn: 'Signing you in…',
+    signInError: "We couldn't reach eGovPH. Please try again.",
+    welcomeBack: 'Welcome back!', mpinPrompt: 'Sign in with your eGovPH account', mpinLabel: 'Enter your 6-digit MPIN', clearLabel: 'Clear', forgotMpin: 'Forgot MPIN?', notYou: 'Not you?', switchAccount: 'Switch account', navPay: 'Payments', navMessages: 'Messages', navReport: 'Report', fingerprint: 'Scan your fingerprint', quickAdd: 'Common symptoms — tap to add', featured: 'Featured', featuredTitle: 'Verified labs across hospitals', featuredSub: 'No repeat tests — your results follow you.',
+    greeting: 'Hi, Rosa', homeSignedInAs: 'Signed in with eGovPH', notifications: 'Notifications',
+    startVisit: 'Start a visit', startVisitSub: "Tell us how you feel — we'll guide you.",
+    upcoming: 'Upcoming appointment', noAppts: 'No upcoming appointments', noApptsSub: "Start a visit and we'll book one for you.",
+    navHome: 'Home', navRecords: 'Records', navHelp: 'Help', navAccount: 'Account',
+    stepIntake: 'Step 1 · Symptoms', stepTriage: 'Step 2 · Routing', stepVerify: 'Step 3 · Verify you', stepBook: 'Step 4 · Book', stepPay: 'Payment',
+    symptomTitle: 'Describe how you feel', symptomHint: 'You can type or speak — in Tagalog or English.',
+    symptomPlaceholder: 'e.g. chest pain and shortness of breath since this morning…',
+    micTap: 'Tap to speak', micStop: 'Listening… tap to stop', analyze: 'Analyze symptoms', thinking: 'Finding the right department…',
+    symptomSafety: 'In an emergency, call 911 or go to the nearest ER right away.',
+    triageTitle: 'Suggested next step', deptLabel: 'Suggested department', triageWhy: 'Why this suggestion',
+    triageDisclaimer: 'A nurse will confirm this. This is not a diagnosis.',
+    uRoutine: 'Routine', uUrgent: 'Urgent', uEmergency: 'Emergency', continue: 'Continue',
+    emergencyTitle: 'Seek help now', emergencyBanner: 'This may be urgent. Please go to the nearest emergency room or call for help now.',
+    callER: 'Call 911', findER: 'Find nearest ER', emgDemoContinue: 'This is a demo — continue the flow',
+    consentTitle: "Verify it's you", consentSub: "To book with PGH, we'll verify your identity with your National ID (PhilSys).",
+    consentDecline: 'Not now', consentAccept: 'I agree, verify me',
+    livenessLook: 'Look at the camera', livenessHold: 'Hold still…', livenessVerifying: 'Verifying your identity…',
+    livenessSubLook: 'Keep your face inside the circle.',
+    verified: 'Identity verified', verifiedSub: "You're all set. Let's book your appointment.",
+    bookTitle: 'Book your appointment', deptPre: 'Department', pickSlot: 'Choose a time',
+    loadingSlots: 'Finding available slots…', confirmBook: 'Confirm booking', booking: 'Booking your slot…',
+    confirmTitle: "You're booked", refLabel: 'Reference number', prep: 'Before your visit',
+    texted: "We've texted this to you", goPay: 'Continue to payment', backHome: 'Back to home',
+    payTitle: 'Payment', billFor: 'Consultation — Cardiology', benefits: 'Benefits applied', mockTag: 'demo · pending integration',
+    balance: 'Amount to pay', payChannelTitle: 'Pay with', payNow: 'Pay now', processing: 'Processing payment…',
+    settled: 'Payment settled', settledSub: 'A receipt has been texted to you.',
+    recordsTitle: 'Records & lab results', recordsSub: 'Results shared and verified across hospitals — no repeat labs.',
+    verifiedBadge: 'Verified', verifiedFrom: 'Verified from',
+    reportTitle: 'Report an issue', reportSub: "Tell us what went wrong. You'll get a case number to track it.",
+    reportCatLabel: 'What is this about?', descLabel: 'What happened?', descPlaceholder: 'Describe the issue in your own words…',
+    submitReport: 'Submit report', otpTitle: 'Enter the code', otpSub: 'We texted a 6-digit code to •••• 4567.',
+    otpResend: 'Resend code in 0:30', verifyOtp: 'Verify', caseTitle: 'Report filed', caseLabel: 'Case number',
+    escalation: 'If unresolved in 5 days, it escalates automatically.',
+    timeoutTitle: 'Still there?', timeoutSub: "For your privacy, we'll sign you out soon.", stayIn: 'Stay signed in', logout: 'Log out',
+  },
+  tl: {
+    textSize: 'Laki ng teksto', appTagline: 'Ang inyong serbisyong pangkalusugan ng gobyerno',
+    signInTitle: 'Mag-sign in sa eGovMed', signInSub: 'Gamitin ang iyong eGovPH account para magpatuloy.',
+    signInBtn: 'Mag-sign in gamit ang eGovPH', signInSecure: 'Ligtas na single sign-on', signingIn: 'Sini-sign in ka…',
+    signInError: 'Hindi ma-abot ang eGovPH. Pakisubukang muli.',
+    welcomeBack: 'Maligayang pagbabalik!', mpinPrompt: 'Mag-sign in gamit ang iyong eGovPH account', mpinLabel: 'Ilagay ang 6-digit MPIN', clearLabel: 'I-clear', forgotMpin: 'Nakalimutan ang MPIN?', notYou: 'Hindi ikaw?', switchAccount: 'Palitan ang account', navPay: 'Bayad', navMessages: 'Mensahe', navReport: 'Ulat', fingerprint: 'I-scan ang fingerprint', quickAdd: 'Karaniwang sintomas — pindutin para idagdag', featured: 'Featured', featuredTitle: 'Verified labs sa mga ospital', featuredSub: 'Walang paulit-ulit na test — kasama mo ang resulta.',
+    greeting: 'Kumusta, Rosa', homeSignedInAs: 'Naka-sign in gamit ang eGovPH', notifications: 'Mga abiso',
+    startVisit: 'Magsimula ng konsulta', startVisitSub: 'Sabihin ang nararamdaman — gagabayan ka namin.',
+    upcoming: 'Nakatakdang appointment', noAppts: 'Walang nakatakdang appointment', noApptsSub: 'Magsimula ng konsulta at ibo-book namin ito.',
+    navHome: 'Home', navRecords: 'Rekord', navHelp: 'Tulong', navAccount: 'Account',
+    stepIntake: 'Hakbang 1 · Sintomas', stepTriage: 'Hakbang 2 · Routing', stepVerify: 'Hakbang 3 · I-verify', stepBook: 'Hakbang 4 · Book', stepPay: 'Bayad',
+    symptomTitle: 'Ilarawan ang nararamdaman', symptomHint: 'Maaari kang mag-type o magsalita — sa Tagalog o Ingles.',
+    symptomPlaceholder: 'hal. sumasakit ang dibdib at hirap huminga mula kaninang umaga…',
+    micTap: 'Pindutin para magsalita', micStop: 'Nakikinig… pindutin para itigil', analyze: 'Suriin ang sintomas', thinking: 'Hinahanap ang tamang departamento…',
+    symptomSafety: 'Sa emergency, tumawag sa 911 o pumunta agad sa pinakamalapit na ER.',
+    triageTitle: 'Iminungkahing hakbang', deptLabel: 'Iminungkahing departamento', triageWhy: 'Bakit ito iminungkahi',
+    triageDisclaimer: 'Ico-confirm ito ng isang nurse. Hindi ito diagnosis.',
+    uRoutine: 'Rutinaryo', uUrgent: 'Kagyat', uEmergency: 'Emergency', continue: 'Magpatuloy',
+    emergencyTitle: 'Humingi ng tulong ngayon', emergencyBanner: 'Maaaring kagyat ito. Pumunta agad sa pinakamalapit na emergency room o tumawag ng tulong ngayon.',
+    callER: 'Tumawag sa 911', findER: 'Hanapin ang pinakamalapit na ER', emgDemoContinue: 'Demo ito — ituloy ang flow',
+    consentTitle: 'Patunayan na ikaw nga', consentSub: 'Para mag-book sa PGH, ipapatunay namin ang iyong pagkakakilanlan gamit ang National ID (PhilSys).',
+    consentDecline: 'Hindi muna', consentAccept: 'Sang-ayon ako, i-verify ako',
+    livenessLook: 'Tumingin sa camera', livenessHold: 'Wag gagalaw…', livenessVerifying: 'Vine-verify ang pagkakakilanlan…',
+    livenessSubLook: 'Panatilihin ang mukha sa loob ng bilog.',
+    verified: 'Napatunayan ang pagkakakilanlan', verifiedSub: 'Handa ka na. I-book na natin ang appointment mo.',
+    bookTitle: 'I-book ang appointment', deptPre: 'Departamento', pickSlot: 'Pumili ng oras',
+    loadingSlots: 'Naghahanap ng bakanteng oras…', confirmBook: 'Kumpirmahin ang booking', booking: 'Bino-book ang iyong oras…',
+    confirmTitle: 'Naka-book ka na', refLabel: 'Reference number', prep: 'Bago ang iyong konsulta',
+    texted: 'Ipinadala namin ito sa iyong SMS', goPay: 'Magpatuloy sa bayad', backHome: 'Bumalik sa home',
+    payTitle: 'Bayad', billFor: 'Konsulta — Cardiology', benefits: 'Mga benepisyong inilapat', mockTag: 'demo · nakabinbing integration',
+    balance: 'Halagang babayaran', payChannelTitle: 'Magbayad gamit ang', payNow: 'Magbayad', processing: 'Pinoproseso ang bayad…',
+    settled: 'Nabayaran na', settledSub: 'Ipinadala ang resibo sa iyong SMS.',
+    recordsTitle: 'Rekord at resulta ng lab', recordsSub: 'Ibinabahagi at ni-verify sa iba’t ibang ospital — walang paulit-ulit na lab.',
+    verifiedBadge: 'Verified', verifiedFrom: 'Verified mula sa',
+    reportTitle: 'Mag-ulat ng problema', reportSub: 'Sabihin kung ano ang nangyari. Bibigyan ka ng case number para masubaybayan.',
+    reportCatLabel: 'Tungkol saan ito?', descLabel: 'Ano ang nangyari?', descPlaceholder: 'Ilarawan ang problema sa iyong sariling salita…',
+    submitReport: 'Isumite ang ulat', otpTitle: 'Ilagay ang code', otpSub: 'Nagpadala kami ng 6-digit code sa •••• 4567.',
+    otpResend: 'Magpadala muli sa 0:30', verifyOtp: 'I-verify', caseTitle: 'Naisumite ang ulat', caseLabel: 'Case number',
+    escalation: 'Kung hindi maresolba sa loob ng 5 araw, awtomatikong ie-escalate.',
+    timeoutTitle: 'Nandiyan ka pa ba?', timeoutSub: 'Para sa iyong privacy, mala-log out ka na sa ilang sandali.', stayIn: 'Manatiling naka-sign in', logout: 'Mag-log out',
+  },
+};
+
+export const WHY = {
+  en: ['Symptoms mention chest pain', 'Best matched to heart & circulation care'],
+  tl: ['Binanggit ang pananakit ng dibdib', 'Pinakabagay sa pangangalaga ng puso'],
+};
+export const PREP = {
+  en: ['Bring your National ID', 'Arrive 15 minutes early', 'No fasting required for this visit'],
+  tl: ['Dalhin ang iyong National ID', 'Dumating 15 minuto nang maaga', 'Hindi kailangang mag-fasting'],
+};
+export const CATS = {
+  en: ['Wrong routing', 'Billing', 'Access', 'Misconduct', 'Technical'],
+  tl: ['Maling routing', 'Singil', 'Access', 'Maling asal', 'Teknikal'],
+};
+export const SLOTS = {
+  en: [['Today · 2:30 PM', 'Cardiology', false], ['Tomorrow · 9:00 AM', 'Cardiology', false], ['Tomorrow · 11:15 AM', 'Cardiology', true], ['Fri · 3:45 PM', 'Cardiology', false]],
+  tl: [['Ngayon · 2:30 PM', 'Cardiology', false], ['Bukas · 9:00 AM', 'Cardiology', false], ['Bukas · 11:15 AM', 'Cardiology', true], ['Biyernes · 3:45 PM', 'Cardiology', false]],
+};
+export const RECORDS = {
+  en: [['Complete Blood Count', '12 Jun 2026', 'St. Luke’s Medical Center'], ['Lipid Panel', '03 May 2026', 'Makati Medical Center'], ['ECG Report', '21 Apr 2026', 'Philippine Heart Center']],
+  tl: [['Complete Blood Count', '12 Hun 2026', 'St. Luke’s Medical Center'], ['Lipid Panel', '03 Mayo 2026', 'Makati Medical Center'], ['ECG Report', '21 Abr 2026', 'Philippine Heart Center']],
+};
+export const TRACK = {
+  en: ['Received', 'Under review', 'Assigned', 'Resolved'],
+  tl: ['Natanggap', 'Sinusuri', 'Na-assign', 'Naresolba'],
+};
+export const TRACKNOTE = {
+  en: ['Just now', 'Est. within 24 hours', '—', '—'],
+  tl: ['Ngayon lang', 'Tantiyang 24 oras', '—', '—'],
+};
+export const CHIPS = {
+  en: ['Fever', 'Cough', 'Chest pain', 'Headache', 'Dizziness'],
+  tl: ['Lagnat', 'Ubo', 'Sakit ng dibdib', 'Sakit ng ulo', 'Hilo'],
+};
+export const CONSENT_POINTS = {
+  en: ['We check your National ID with PhilSys eVerify.', 'Only your name and ID status are shared with PGH.', 'Your symptoms stay private to your care team.'],
+  tl: ['Sinusuri ang National ID mo sa PhilSys eVerify.', 'Pangalan at status lang ang ibabahagi sa PGH.', 'Pribado sa iyong care team ang iyong sintomas.'],
+};
+export const PAY_ITEMS = {
+  en: [{ label: 'Consultation — Cardiology', amount: '₱600' }, { label: 'Facility fee', amount: '₱150' }],
+  tl: [{ label: 'Konsulta — Cardiology', amount: '₱600' }, { label: 'Facility fee', amount: '₱150' }],
+};
+export const BENEFIT_LINES = {
+  en: [{ label: 'PhilHealth', amount: '−₱300' }, { label: 'PWD / Senior 20%', amount: '−₱150' }],
+  tl: [{ label: 'PhilHealth', amount: '−₱300' }, { label: 'PWD / Senior 20%', amount: '−₱150' }],
+};
+// [abbr, name, iconBg, iconColor]
+export const CHANNELS = [
+  ['GC', 'GCash', '#eaf1fe', '#0f52d9'],
+  ['MB', 'Maya', '#e2f4f2', '#0e8c86'],
+  ['CT', 'Debit / Credit card', '#f1eefb', '#5b3fd6'],
+];
+
+// Fixed demo constants from the prototype.
+export const CONST = {
+  balance: '₱300',
+  refNo: 'PGH-4821-QK',
+  hospital: 'Philippine General Hospital',
+  dept: 'Cardiology',
+  caseNo: 'CR-2026-00417',
+  phone: '+63 961 ••• 8546',
+};
