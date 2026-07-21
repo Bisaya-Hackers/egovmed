@@ -12,15 +12,26 @@ export function setToken(t) {
 }
 export function getToken() { return token; }
 
-async function req(path, { method = 'GET', body } = {}) {
+async function req(path, { method = 'GET', body, timeoutMs } = {}) {
   const headers = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller?.signal,
+    });
+  } catch (err) {
+    if (err?.name === 'AbortError') throw new Error('Backend configuration request timed out');
+    throw err;
+  } finally {
+    if (timer) window.clearTimeout(timer);
+  }
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
@@ -34,7 +45,7 @@ async function req(path, { method = 'GET', body } = {}) {
 }
 
 export const api = {
-  authConfig: () => req('/auth/config'),
+  authConfig: () => req('/auth/config', { timeoutMs: 2000 }),
   // In live mode the exchange code comes from the eGovPH redirect query string.
   login: (exchangeCode = 'demo') => req('/auth/egov/exchange', { method: 'POST', body: { exchangeCode } }),
   me: () => req('/patients/me'),
