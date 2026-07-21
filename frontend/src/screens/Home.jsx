@@ -23,7 +23,7 @@ export default function Home({ c, lang, S, A }) {
       <div data-stagger style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
         <span className="img-slot" style={{ width: 56, height: 56, borderRadius: '50%', flex: 'none' }} aria-hidden="true" />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '1.3em', fontWeight: 800, color: 'var(--primary)', lineHeight: 1.1 }}>{c.greeting}</div>
+          <h1 style={{ fontSize: '1.3em', fontWeight: 800, color: 'var(--primary)', lineHeight: 1.1, margin: 0 }}>{c.greeting}</h1>
           <div className="sub" style={{ margin: '3px 0 0' }}>{CONST.phone}</div>
         </div>
         <span className="img-slot" style={{ width: 92, height: 58, borderRadius: 14, flex: 'none' }} aria-hidden="true" />

@@ -63,6 +63,9 @@ export default function App() {
     if (cards.length) gsap.fromTo(cards, { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.42, stagger: 0.06, ease: 'power2.out', delay: 0.04 });
   }, { dependencies: [S.screen], scope: contentRef });
 
+  // Keep the document language in sync so screen readers use the right pronunciation for EN/TL.
+  useEffect(() => { document.documentElement.lang = S.lang === 'tl' ? 'fil' : 'en'; }, [S.lang]);
+
   const A = {
     setLang: (l) => set({ lang: l }),
     cycleText: () => set((p) => ({ textScale: (p.textScale + 1) % 3 })),
@@ -176,16 +179,16 @@ export default function App() {
 
   return (
     <div className="device" style={{ fontSize: FONT[S.textScale] }}>
-      {/* status bar */}
-      <div className="statusbar">
+      {/* status bar (decorative chrome) */}
+      <div className="statusbar" aria-hidden="true">
         <span>9:41</span>
-        <span className="glyphs" aria-hidden="true">
+        <span className="glyphs">
           <Signal /><Wifi /><Battery />
         </span>
       </div>
 
       {/* utility strip */}
-      <div className="util">
+      <header className="util">
         <span className="wm">eGOV<span className="med">MED</span></span>
         <div className="util-right">
           <div className="seg" role="group" aria-label="Language">
@@ -201,14 +204,14 @@ export default function App() {
             </button>
           )}
         </div>
-      </div>
+      </header>
 
       {/* active screen */}
-      <div className="scroll" ref={scrollRef}>
+      <main className="scroll" ref={scrollRef}>
         <div className="screen-wrap" ref={contentRef}>
           <Screen c={c} lang={S.lang} S={S} set={set} A={A} />
         </div>
-      </div>
+      </main>
 
       {showNav && <BottomNav c={c} S={S} A={A} />}
 
