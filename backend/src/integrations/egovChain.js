@@ -39,7 +39,8 @@ async function anchorLive(recordHash, meta) {
   // NEVER put identifiers/clinical content on-chain (Data Privacy Act). patientId, title,
   // sourceFacility etc. are dropped here — only a non-identifying record-type tag is anchored.
   const safeMeta = { type: meta.type || null, anchoredAt: new Date().toISOString() };
-  const tx = await contract.anchor(recordHash, JSON.stringify(safeMeta));
+  // eGovChain (Besu QBFT) is zero-fee: submit with gasPrice 0 (no ETH needed for gas).
+  const tx = await contract.anchor(recordHash, JSON.stringify(safeMeta), { gasPrice: 0 });
   const receipt = await tx.wait();
   return { hash: recordHash, txHash: receipt.hash, blockNumber: receipt.blockNumber, anchoredAt: new Date().toISOString(), verified: true, provider: 'egovchain' };
 }

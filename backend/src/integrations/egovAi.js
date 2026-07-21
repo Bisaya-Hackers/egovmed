@@ -26,26 +26,40 @@ Classify the patient's symptoms and respond with STRICT JSON only, no prose:
 }
 Always include an urgency flag. If any life-threatening sign is present, set urgency "emergency".`;
 
+// eGov AI auth: mint a Bearer token from the team access code (per apidocumentation/eGov-AI-API.md).
+let aiTokenCache = null;
+const isAiLive = () => cfg.mode === 'live' && !!cfg.accessCode && !!cfg.baseUrl;
+async function egovAiToken() {
+  if (aiTokenCache && aiTokenCache.expiresAt > Date.now() + 5000) return aiTokenCache.token;
+  const res = await http.post(`${cfg.baseUrl}/api/v1/egov/integration/token`, { access_code: cfg.accessCode });
+  const token = res && res.access_token;
+  if (!token) throw new Error('eGov AI token endpoint returned no access_token');
+  aiTokenCache = { token, expiresAt: Date.now() + (res.expires_in_seconds || 28800) * 1000 };
+  return token;
+}
+
+// The AI endpoints return free text in `data`; pull the JSON object out of it.
+function parseJsonFromText(s) {
+  if (!s || typeof s !== 'string') return {};
+  const t = s.replace(/```(?:json)?/gi, '');
+  const a = t.indexOf('{');
+  const b = t.lastIndexOf('}');
+  try { return JSON.parse(a >= 0 && b > a ? t.slice(a, b + 1) : t); } catch { return {}; }
+}
+
 /**
  * Classify free-text symptoms → structured triage result.
- * live: calls eGov AI. mock/no-key: deterministic rule-based fallback so the demo never breaks.
+ * live: eGov AI /ai_assistant/generate (prompt → free text, parsed to JSON). mock: deterministic rule-based fallback.
  */
 async function classifySymptoms({ text, language = 'auto', patientContext = {} }) {
-  if (cfg.mode === 'live' && cfg.apiKey) {
+  if (isAiLive()) {
     try {
-      const res = await http.post(`${cfg.baseUrl}/v1/chat/completions`, {
-        model: cfg.model,
-        temperature: 0,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: JSON.stringify({ symptoms: text, language, patientContext }) },
-        ],
-      }, { headers: { Authorization: `Bearer ${cfg.apiKey}` }, timeoutMs: 25000 });
-
-      const content = res?.choices?.[0]?.message?.content ?? res?.output ?? res;
-      const parsed = typeof content === 'string' ? JSON.parse(content) : content;
-      return sanitize(parsed, text);
+      const token = await egovAiToken();
+      const prompt = `${SYSTEM_PROMPT}\n\nPatient context: ${JSON.stringify(patientContext)}\nInput language: ${language}\nSymptoms: ${text}\n\nReturn ONLY the JSON object described above, no prose.`;
+      const res = await http.post(`${cfg.baseUrl}/api/v1/egov/integration/ai_assistant/generate`, {
+        prompt, category: cfg.category,
+      }, { headers: { Authorization: `Bearer ${token}` }, timeoutMs: 25000 });
+      return sanitize(parseJsonFromText(res?.data), text); // sanitize() applies the rule-based emergency floor
     } catch (err) {
       logger.warn('eGov AI live call failed — using rule-based fallback', { err: err.message });
     }
@@ -145,17 +159,14 @@ function ruleBasedTriage(text = '') {
 
 /** Summarize a patient's history for the doctor (used at the visit step). */
 async function summarizeHistory({ records = [], triage = [] }) {
-  if (cfg.mode === 'live' && cfg.apiKey) {
+  if (isAiLive()) {
     try {
-      const res = await http.post(`${cfg.baseUrl}/v1/chat/completions`, {
-        model: cfg.model,
-        temperature: 0.2,
-        messages: [
-          { role: 'system', content: 'Summarize this patient history for a clinician in 4-6 concise bullet points. English.' },
-          { role: 'user', content: JSON.stringify({ records, triage }) },
-        ],
-      }, { headers: { Authorization: `Bearer ${cfg.apiKey}` } });
-      return res?.choices?.[0]?.message?.content || fallbackSummary(records, triage);
+      const token = await egovAiToken();
+      const prompt = `Summarize this patient history for a clinician in 4-6 concise English bullet points.\n${JSON.stringify({ records, triage })}`;
+      const res = await http.post(`${cfg.baseUrl}/api/v1/egov/integration/ai_assistant/generate`, {
+        prompt, category: cfg.category,
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      return res?.data || fallbackSummary(records, triage);
     } catch (err) {
       logger.warn('history summary live call failed', { err: err.message });
     }

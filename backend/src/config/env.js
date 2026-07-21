@@ -42,9 +42,10 @@ const env = {
   },
   egovAi: {
     mode: modeFor('EGOV_AI'),
-    baseUrl: process.env.EGOV_AI_BASE_URL || 'https://ai.egov.ph',
-    apiKey: process.env.EGOV_AI_API_KEY || '',
-    model: process.env.EGOV_AI_MODEL || 'egov-ai-default',
+    // per apidocumentation/eGov-AI-API.md: POST /api/v1/egov/integration/token (access_code) → Bearer, then /ai_assistant/generate
+    baseUrl: process.env.EGOV_AI_BASE_URL || '',
+    accessCode: process.env.EGOV_AI_ACCESS_CODE || '',
+    category: process.env.EGOV_AI_CATEGORY || 'PH',
   },
   everify: {
     mode: modeFor('EVERIFY'),
@@ -64,14 +65,16 @@ const env = {
   },
   eMessage: {
     mode: modeFor('EMESSAGE'),
-    baseUrl: process.env.EMESSAGE_BASE_URL || 'https://message.egov.ph',
-    apiKey: process.env.EMESSAGE_API_KEY || '',
+    // per apidocumentation/eMessage-API.md: POST /messaging/v1/sms/push, X-EMESSAGE-Auth header
+    baseUrl: process.env.EMESSAGE_BASE_URL || 'https://ws-message.e.gov.ph',
+    authToken: process.env.EMESSAGE_AUTH_TOKEN || process.env.EMESSAGE_API_KEY || '',
     senderId: process.env.EMESSAGE_SENDER_ID || 'eGovMed',
   },
   egovChain: {
     mode: modeFor('EGOVCHAIN'),
-    rpcUrl: process.env.EGOVCHAIN_RPC_URL || '',
-    chainId: int(process.env.EGOVCHAIN_CHAIN_ID, undefined),
+    // per apidocumentation/eGovChain-API.md: Hyperledger Besu QBFT, zero-fee (gasPrice 0), chainId 13371
+    rpcUrl: process.env.EGOVCHAIN_RPC_URL || 'https://hackathon-blockchain.e.gov.ph',
+    chainId: int(process.env.EGOVCHAIN_CHAIN_ID, 13371),
     contractAddress: process.env.EGOVCHAIN_CONTRACT_ADDRESS || '',
     privateKey: process.env.EGOVCHAIN_PRIVATE_KEY || '',
   },
@@ -87,8 +90,17 @@ const env = {
   },
   eReport: {
     mode: modeFor('EREPORT'),
-    baseUrl: process.env.EREPORT_BASE_URL || 'https://report.egov.ph',
-    apiKey: process.env.EREPORT_API_KEY || '',
+    // per apidocumentation/eReport-API.md: POST /api/integration/token (access_code) → submit_complaint; view via X-EReport-View-Token
+    baseUrl: process.env.EREPORT_BASE_URL || '',
+    accessCode: process.env.EREPORT_ACCESS_CODE || '',
+    reportType: process.env.EREPORT_TYPE || 'red_tape',
+    viewToken: process.env.EREPORT_VIEW_TOKEN || '', // OTP-confirmed report_view_token (for status lookups)
+    location: {
+      regionCode: process.env.EREPORT_REGION_CODE || '',
+      provinceCode: process.env.EREPORT_PROVINCE_CODE || '',
+      municipalityCode: process.env.EREPORT_MUNICIPALITY_CODE || '',
+      barangayCode: process.env.EREPORT_BARANGAY_CODE || '',
+    },
     escalateAfterHours: int(process.env.EREPORT_ESCALATE_AFTER_HOURS, 48),
   },
 };
