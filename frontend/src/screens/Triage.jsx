@@ -1,6 +1,6 @@
 import { ScreenHeader, Btn } from '../components/ui.jsx';
 import { HeartPulse, Warning, Phone, Pin, Dot } from '../components/Icons.jsx';
-import { WHY, CONST } from '../i18n/dict.js';
+import { CONST } from '../i18n/dict.js';
 
 // True on touch-primary devices (mobile/tablet). Desktop returns false so tel: doesn't
 // leave a "failed" entry in the DevTools network panel when there's no phone handler.
@@ -9,7 +9,18 @@ const isPhoneCapable = () => typeof window !== 'undefined'
 
 export default function Triage({ c, lang, S, A }) {
   const dept = S.triage?.specialty || CONST.dept;
-  const why = S.triage?.redFlags?.length ? S.triage.redFlags : WHY[lang];
+  const urgency = ['routine', 'urgent', 'emergency'].includes(S.triage?.urgency) ? S.triage.urgency : 'routine';
+  const urgencyLabel = urgency === 'routine' ? c.uRoutine : urgency === 'emergency' ? c.uEmergency : c.uUrgent;
+  const reported = String(S.triage?.inputSymptoms || S.symptom || '').trim();
+  const excerpt = reported.length > 120 ? `${reported.slice(0, 117)}…` : reported;
+  const reasoning = String(S.triage?.reasoning || '').trim();
+  const usefulReasoning = reasoning && !/fallback triage|unavailable/i.test(reasoning) ? reasoning : null;
+  const why = [
+    excerpt ? `${c.reportedSymptoms}: “${excerpt}”` : null,
+    ...(S.triage?.redFlags || []),
+    usefulReasoning,
+    `${c.specialtyMatch} ${dept}.`,
+  ].filter(Boolean).slice(0, 4);
 
   const callEmergency = () => {
     if (isPhoneCapable()) { window.location.href = 'tel:911'; return; }
@@ -48,8 +59,8 @@ export default function Triage({ c, lang, S, A }) {
           <span style={{ fontSize: '1.4em', fontWeight: 800 }}>{dept}</span>
         </div>
         <div style={{ marginTop: 14 }}>
-          <span className="pill amber" style={{ fontSize: '0.85em' }}>
-            <Dot color="var(--amber)" /> {c.uUrgent}
+          <span className={`pill ${urgency === 'routine' ? 'green' : 'amber'}`} style={{ fontSize: '0.85em' }}>
+            <Dot color={urgency === 'routine' ? 'var(--green)' : 'var(--amber)'} /> {urgencyLabel}
           </span>
         </div>
       </div>

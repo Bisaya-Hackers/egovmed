@@ -151,6 +151,9 @@ test('security regression suite', async (t) => {
     }));
     assert.equal(triage.response.status, 201);
     assert.equal(triage.value.inputSymptoms, 'I have a mild headache');
+    assert.equal(triage.value.specialty, 'Neurology');
+    assert.equal(triage.value.urgency, 'routine');
+    assert.ok(triage.value.reasoning);
     const storedTriage = await store.findById(COLLECTIONS.TRIAGE, triage.value.id);
     assert.equal(storedTriage.inputSymptoms, undefined);
     assert.match(storedTriage.encrypted, /^v1:/);
