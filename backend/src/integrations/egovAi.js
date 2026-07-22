@@ -71,16 +71,29 @@ function sanitize(parsed, text) {
   // Model output is untrusted: it may be null, an array, a string, or an adversarially
   // crafted object (prompt injection via the symptom text). Coerce to a safe object first.
   const p = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  const floor = ruleBasedTriage(text);
+  const validSpecialty = SPECIALTIES.includes(p.specialty);
+  const validUrgency = ['emergency', 'urgent', 'routine'].includes(p.urgency);
+  let usedFallback = !validSpecialty || !validUrgency;
 
-  let specialty = SPECIALTIES.includes(p.specialty) ? p.specialty : 'General Medicine';
-  let urgency = ['emergency', 'urgent', 'routine'].includes(p.urgency) ? p.urgency : 'routine';
-  let redFlags = Array.isArray(p.red_flags) ? p.red_flags.filter((s) => typeof s === 'string') : [];
+  let specialty = validSpecialty ? p.specialty : floor.specialty;
+  let urgency = validUrgency ? p.urgency : floor.urgency;
+  let redFlags = Array.isArray(p.red_flags) ? p.red_flags.filter((s) => typeof s === 'string') : floor.redFlags;
+  let reasoning = typeof p.reasoning === 'string' ? p.reasoning.trim() : '';
   let recommendedAction = typeof p.recommended_action === 'string' && p.recommended_action ? p.recommended_action : null;
+
+  // A structurally valid but empty/default AI answer should not erase an obvious input-based
+  // specialty match. Keep General Medicine when the model explains it; otherwise use the
+  // deterministic bilingual keyword classifier as the reliable routing fallback.
+  if (specialty === 'General Medicine' && floor.specialty !== 'General Medicine' && !reasoning) {
+    specialty = floor.specialty;
+    recommendedAction = null;
+    usedFallback = true;
+  }
 
   // SAFETY FLOOR: never let the live model under-triage below the deterministic rule check.
   // If the offline rules see an emergency, the result is forced to emergency regardless of
   // what the model returned (malformed JSON, injection, or a genuine miss).
-  const floor = ruleBasedTriage(text);
   if (floor.urgency === 'emergency' && urgency !== 'emergency') {
     urgency = 'emergency';
     specialty = 'Emergency Medicine';
@@ -94,10 +107,10 @@ function sanitize(parsed, text) {
     urgency,
     redFlags,
     summaryEn: typeof p.summary_en === 'string' && p.summary_en ? p.summary_en : text.slice(0, 200),
-    reasoning: typeof p.reasoning === 'string' ? p.reasoning : '',
+    reasoning: reasoning || floor.reasoning,
     recommendedAction: recommendedAction || (urgency === 'emergency' ? 'Proceed to ER immediately' : `Book ${specialty}`),
     confidence,
-    engine: 'egov-ai',
+    engine: usedFallback ? 'rule-based-fallback' : 'egov-ai',
   };
 }
 
@@ -145,12 +158,27 @@ function ruleBasedTriage(text = '') {
   if (has('suicidal')) redFlags.push('Suicidal ideation');
 
   const urgency = emergency ? 'emergency' : redFlags.length ? 'urgent' : 'routine';
+  const routedSpecialty = emergency ? 'Emergency Medicine' : specialty;
+  const reasonBySpecialty = {
+    'General Medicine': 'The symptoms are best suited to an initial General Medicine assessment.',
+    Cardiology: 'The symptoms involve the heart or circulation.',
+    Pulmonology: 'The symptoms involve breathing or the lungs.',
+    Neurology: 'The symptoms involve headaches, dizziness, or the nervous system.',
+    Gastroenterology: 'The symptoms involve the abdomen or digestive system.',
+    Orthopedics: 'The symptoms involve bones or joints.',
+    Pediatrics: 'The symptoms concern a child or infant.',
+    'OB-GYN': 'The symptoms involve pregnancy or reproductive health.',
+    Dermatology: 'The symptoms involve the skin, irritation, or a rash.',
+    Ophthalmology: 'The symptoms involve the eyes or vision.',
+    Psychiatry: 'The symptoms involve mood, anxiety, or mental health.',
+    'Emergency Medicine': 'The symptoms include a sign that needs immediate emergency assessment.',
+  };
   return {
-    specialty: emergency ? 'Emergency Medicine' : specialty,
+    specialty: routedSpecialty,
     urgency,
     redFlags,
     summaryEn: text.slice(0, 200),
-    reasoning: 'Keyword-based fallback triage (eGov AI unavailable).',
+    reasoning: reasonBySpecialty[routedSpecialty],
     recommendedAction: urgency === 'emergency' ? 'Proceed to ER immediately' : `Book ${specialty}`,
     confidence: 0.4,
     engine: 'rule-based-fallback',

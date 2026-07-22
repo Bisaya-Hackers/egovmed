@@ -231,14 +231,15 @@ export default function App() {
       if (!S.symptom.trim() || S.thinking) return;
       set({ thinking: true });
       const [apiResult] = await Promise.all([tryApi(api.triage(S.symptom, S.lang)), delay(1900)]);
-      const res = apiResult || fallbackTriage(S.symptom, S.lang);
+      const localFallback = fallbackTriage(S.symptom, S.lang);
+      const res = apiResult || localFallback;
       const emergency = S.emergency || res?.urgency === 'emergency';
       const triage = {
         specialty: res?.specialty || CONST.dept,
         urgency: emergency ? 'emergency' : res?.urgency || 'urgent',
         redFlags: Array.isArray(res?.redFlags) ? res.redFlags : [],
         inputSymptoms: res?.inputSymptoms || S.symptom,
-        reasoning: res?.reasoning || null,
+        reasoning: ['rule-based-fallback', 'on-device-fallback'].includes(res?.engine) ? localFallback.reasoning : res?.reasoning || null,
         recommendedAction: res?.recommendedAction || null,
         confidence: res?.confidence ?? null,
         engine: res?.engine || null,
