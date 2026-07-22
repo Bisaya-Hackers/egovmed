@@ -13,7 +13,7 @@ router.get('/', (_req, res) => {
     status: 'ok',
     store: getStore().driver,
     integrationMode: env.globalMode,
-    docs: '/health, /auth, /patients, /triage, /identity, /records, /appointments, /payments, /reports',
+    docs: '/health, /auth, /patients, /triage, /identity, /records, /appointments, /payments, /messages, /reports',
   });
 });
 
@@ -26,6 +26,7 @@ router.use('/identity', require('./identity.routes'));
 router.use('/records', require('./records.routes'));
 router.use('/appointments', require('./appointments.routes'));
 router.use('/payments', require('./payments.routes'));
+router.use('/messages', require('./messages.routes'));
 router.use('/reports', require('./reports.routes'));
 
 module.exports = router;

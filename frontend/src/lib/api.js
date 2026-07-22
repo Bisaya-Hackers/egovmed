@@ -59,6 +59,7 @@ export const api = {
     method: 'POST', body: { specialty, ...(scheduledFor ? { scheduledFor } : {}), ...(triageId ? { triageId } : {}) },
   }),
   appointments: () => req('/appointments'),
+  messages: () => req('/messages'),
   // eGovPay (benefits mock-labeled by the backend)
   quote: (billAmount) => req('/payments/quote', { method: 'POST', body: { billAmount } }),
   pay: (billAmount, channel) => req('/payments', { method: 'POST', body: { billAmount, channel } }),

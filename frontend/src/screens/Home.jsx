@@ -53,7 +53,7 @@ export default function Home({ c, lang, S, A }) {
         <Service icon={<FileText size={24} />} label={c.navRecords} onClick={A.goRecords} />
         <Service icon={<Card size={24} />} label={c.navPay} color="var(--teal)" onClick={() => (S.booked ? A.goPayment() : A.toast(c.noAppts))} />
         <Service icon={<Flag size={24} />} label={c.navReport} color="var(--red)" badge={lang === 'tl' ? 'Bago' : 'New'} onClick={A.openReport} />
-        <Service icon={<Chat size={24} />} label={c.navMessages} onClick={A.openMessages} />
+        <Service icon={<Chat size={24} />} label={c.navMessages} onClick={() => A.go('messages')} />
       </div>
 
       {/* upcoming appointment */}
