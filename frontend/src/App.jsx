@@ -3,6 +3,7 @@ import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { DICT, CONST, CHANNELS } from './i18n/dict.js';
 import { api, getToken, setToken } from './lib/api.js';
+import { fallbackTriage } from './lib/triageFallback.js';
 import { Gear, Bell, Check } from './components/Icons.jsx';
 
 import SignIn from './screens/SignIn.jsx';
@@ -229,12 +230,18 @@ export default function App() {
     doAnalyze: async () => {
       if (!S.symptom.trim() || S.thinking) return;
       set({ thinking: true });
-      const [res] = await Promise.all([tryApi(api.triage(S.symptom, S.lang)), delay(1900)]);
+      const [apiResult] = await Promise.all([tryApi(api.triage(S.symptom, S.lang)), delay(1900)]);
+      const res = apiResult || fallbackTriage(S.symptom, S.lang);
       const emergency = S.emergency || res?.urgency === 'emergency';
       const triage = {
         specialty: res?.specialty || CONST.dept,
         urgency: emergency ? 'emergency' : res?.urgency || 'urgent',
-        redFlags: res?.redFlags || null,
+        redFlags: Array.isArray(res?.redFlags) ? res.redFlags : [],
+        inputSymptoms: res?.inputSymptoms || S.symptom,
+        reasoning: res?.reasoning || null,
+        recommendedAction: res?.recommendedAction || null,
+        confidence: res?.confidence ?? null,
+        engine: res?.engine || null,
         id: res?.id || null,
       };
       set({ thinking: false, emergency, triage, screen: 'triage', stack: [...S.stack, 'symptom'] });
