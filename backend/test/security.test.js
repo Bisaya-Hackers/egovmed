@@ -126,6 +126,21 @@ test('security regression suite', async (t) => {
     const messages = await store.findAll(COLLECTIONS.MESSAGES);
     assert.equal(messages[0].to, undefined);
     assert.equal(messages[0].body, undefined);
+
+    const ownerMessages = await json(await request('/messages', { token: owner }));
+    assert.equal(ownerMessages.response.status, 200);
+    assert.equal(ownerMessages.response.headers.get('ratelimit-limit'), '60');
+    assert.equal(ownerMessages.value.length, 1);
+    assert.equal(ownerMessages.value[0].kind, 'confirmation');
+    assert.equal(ownerMessages.value[0].patientId, undefined);
+    assert.equal(ownerMessages.value[0].to, undefined);
+    assert.equal(ownerMessages.value[0].body, undefined);
+
+    const attackerMessages = await json(await request('/messages', { token: attacker }));
+    assert.equal(attackerMessages.response.status, 200);
+    assert.deepEqual(attackerMessages.value, []);
+    const messageAudits = await store.findAll(COLLECTIONS.AUDIT_LOGS, (entry) => entry.action === 'messages.list');
+    assert.equal(messageAudits.length, 2);
   });
 
   await t.test('triage symptoms and report narratives are encrypted at rest', async () => {

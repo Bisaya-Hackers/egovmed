@@ -15,6 +15,8 @@ import Book from './screens/Book.jsx';
 import Confirm from './screens/Confirm.jsx';
 import Payment from './screens/Payment.jsx';
 import Records from './screens/Records.jsx';
+import Messages from './screens/Messages.jsx';
+import Account from './screens/Account.jsx';
 import Report from './screens/Report.jsx';
 import Tokens from './screens/Tokens.jsx';
 import BottomNav from './components/BottomNav.jsx';
@@ -37,8 +39,8 @@ const initial = () => ({
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const tryApi = async (p) => { try { return await p; } catch { return null; } };
 
-const SCREENS = { signin: SignIn, home: Home, symptom: Symptom, triage: Triage, consent: Consent, liveness: Liveness, book: Book, confirm: Confirm, payment: Payment, records: Records, report: Report, tokens: Tokens };
-const NAV_SCREENS = new Set(['home', 'records']);
+const SCREENS = { signin: SignIn, home: Home, symptom: Symptom, triage: Triage, consent: Consent, liveness: Liveness, book: Book, confirm: Confirm, payment: Payment, records: Records, messages: Messages, account: Account, report: Report, tokens: Tokens };
+const NAV_SCREENS = new Set(['home', 'records', 'messages', 'account']);
 
 export default function App() {
   const [S, setS] = useState(initial);
@@ -311,7 +313,6 @@ export default function App() {
     },
 
     // Overlays / demo controls
-    openMessages: () => toast(S.lang === 'tl' ? 'Walang bagong mensahe' : 'No new messages'),
     resetToHome: () => set({ screen: 'home', stack: [], selectedSlot: null, channel: null, paid: false, paying: false, reportStage: 'form', reportCat: null, reportDesc: '' }),
     toggleDemo: () => set((p) => ({ showDemo: !p.showDemo })),
     toggleEmergency: () => set((p) => ({ emergency: !p.emergency })),
