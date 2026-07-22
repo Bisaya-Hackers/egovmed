@@ -71,6 +71,11 @@ export default function App() {
   // Keep the document language in sync so screen readers use the right pronunciation for EN/TL.
   useEffect(() => { document.documentElement.lang = S.lang === 'tl' ? 'fil' : 'en'; }, [S.lang]);
 
+  // Primary screens share one scroll container; always open a newly selected screen at its top.
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [S.screen]);
+
   // Resume eGovPH, hosted-liveness, and eGovPay redirects. Session JWTs live in
   // sessionStorage so they survive same-tab provider redirects but disappear when the tab closes.
   useEffect(() => {
