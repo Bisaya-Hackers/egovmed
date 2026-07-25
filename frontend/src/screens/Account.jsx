@@ -6,11 +6,9 @@ import rosaAvatar from '../assets/home-avatar-rosa.png';
 
 const displayName = (patient) => [patient?.firstName, patient?.middleName, patient?.lastName].filter(Boolean).join(' ');
 
-// Real Philippine benefit/discount programs a patient could plausibly have. Only the first 3
-// (philhealth/whiteCard/sss) are wired into the eGovPay benefit engine (see backend
-// paymentService.BENEFIT_RULES) — those get a working "Add" button. The rest are genuine
-// programs but this demo doesn't compute coverage for them yet, so they're labeled honestly
-// as coming soon rather than pretending to activate something the payment math never reads.
+// Real Philippine benefit/discount programs a patient could plausibly have. All of them are now
+// wired into the eGovPay benefit engine (see backend paymentService.BENEFIT_RULES) and get a
+// working "Add" button — keep this list in sync with BENEFIT_RULES/SUPPORTED_BENEFITS.
 const BENEFIT_CATALOG = [
   { key: 'philhealth', label: 'PhilHealth' },
   { key: 'whiteCard', label: 'White Card (indigent)' },
@@ -25,7 +23,7 @@ const BENEFIT_CATALOG = [
   { key: 'ecc', label: 'ECC (Employees\u2019 Compensation)' },
   { key: 'aics', label: 'DSWD AICS' },
 ];
-const WIRED_BENEFIT_KEYS = ['philhealth', 'whiteCard', 'sss'];
+const WIRED_BENEFIT_KEYS = BENEFIT_CATALOG.map((b) => b.key);
 
 function BenefitRow({ label, active, c }) {
   return (
@@ -38,15 +36,14 @@ function BenefitRow({ label, active, c }) {
   );
 }
 
-// Row shown inside the "add a benefit" catalog: Active (already on), a working Add button for
-// wired programs, or a muted "Coming soon" for real programs this demo can't compute yet.
-function CatalogRow({ label, active, wired, busy, onAdd, c }) {
+// Row shown inside the "add a benefit" catalog — already-active benefits are filtered out
+// before this renders, so it only ever needs a working Add button (wired programs) or a muted
+// "Coming soon" fallback (any program not yet in BENEFIT_RULES).
+function CatalogRow({ label, wired, busy, onAdd, c }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
       <span style={{ fontWeight: 700 }}>{label}</span>
-      {active ? (
-        <span className="pill green"><Check size={13} />{c.benefitOn}</span>
-      ) : wired ? (
+      {wired ? (
         <button onClick={onAdd} disabled={busy} className="chip add" style={{ fontWeight: 800, padding: '6px 12px', fontSize: '0.85em' }}>
           {busy ? c.benefitAdding : c.benefitAdd}
         </button>
@@ -88,6 +85,7 @@ export default function Account({ c, S, A }) {
   };
 
   const activeBenefits = BENEFIT_CATALOG.filter((b) => patient?.benefits?.[b.key]);
+  const addableBenefits = BENEFIT_CATALOG.filter((b) => !patient?.benefits?.[b.key]);
 
   return (
     <div className="screen">
@@ -145,21 +143,24 @@ export default function Account({ c, S, A }) {
             {showAddBenefit && (
               <>
                 <div className="rowsep" />
-                <div className="stack">
-                  {BENEFIT_CATALOG.map((b, i) => (
-                    <div key={b.key}>
-                      {i > 0 && <div className="rowsep" />}
-                      <CatalogRow
-                        label={b.label}
-                        active={!!patient.benefits?.[b.key]}
-                        wired={WIRED_BENEFIT_KEYS.includes(b.key)}
-                        busy={addingKey === b.key}
-                        onAdd={() => handleAddBenefit(b.key)}
-                        c={c}
-                      />
-                    </div>
-                  ))}
-                </div>
+                {addableBenefits.length > 0 ? (
+                  <div className="stack">
+                    {addableBenefits.map((b, i) => (
+                      <div key={b.key}>
+                        {i > 0 && <div className="rowsep" />}
+                        <CatalogRow
+                          label={b.label}
+                          wired={WIRED_BENEFIT_KEYS.includes(b.key)}
+                          busy={addingKey === b.key}
+                          onAdd={() => handleAddBenefit(b.key)}
+                          c={c}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="sub" style={{ margin: 0 }}>{c.benefitCatalogEmpty}</p>
+                )}
               </>
             )}
           </section>
