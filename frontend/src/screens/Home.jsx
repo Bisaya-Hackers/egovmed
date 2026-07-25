@@ -1,4 +1,4 @@
-import { HeartPulse, FileText, Card, Flag, Chat, ChevronRight } from '../components/Icons.jsx';
+import { HeartPulse, FileText, Card, Flag, Chat, ChevronRight, ShieldTick } from '../components/Icons.jsx';
 import { CONST } from '../i18n/dict.js';
 import rosaAvatar from '../assets/home-avatar-rosa.png';
 import digitalIdArt from '../assets/home-digital-id.png';
@@ -94,6 +94,15 @@ export default function Home({ c, lang, S, A }) {
           <p className="sub" style={{ margin: '5px 0 0' }}>{c.featuredSub}</p>
         </div>
         <img src={verifiedLabsArt} alt="Verified lab records shared across hospitals" style={{ width: 76, height: 60, borderRadius: 12, objectFit: 'contain', flex: 'none' }} />
+      </div>
+      <div data-stagger className="card tint" style={{ display: 'flex', gap: 14, alignItems: 'center', marginTop: 10 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 800 }}>{c.featuredTitle2}</div>
+          <p className="sub" style={{ margin: '5px 0 0' }}>{c.featuredSub2}</p>
+        </div>
+        <span style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(255,255,255,.6)', color: 'var(--teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+          <ShieldTick size={26} />
+        </span>
       </div>
     </div>
   );
