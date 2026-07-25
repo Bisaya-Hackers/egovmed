@@ -24,9 +24,11 @@ router.post('/', requireAuth,
   }));
 
 // GET /triage → the patient's triage history
-router.get('/', requireAuth, asyncHandler(async (req, res) => {
-  res.json(await triageService.listForPatient(req.user.sub));
-}));
+router.get('/', requireAuth,
+  rateLimit({ scope: 'triage-list', max: 60, windowMs: 60_000 }),
+  asyncHandler(async (req, res) => {
+    res.json(await triageService.listForPatient(req.user.sub));
+  }));
 
 // POST /triage/:id/confirm  { confirmedSpecialty?, note? }  → CLINICIAN-ONLY nurse confirmation.
 // Decision-support integrity: a nurse confirms every result; patients must NOT self-confirm.
