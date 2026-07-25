@@ -45,3 +45,7 @@ tmp/
 
 # Claude Code local config and worktrees
 .claude/
+
+# Personal workflow handoffs — Claude Code reads them off disk without needing them committed.
+# Pattern matches "handoff-*.md" only, so pentest-handoff.md and design-handoff.md stay tracked.
+docs/handoff-*.md
