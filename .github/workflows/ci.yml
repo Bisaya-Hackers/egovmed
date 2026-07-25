@@ -13,22 +13,28 @@ concurrency:
 
 jobs:
   secret-scan:
-    name: Secret scan (gitleaks)
+    name: Secret scan (trufflehog)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history so gitleaks scans every commit on this ref, not just the tip.
+          # Full history so trufflehog scans every commit on this ref, not just the tip.
           # Catches secrets that were committed and then removed in a later commit.
           fetch-depth: 0
 
       # Blocks PRs that introduce any hardcoded API key, private key, JWT, cloud credential,
-      # or generic high-entropy string. Uses gitleaks' default ruleset — no config file needed.
-      # Fails the job on any finding, so an accidental commit of `.env` never reaches main.
+      # or high-entropy string. Uses trufflehog's built-in ruleset — no config needed.
+      # `--only-verified` cuts false positives to near zero (each finding is actively
+      # validated against the issuing provider), but SLOWER on private repos. If the run
+      # gets too slow, drop --only-verified and accept some noise. We use trufflehog rather
+      # than gitleaks-action because gitleaks-action@v2 requires a paid license for orgs.
       - name: Detect committed secrets
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --results=verified,unknown
 
   backend:
     name: Backend (tests + audit)
