@@ -103,3 +103,24 @@ If there are zero Critical/High findings, say so explicitly. A clean review is a
 - ✅ Contract SWC-114 front-running risk explicitly scored (Low if `submitterOf` is not trusted downstream)
 - ✅ `EGOVCHAIN_PRIVATE_KEY` handling audited: not in any commit, marked Sensitive in Vercel when set, never logged
 - ✅ `/integrations/status` response verified to leak no secret values under any input
+
+## CodeQL suppressions
+
+CodeQL's `security-extended` pack runs on every push and PR. Two suppressions are configured
+so noise doesn't drown out real findings — both survive re-review and both are safe:
+
+- **`js/missing-rate-limiting`** — suppressed in [`.github/codeql/codeql-config.yml`](../.github/codeql/codeql-config.yml).
+  The rule only recognizes the `express-rate-limit` NPM package. Our custom store-backed
+  `rateLimit()` middleware in [`backend/src/middleware/index.js`](../backend/src/middleware/index.js)
+  is functionally equivalent but doesn't match the detector's pattern. Manual audit confirmed
+  every state-mutating route and every expensive read path (chain writes, eGov AI calls,
+  eGovPay calls) has a per-user rate limit. If you migrate to `express-rate-limit`, delete
+  the filter and let the rule run.
+
+- **`js/request-forgery` at `backend/src/lib/http.js:26`** — CONFIRMED false positive by
+  audit of all 16 outbound call sites. Every URL host component comes from
+  `env.<integration>.baseUrl` (never from request input); path segments are static, from
+  the owner-scoped store, or `encodeURIComponent`-escaped. Defense-in-depth guard added
+  in the same file rejects any non-`https:` outbound URL (except loopback for dev). The
+  alert should be dismissed via the Security tab with reason "won't fix — mitigated by
+  transport-layer https guard".

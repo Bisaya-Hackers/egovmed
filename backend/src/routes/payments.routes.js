@@ -16,6 +16,7 @@ router.post('/callback',
 
 // POST /payments/quote  { billAmount } → preview benefits without creating a bill
 router.post('/quote', requireAuth,
+  rateLimit({ scope: 'payment-quote', max: 20, windowMs: 10 * 60_000 }),
   validate(z.object({ billAmount: z.number().finite().positive().max(10_000_000) }).strict()),
   asyncHandler(async (req, res) => {
     const store = getStore();
@@ -24,7 +25,10 @@ router.post('/quote', requireAuth,
   }));
 
 // POST /payments  { billAmount, description?, channel? } → create bill + eGovPay checkout
+// Tight limit: each call hits eGovPay to create a live checkout — spam would flood their
+// sandbox with orphan bills and burn our partner's reputation on shared infra.
 router.post('/', requireAuth,
+  rateLimit({ scope: 'payment-create', max: 20, windowMs: 10 * 60_000 }),
   validate(z.object({
     billAmount: z.number().finite().positive().max(10_000_000),
     description: z.string().trim().min(1).max(500).optional(),
@@ -36,9 +40,11 @@ router.post('/', requireAuth,
   }));
 
 // GET /payments → patient's bills
-router.get('/', requireAuth, asyncHandler(async (req, res) => {
-  res.json(await paymentService.listForPatient(req.user.sub));
-}));
+router.get('/', requireAuth,
+  rateLimit({ scope: 'payment-list', max: 60, windowMs: 60_000 }),
+  asyncHandler(async (req, res) => {
+    res.json(await paymentService.listForPatient(req.user.sub));
+  }));
 
 // GET /payments/:id/status → refresh checkout status
 router.get('/:id/status', requireAuth,
