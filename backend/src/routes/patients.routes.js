@@ -1,6 +1,7 @@
 'use strict';
 const { Router } = require('express');
-const { rateLimit, requireAuth, asyncHandler } = require('../middleware');
+const { z } = require('zod');
+const { rateLimit, requireAuth, validate, asyncHandler } = require('../middleware');
 const { getStore, COLLECTIONS } = require('../store');
 const { notFound, badRequest } = require('../lib/errors');
 const { publicPatient } = require('../lib/presenters');
@@ -15,6 +16,46 @@ router.get('/me', requireAuth,
     const patient = await store.findById(COLLECTIONS.PATIENTS, req.user.sub);
     if (!patient) throw notFound('Patient not found');
     res.json(publicPatient(patient));
+  }));
+
+// PATCH /patients/me → let the citizen correct their own contact fields.
+//
+// Motivation: eGovPH SSO is the source of truth for identity, but the `mobile` field on the
+// SSO profile may be missing or stale. Without a user-editable phone, eMessage in live mode
+// would silently fail to deliver appointment confirmations to anyone whose SSO record lacks
+// a number. Same rationale for email.
+//
+// Only contact fields are editable here. Names / DOB / sex / nationality all come from
+// PhilSys via SSO and are load-bearing for identity matching — those must not be user-editable.
+// Benefits have their own PATCH route below.
+//
+// SSO overwrite caveat: authService.upsertAndIssue currently prefers any non-empty phone/email
+// returned by SSO on subsequent logins (see the "Don't overwrite previously-good fields with
+// blanks/nulls from a thinner SSO payload" comment there). So a user-set phone STICKS if SSO
+// returns blank on later logins, but gets overwritten if SSO returns any value. That's fine for
+// the "SSO omitted phone" use case this endpoint exists to solve; a full "manual override
+// beats SSO" would need per-field provenance tracking — deferred.
+const updateLimit = rateLimit({ scope: 'patients-update', max: 20, windowMs: 10 * 60_000 });
+// E.164 Philippine mobile: +63 + 10 digits. Stored canonical so integration adapters don't
+// each guess a format; eReport's fileReport already strips the leading + at send time.
+const PH_MOBILE = /^\+63\d{10}$/;
+const updateBody = z.object({
+  phone: z.string().trim().regex(PH_MOBILE, 'phone must be +63 followed by 10 digits').optional(),
+  email: z.string().trim().toLowerCase().email().max(254).optional(),
+}).strict().refine((o) => o.phone !== undefined || o.email !== undefined, {
+  message: 'At least one of phone or email must be provided',
+});
+router.patch('/me', requireAuth, updateLimit,
+  validate(updateBody),
+  asyncHandler(async (req, res) => {
+    const store = getStore();
+    const patient = await store.findById(COLLECTIONS.PATIENTS, req.user.sub);
+    if (!patient) throw notFound('Patient not found');
+    const patch = { updatedAt: new Date().toISOString() };
+    if (req.body.phone !== undefined) patch.phone = req.body.phone;
+    if (req.body.email !== undefined) patch.email = req.body.email;
+    const updated = await store.update(COLLECTIONS.PATIENTS, req.user.sub, patch);
+    res.json(publicPatient(updated));
   }));
 
 // PATCH /patients/me/benefits/:key → activate one of the benefit programs the eGovPay benefit
