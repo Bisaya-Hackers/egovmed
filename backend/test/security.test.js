@@ -220,6 +220,45 @@ test('security regression suite', async (t) => {
     })).status, 404);
   });
 
+  await t.test('PATCH /patients/me: contact fields are self-editable, name/DOB are locked', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+
+    // Valid PH E.164 mobile — accepted and persisted.
+    const ok = await json(await request('/patients/me', {
+      token: owner, method: 'PATCH', body: { phone: '+639175551234' },
+    }));
+    assert.equal(ok.response.status, 200);
+    assert.equal(ok.value.phone, '+639175551234');
+
+    // Non-E.164 phone shapes — rejected with 400. Format canonicalization happens client-side;
+    // the API contract is strictly +63 + 10 digits.
+    for (const bad of ['09175551234', '639175551234', '5551234', '+1234', 'not-a-phone']) {
+      const res = await request('/patients/me', {
+        token: owner, method: 'PATCH', body: { phone: bad },
+      });
+      assert.equal(res.status, 400, `expected 400 for phone=${bad}, got ${res.status}`);
+    }
+
+    // Attempts to alter locked identity fields via strict-mode zod are rejected as 400 —
+    // firstName/lastName/birthDate/identityVerified come from SSO+eVerify and must not be
+    // user-editable via this endpoint.
+    for (const bad of [{ firstName: 'Attacker' }, { identityVerified: true }, { birthDate: '2000-01-01' }, { egovSub: 'other-user' }]) {
+      const res = await request('/patients/me', { token: owner, method: 'PATCH', body: bad });
+      assert.equal(res.status, 400, `expected 400 for body=${JSON.stringify(bad)}, got ${res.status}`);
+    }
+
+    // Empty body (no phone AND no email) rejected — no silent no-op PATCH.
+    assert.equal((await request('/patients/me', { token: owner, method: 'PATCH', body: {} })).status, 400);
+
+    // Cross-tenant: an attacker's PATCH updates ONLY their own record (JWT sub scoping),
+    // never the owner's. Verify the owner's phone from the first PATCH is still intact.
+    const attacker = sign({ sub: 'pat_attacker' });
+    await request('/patients/me', { token: attacker, method: 'PATCH', body: { phone: '+639170000000' } });
+    const ownerAfter = await json(await request('/patients/me', { token: owner }));
+    assert.equal(ownerAfter.value.phone, '+639175551234');
+  });
+
   await t.test('PATCH benefits: unknown key does not reflect raw input into the response message', async () => {
     const ownerId = await resetWithPatients();
     const owner = sign({ sub: ownerId });
