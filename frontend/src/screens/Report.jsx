@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScreenHeader, Btn } from '../components/ui.jsx';
 import PinInput from '../components/PinInput.jsx';
 import { Check, Warning } from '../components/Icons.jsx';
@@ -36,6 +36,32 @@ function Tracker({ lang, stepIndex }) {
 
 export default function Report({ c, lang, S, set, A }) {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [resendSecs, setResendSecs] = useState(30);
+  const resendTimer = useRef(null);
+
+  const startResendCountdown = () => {
+    if (resendTimer.current) clearInterval(resendTimer.current);
+    setResendSecs(30);
+    resendTimer.current = setInterval(() => {
+      setResendSecs((s) => {
+        if (s <= 1) { clearInterval(resendTimer.current); resendTimer.current = null; return 0; }
+        return s - 1;
+      });
+    }, 1000);
+  };
+
+  // Start (and restart on re-entry) the 30s resend countdown whenever the OTP step is shown.
+  useEffect(() => {
+    if (S.reportStage === 'otp') startResendCountdown();
+    return () => { if (resendTimer.current) { clearInterval(resendTimer.current); resendTimer.current = null; } };
+  }, [S.reportStage]);
+
+  const handleResend = () => {
+    if (resendSecs > 0) return;
+    setOtp(['', '', '', '', '', '']);
+    startResendCountdown();
+    A.toast(c.resendSent);
+  };
 
   if (S.reportStage === 'track') {
     const result = S.trackResult;
@@ -124,7 +150,9 @@ export default function Report({ c, lang, S, set, A }) {
         <div data-stagger style={{ marginTop: 20 }}>
           <PinInput values={otp} onChange={setOtp} autoFocus ariaLabel={c.otpTitle} />
         </div>
-        <button className="btn ghost" style={{ marginTop: 14 }} disabled>{c.otpResend}</button>
+        <button className="btn ghost" style={{ marginTop: 14 }} disabled={resendSecs > 0} onClick={handleResend}>
+          {resendSecs > 0 ? `${c.resendPrefix} 0:${String(resendSecs).padStart(2, '0')}` : c.resendReady}
+        </button>
         <div style={{ marginTop: 12 }}>
           <Btn disabled={!ready} onClick={() => A.verifyOtp(CATS.en[S.reportCat])}>{c.verifyOtp}</Btn>
         </div>
