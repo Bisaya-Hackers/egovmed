@@ -20,9 +20,18 @@ const cfg = env.eMessage;
 async function send({ to, channel = 'sms', subject, body }) {
   if (cfg.mode === 'live' && channel === 'sms') {
     if (!cfg.authToken) throw new Error('eMessage live mode requires EMESSAGE_AUTH_TOKEN');
-    const res = await http.post(`${cfg.baseUrl}/messaging/v1/sms/push`, {
-      number: to, message: body,
-    }, { headers: { 'X-EMESSAGE-Auth': cfg.authToken, 'Content-Type': 'application/json' } });
+    let res;
+    try {
+      res = await http.post(`${cfg.baseUrl}/messaging/v1/sms/push`, {
+        number: to, message: body,
+      }, { headers: { 'X-EMESSAGE-Auth': cfg.authToken, 'Content-Type': 'application/json' } });
+    } catch (err) {
+      // appointmentService.book() swallows this by design (a failed SMS must never fail a
+      // booking), so without a log here a live send failure is invisible — the only trace
+      // would be the generic `http upstream non-2xx` line. Never log `to` (PII) or the token.
+      logger.warn('eMessage live SMS push failed', { subject, reason: err.message });
+      throw err;
+    }
     // http client throws on non-2xx, so reaching here = 201 Created. data.message is a
     // human-readable status string, not an ID; capture for audit but the reliable success
     // signal is the HTTP status.
