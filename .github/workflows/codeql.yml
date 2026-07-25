@@ -22,6 +22,12 @@ jobs:
     name: CodeQL analysis (${{ matrix.language }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # CodeQL requires GitHub Advanced Security, which is FREE on public repos and PAID
+    # on private repos. This guard makes the workflow inert on private repos (it won't
+    # even start jobs), so no red-X noise on every push. Flip the repo to public and
+    # CodeQL kicks in automatically. Alternative if you want CodeQL on a private repo:
+    # enable GitHub Advanced Security in repo Settings > Code security (paid).
+    if: github.event.repository.private == false || github.repository_visibility == 'public'
     permissions:
       # Required so CodeQL can upload SARIF results to the Security tab.
       security-events: write
