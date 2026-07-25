@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same branch so a fast follow-up push doesn't queue behind
+# a stale run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      # `npm ci` is stricter than `npm install` — fails hard if package-lock.json is out of
+      # sync with package.json, catching a common source of "works on my machine" bugs.
+      - name: Install dependencies
+        run: npm ci
+
+      # 16 regression tests (11 baseline + 5 added for /integrations/status, credential-leak
+      # sentinels, benefits reflection, cross-tenant payment attribution, rate limit).
+      # This is the merge gate — the mock-to-live rollout depends on these staying green.
+      - name: Run tests
+        run: npm test
+
+  frontend:
+    name: Frontend (build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Full production build — catches Vite/React errors, missing imports, and unresolved
+      # module references before they reach a Vercel preview deploy.
+      - name: Build
+        run: npm run build
