@@ -8,7 +8,10 @@ const router = Router();
 const idParams = z.object({ id: z.string().regex(/^apt_[A-Za-z0-9_-]{1,100}$/) }).strict();
 
 // POST /appointments  { specialty, hospital?, scheduledFor?, triageId? }
+// Books an appointment AND fires an eMessage confirmation — capped per user so a hot loop
+// doesn't spam SMS credits on shared hackathon infra.
 router.post('/', requireAuth,
+  rateLimit({ scope: 'appointment-create', max: 20, windowMs: 10 * 60_000 }),
   validate(z.object({
     specialty: z.string().trim().min(2).max(100),
     hospital: z.string().trim().min(2).max(200).optional(),
@@ -20,9 +23,11 @@ router.post('/', requireAuth,
   }));
 
 // GET /appointments → patient's appointments
-router.get('/', requireAuth, asyncHandler(async (req, res) => {
-  res.json(await appointmentService.listForPatient(req.user.sub));
-}));
+router.get('/', requireAuth,
+  rateLimit({ scope: 'appointment-list', max: 60, windowMs: 60_000 }),
+  asyncHandler(async (req, res) => {
+    res.json(await appointmentService.listForPatient(req.user.sub));
+  }));
 
 // POST /appointments/:id/remind → send an eMessage reminder
 router.post('/:id/remind', requireAuth,
@@ -33,6 +38,7 @@ router.post('/:id/remind', requireAuth,
 
 // PATCH /appointments/:id  { status }
 router.patch('/:id', requireAuth,
+  rateLimit({ scope: 'appointment-update', max: 20, windowMs: 10 * 60_000 }),
   validate(idParams, 'params'),
   validate(z.object({ status: z.literal('cancelled') }).strict()),
   asyncHandler(async (req, res) => {

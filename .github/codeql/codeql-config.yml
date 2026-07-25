@@ -1,0 +1,19 @@
+name: eGovMed CodeQL config
+
+# Full security-extended query pack from the workflow file — we only DISABLE specific queries
+# below. The default suite still runs (SQL injection, XSS sinks, prototype pollution, unsafe
+# deserialization, path traversal, request forgery, etc.).
+disable-default-queries: false
+
+query-filters:
+  # ─── js/missing-rate-limiting ─────────────────────────────────────────────────────────────
+  # This rule ONLY recognizes the `express-rate-limit` NPM package. We use a custom
+  # store-backed rateLimit() middleware in `backend/src/middleware/index.js` (needed because
+  # our rate-limit counters must persist across serverless invocations via Upstash Redis —
+  # express-rate-limit's in-memory default resets every cold start on Vercel).
+  #
+  # Result: the rule reports every rate-limited route as unprotected. Confirmed by manual
+  # audit — see docs/security-review-mock-to-live.md, "CodeQL suppressions" section.
+  # If you switch to express-rate-limit someday, delete this filter and let the rule run.
+  - exclude:
+      id: js/missing-rate-limiting
