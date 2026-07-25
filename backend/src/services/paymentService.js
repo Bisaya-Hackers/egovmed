@@ -35,7 +35,7 @@ function computeBenefits(billAmount, benefits = {}) {
   return { applied, coveredTotal: round2(billAmount - remaining), balance: Math.max(0, round2(remaining)), ...mockMeta };
 }
 
-async function createBill({ patientId, billAmount, description = 'Hospital services', channel = 'any' }) {
+async function createBill({ patientId, billAmount, description = 'Hospital services', channel = 'any', appointmentId = null }) {
   const store = getStore();
   const patient = await store.findById(COLLECTIONS.PATIENTS, patientId);
   if (!patient) throw notFound('Patient not found');
@@ -48,6 +48,7 @@ async function createBill({ patientId, billAmount, description = 'Hospital servi
   const payment = {
     id: randomId('bill_'),
     patientId,
+    appointmentId,
     billAmount,
     benefitsApplied: applied,
     coveredTotal,

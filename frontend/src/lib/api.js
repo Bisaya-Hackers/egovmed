@@ -63,11 +63,12 @@ export const api = {
   replyToMessage: (id, text) => req(`/messages/${encodeURIComponent(id)}/reply`, { method: 'POST', body: { text } }),
   // eGovPay (benefits mock-labeled by the backend)
   quote: (billAmount) => req('/payments/quote', { method: 'POST', body: { billAmount } }),
-  pay: (billAmount, channel) => req('/payments', { method: 'POST', body: { billAmount, channel } }),
+  pay: (billAmount, channel, appointmentId) => req('/payments', { method: 'POST', body: { billAmount, channel, ...(appointmentId ? { appointmentId } : {}) } }),
   paymentStatus: (billId) => req(`/payments/${encodeURIComponent(billId)}/status`),
   payments: () => req('/payments'),
   // eGovChain-anchored records
   records: () => req('/records'),
+  createRecord: (record) => req('/records', { method: 'POST', body: record }),
   getRecord: (id) => req(`/records/${encodeURIComponent(id)}`),
   verifyRecord: (id) => req(`/records/${encodeURIComponent(id)}/verify`),
   doctorSummary: () => req('/records/doctor-summary'),

@@ -35,7 +35,7 @@ export default function Confirm({ c, lang, S, A }) {
 
       <div className="spacer" style={{ minHeight: 18 }} />
       <div className="stack">
-        <Btn onClick={A.goPayment}>{c.goPay}</Btn>
+        <Btn onClick={() => A.goPayment(S.appointments[0]?.id)}>{c.goPay}</Btn>
         <Btn variant="secondary" onClick={A.resetToHome}>{c.backHome}</Btn>
       </div>
     </div>

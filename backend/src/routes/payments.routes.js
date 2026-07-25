@@ -29,6 +29,7 @@ router.post('/', requireAuth,
     billAmount: z.number().finite().positive().max(10_000_000),
     description: z.string().trim().min(1).max(500).optional(),
     channel: z.string().trim().min(1).max(50).optional(),
+    appointmentId: z.string().regex(/^apt_[A-Za-z0-9_-]{1,100}$/).optional(),
   }).strict()),
   asyncHandler(async (req, res) => {
     res.status(201).json(await paymentService.createBill({ patientId: req.user.sub, ...req.body }));

@@ -33,6 +33,7 @@ const initial = () => ({
   emergency: false, liveness: 'idle', livenessSessionId: null,
   triage: null,
   slotsLoading: false, selectedSlot: null, booking: false, booked: false, slotLabel: '', refNo: makeRefNo(CONST.hospital),
+  appointments: [], payingApptId: null,
   hospital: CONST.hospital, showHospitalPicker: false,
   channel: null, paying: false, paid: false, paymentStatus: null,
   messages: [], unreadMessages: 0,
@@ -103,25 +104,45 @@ export default function App() {
     // e.g. the eGovPay hosted-checkout redirect reloads the app and wipes in-memory React state,
     // so without this the card would silently vanish even though the booking still exists server-side.
     const SETTLED = ['paid', 'settled', 'success', 'successful', 'completed'];
+    const formatSlot = (scheduledFor, lang) => (scheduledFor
+      ? new Date(scheduledFor).toLocaleString(lang === 'tl' ? 'fil-PH' : 'en-PH', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+      : null);
+    // Every active (non-cancelled) appointment gets its own card — not just the most recent one —
+    // so booking a 2nd, 3rd, etc. appointment doesn't silently push earlier ones out of view.
+    // Payments are matched back to their appointment via `appointmentId` so each card shows its
+    // own paid/unpaid state independently.
     const syncPatientState = async () => {
       const [appts, pays, msgs] = await Promise.all([tryApi(api.appointments()), tryApi(api.payments()), tryApi(api.messages())]);
       if (Array.isArray(msgs)) set({ messages: msgs });
       if (Array.isArray(appts) && appts.length) {
-        const active = [...appts]
+        const activeAppts = [...appts]
           .filter((a) => a.status !== 'cancelled')
-          .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0];
-        if (active) {
-          const latestPaid = Array.isArray(pays) && pays.some((p) => SETTLED.includes(String(p.status || '').toLowerCase()));
-          set((p) => ({
-            booked: true,
-            triage: { ...(p.triage || {}), specialty: active.specialty },
-            slotLabel: active.scheduledFor
-              ? new Date(active.scheduledFor).toLocaleString(p.lang === 'tl' ? 'fil-PH' : 'en-PH', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
-              : p.slotLabel,
-            refNo: makeRefNo(active.hospital || 'PGH', active.queueNumber, active.id || active.queueNumber),
-            hospital: active.hospital && active.hospital !== 'PGH' ? active.hospital : p.hospital,
-            paid: p.paid || latestPaid,
-          }));
+          .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+        if (activeAppts.length) {
+          set((p) => {
+            const appointments = activeAppts.map((a) => ({
+              id: a.id,
+              specialty: a.specialty,
+              hospital: a.hospital || 'PGH',
+              slotLabel: formatSlot(a.scheduledFor, p.lang) || p.slotLabel,
+              refNo: makeRefNo(a.hospital || 'PGH', a.queueNumber, a.id || a.queueNumber),
+              queueNumber: a.queueNumber,
+              paid: Array.isArray(pays) && pays.some((pay) => pay.appointmentId === a.id && SETTLED.includes(String(pay.status || '').toLowerCase())),
+            }));
+            const active = activeAppts[0];
+            // Legacy/unlinked payments (made before appointmentId existed) still settle the
+            // singular flow used right after booking (Confirm screen, etc.).
+            const legacyPaid = Array.isArray(pays) && pays.some((pay) => !pay.appointmentId && SETTLED.includes(String(pay.status || '').toLowerCase()));
+            return {
+              appointments,
+              booked: true,
+              triage: { ...(p.triage || {}), specialty: active.specialty },
+              slotLabel: appointments[0]?.slotLabel || p.slotLabel,
+              refNo: appointments[0]?.refNo || p.refNo,
+              hospital: active.hospital && active.hospital !== 'PGH' ? active.hospital : p.hospital,
+              paid: p.paid || appointments[0]?.paid || legacyPaid,
+            };
+          });
         }
       }
     };
@@ -159,10 +180,12 @@ export default function App() {
         if (current.pathname.endsWith('/payment/return')) {
           cleanUrl();
           const billId = window.sessionStorage.getItem('egovmed.pendingBillId');
+          const pendingApptId = window.sessionStorage.getItem('egovmed.pendingApptId');
           if (!getToken() || !billId) throw new Error('The payment session could not be resumed');
-          set({ screen: 'payment', stack: ['home'], paying: true, channel: 0, flowError: null });
+          set({ screen: 'payment', stack: ['home'], paying: true, channel: 0, payingApptId: pendingApptId || null, flowError: null });
           const payment = await finishPayment(billId);
           window.sessionStorage.removeItem('egovmed.pendingBillId');
+          window.sessionStorage.removeItem('egovmed.pendingApptId');
           const status = String(payment?.status || '').toLowerCase();
           const paid = ['paid', 'settled', 'success', 'successful', 'completed'].includes(status);
           set({ paying: false, paid, paymentStatus: status, flowError: paid ? null : `Payment status: ${status || 'pending'}` });
@@ -333,8 +356,16 @@ export default function App() {
         id: 'local_' + Date.now(), kind: 'confirmation', status: 'sent', channel: 'sms', provider: 'mock',
         createdAt: new Date().toISOString(), meta: { specialty, hospital: appt?.hospital || S.hospital, queueNumber: appt?.queueNumber },
       };
+      // New card on Home in addition to the singular fields (which drive the Confirm screen
+      // right after this booking) — so a 2nd/3rd booking shows up alongside earlier ones
+      // instead of replacing them.
+      const newCard = appt ? {
+        id: appt.id, specialty, hospital: appt.hospital || S.hospital,
+        slotLabel, refNo: refNo || makeRefNo(appt.hospital || S.hospital), queueNumber: appt.queueNumber, paid: false,
+      } : null;
       set((p) => ({
         booking: false, booked: true, slotLabel, refNo: refNo || p.refNo,
+        appointments: newCard ? [newCard, ...p.appointments.filter((a) => a.id !== newCard.id)] : p.appointments,
         messages: [optimistic, ...p.messages], unreadMessages: p.unreadMessages + 1,
         screen: 'confirm', stack: ['home'],
       }));
@@ -343,24 +374,32 @@ export default function App() {
     },
 
     // Payment (eGovPay)
-    goPayment: () => A.go('payment'),
+    // apptId identifies which appointment card this payment is for, so multiple bookings can
+    // each be paid independently instead of sharing one global paid flag.
+    goPayment: (apptId) => { set({ payingApptId: apptId || null }); A.go('payment'); },
     setChannel: (i) => set({ channel: i }),
     doPay: async (amount = 300) => {
       if (S.channel == null || S.paying) return;
       set({ paying: true, flowError: null });
       try {
-        const payment = await api.pay(amount, CHANNELS[S.channel]?.[0] || 'card');
+        const payment = await api.pay(amount, CHANNELS[S.channel]?.[0] || 'card', S.payingApptId);
         if (payment?.provider !== 'mock' && payment?.checkoutUrl) {
           const checkout = new URL(payment.checkoutUrl);
           if (checkout.protocol !== 'https:') throw new Error('Payment provider returned an insecure checkout URL');
           window.sessionStorage.setItem('egovmed.pendingBillId', payment.id);
+          if (S.payingApptId) window.sessionStorage.setItem('egovmed.pendingApptId', S.payingApptId);
           window.location.assign(checkout.href);
           return;
         }
         const refreshed = payment?.id ? await api.paymentStatus(payment.id) : payment;
         const status = String(refreshed?.status || '').toLowerCase();
         const paid = ['paid', 'settled', 'success', 'successful', 'completed'].includes(status);
-        set({ paying: false, paid, paymentStatus: status, flowError: paid ? null : `Payment status: ${status || 'pending'}` });
+        set((p) => ({
+          paying: false, paid, paymentStatus: status, flowError: paid ? null : `Payment status: ${status || 'pending'}`,
+          appointments: paid && p.payingApptId
+            ? p.appointments.map((a) => (a.id === p.payingApptId ? { ...a, paid: true } : a))
+            : p.appointments,
+        }));
         if (paid) toast(S.lang === 'tl' ? 'Ipinadala ang resibo sa SMS' : 'Receipt texted to you');
       } catch (err) {
         set({ paying: false, flowError: err.message || 'Payment failed' });
