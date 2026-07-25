@@ -70,7 +70,6 @@ export default function Home({ c, lang, S, A }) {
                 </div>
                 <span style={{ display: 'flex', gap: 6 }}>
                   <span className="pill green">{c.verifiedBadge}</span>
-                  {appt.paid && <span className="pill amber">{c.paidBadge}</span>}
                 </span>
               </div>
               <div className="rowsep" />
