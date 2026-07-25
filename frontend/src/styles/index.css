@@ -45,7 +45,7 @@ body {
   justify-content: center;
   min-height: 100vh;
 }
-button { font-family: inherit; cursor: pointer; }
+button { font-family: inherit; font-size: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 input, textarea { font-family: inherit; }
 .mono { font-family: 'Geist Mono', ui-monospace, monospace; }

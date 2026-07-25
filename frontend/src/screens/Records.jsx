@@ -175,7 +175,8 @@ function UploadSheet({ lang, c, onClose, onSaved }) {
 
   const submit = async () => {
     if (!file) { setError(c.uploadRecordNeedFile); return; }
-    if (!title.trim()) { setError(c.uploadRecordNeedTitle); return; }
+    if (title.trim().length < 2) { setError(c.uploadRecordTitleTooShort); return; }
+    if (source.trim() && source.trim().length < 2) { setError(c.uploadRecordSourceTooShort); return; }
     setError(null);
     setSaving(true);
     try {
@@ -190,7 +191,8 @@ function UploadSheet({ lang, c, onClose, onSaved }) {
       });
       onSaved(saved);
     } catch (e) {
-      setError(e.message || c.uploadRecordError);
+      const detail = Array.isArray(e.data?.error?.details) && e.data.error.details[0];
+      setError((detail && `${detail.path}: ${detail.message}`) || e.message || c.uploadRecordError);
     } finally {
       setSaving(false);
     }
