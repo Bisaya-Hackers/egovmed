@@ -37,9 +37,18 @@ router.get(
 );
 
 // POST /messages/:id/reply  { text } → patient replies to a message thread.
-// The reply text is forwarded to eMessage (mock) but NEVER persisted — same audit-hygiene rule
-// as every other row in this collection. We also write a simulated staff acknowledgement so the
-// thread reads as a live conversation instead of a one-way notification feed.
+//
+// ⚠️  DEMO-ONLY as of the PGH pilot showing. The reply text is forwarded to eMessage with a
+// synthetic recipient (`pgh-patient-services`) on the `in_app` channel — which falls through
+// to the mock path even when eMessage is live (docs only cover SMS push). **NO real hospital
+// staff member sees the message.** The `staff_ack` row is entirely fabricated on the server.
+// The frontend shows a matching "demo — messages don't reach staff yet" banner in the reply UI.
+// Before this route is exposed to real patients: wire it to a real inbox (email/queue/paging
+// system) AND remove the fake staff_ack write below, otherwise a patient could type "I'm
+// having chest pain right now" into a reply and get a fake acknowledgement with no follow-up.
+//
+// The reply text itself is NEVER persisted — same audit-hygiene rule as every other row in
+// this collection (see the messages test in security.test.js for the regression assertion).
 router.post(
   '/:id/reply',
   requireAuth,

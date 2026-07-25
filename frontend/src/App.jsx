@@ -448,7 +448,9 @@ export default function App() {
     setTrackCaseNo: (v) => set({ trackCaseNo: v.toUpperCase(), trackError: null }),
     submitTrackCase: async () => {
       const caseNo = S.trackCaseNo.trim();
-      if (!/^EGM-\d{4}-\d{6}$/.test(caseNo)) { set({ trackError: 'invalid' }); return; }
+      // EGM-YYYY-###### = self-generated (mock); PFM-MMDDYY-#### = live eReport format.
+      // Backend accepts both, keep this in sync so live case numbers don't fail client-side.
+      if (!/^(EGM-\d{4}-\d{6}|PFM-\d{6}-\d{4})$/.test(caseNo)) { set({ trackError: 'invalid' }); return; }
       set({ trackLoading: true, trackError: null, trackResult: null });
       try {
         const res = await api.trackCase(caseNo);

@@ -139,6 +139,15 @@ export default function Messages({ c, lang, S, A }) {
         </div>
 
         <div style={{ marginTop: 16 }}>
+          {/* Demo-only banner: replies don't reach real hospital staff yet. Kept visible in the
+              reply UI so patients aren't misled during the PGH pilot (see messages.routes.js). */}
+          <div role="note" style={{
+            marginBottom: 10, padding: '10px 12px', borderRadius: 10,
+            background: 'var(--yellow-50, #fff8e1)', border: '1px solid var(--yellow, #f5c518)',
+            color: 'var(--ink)', fontSize: '0.82em', lineHeight: 1.35,
+          }}>
+            {c.replyDemoBanner}
+          </div>
           {!canReply && <p className="sub" style={{ fontSize: '0.8em', marginBottom: 8 }}>{c.replySyncing}</p>}
           <div style={{ display: 'flex', gap: 8 }}>
             <input
