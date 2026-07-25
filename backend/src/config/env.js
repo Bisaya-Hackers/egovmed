@@ -144,15 +144,23 @@ function warnIfMisconfigured(log) {
     throw new Error('ADMIN_KEY must be at least 32 characters when configured in production.');
   }
   if (env.isProd && !env.allowMockInProduction) {
+    // All eight eGov integrations must be live + credentialed once the mock escape hatch is off.
+    // A silent mock in production could serve fake triage, identity, or payment data to a real citizen.
     const requirements = [
       [env.egovph.mode === 'live' && env.egovph.partnerCode && env.egovph.partnerSecret, 'eGovPH SSO'],
       [env.everify.mode === 'live' && env.everify.clientId && env.everify.clientSecret, 'eVerify'],
       [env.faceLiveness.mode === 'live' && env.faceLiveness.apiKey, 'Face Liveness'],
       [env.egovPay.mode === 'live' && env.egovPay.token, 'eGovPay'],
+      [env.eMessage.mode === 'live' && env.eMessage.authToken, 'eMessage'],
+      [env.eReport.mode === 'live' && env.eReport.accessCode
+        && env.eReport.location.regionCode && env.eReport.location.provinceCode
+        && env.eReport.location.municipalityCode && env.eReport.location.barangayCode, 'eReport'],
+      [env.egovChain.mode === 'live' && env.egovChain.contractAddress && env.egovChain.privateKey, 'eGovChain'],
+      [env.egovAi.mode === 'live' && env.egovAi.accessCode && env.egovAi.baseUrl, 'eGov AI'],
     ];
     const missing = requirements.filter(([ok]) => !ok).map(([, name]) => name);
     if (missing.length) {
-      throw new Error(`Production cannot use mock or uncredentialed security/payment integrations: ${missing.join(', ')}. Set ALLOW_MOCK_IN_PRODUCTION=true only for an explicit non-live demo.`);
+      throw new Error(`Production cannot use mock or uncredentialed integrations: ${missing.join(', ')}. Set ALLOW_MOCK_IN_PRODUCTION=true only for an explicit non-live demo.`);
     }
   }
 }
