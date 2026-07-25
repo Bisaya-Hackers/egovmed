@@ -69,14 +69,18 @@ export default function Home({ c, lang, S, A }) {
                   <div className="sub" style={{ margin: '2px 0 0' }}>{appt.hospital || CONST.hospital}</div>
                 </div>
                 <span style={{ display: 'flex', gap: 6 }}>
-                  <span className="pill green">{c.verifiedBadge}</span>
+                  {appt.verified ? (
+                    <span className="pill green">{c.verifiedBadge}</span>
+                  ) : (
+                    <span className="pill red">{c.notVerifiedBadge}</span>
+                  )}
                 </span>
               </div>
               <div className="rowsep" />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span className="mono" style={{ fontSize: '0.9em', color: 'var(--muted)' }}>{appt.refNo}</span>
                 {appt.paid ? (
-                  <span className="chip" style={{ fontWeight: 800, color: 'var(--green)', borderColor: 'var(--green-50)', background: 'var(--green-50)' }}>{c.paidBadge}</span>
+                  <span className="chip paid" style={{ fontWeight: 800 }}>{c.paidBadge}</span>
                 ) : (
                   <button onClick={() => A.goPayment(appt.id)} className="chip add" style={{ fontWeight: 800 }}>{c.payNow}</button>
                 )}

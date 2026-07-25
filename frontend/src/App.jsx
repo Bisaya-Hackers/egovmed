@@ -129,6 +129,7 @@ export default function App() {
               refNo: makeRefNo(a.hospital || 'PGH', a.queueNumber, a.id || a.queueNumber, a.specialty),
               queueNumber: a.queueNumber,
               paid: Array.isArray(pays) && pays.some((pay) => pay.appointmentId === a.id && SETTLED.includes(String(pay.status || '').toLowerCase())),
+              verified: p.liveness === 'verified',
             }));
             const active = activeAppts[0];
             // Legacy/unlinked payments (made before appointmentId existed) still settle the
@@ -195,7 +196,8 @@ export default function App() {
         }
 
         if (getToken()) {
-          await api.me();
+          const me = await api.me();
+          if (me?.identityVerified) set({ liveness: 'verified' });
           await syncPatientState();
           set({ screen: 'home', stack: [] });
         }
@@ -369,6 +371,7 @@ export default function App() {
       const newCard = appt ? {
         id: appt.id, specialty, hospital: appt.hospital || S.hospital,
         slotLabel, refNo: refNo || makeRefNo(appt.hospital || S.hospital, appt.queueNumber, appt.id, specialty), queueNumber: appt.queueNumber, paid: false,
+        verified: S.liveness === 'verified',
       } : null;
       set((p) => ({
         booking: false, booked: true, slotLabel, refNo: refNo || p.refNo,
