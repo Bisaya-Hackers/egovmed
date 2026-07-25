@@ -55,15 +55,23 @@ function lettersFromSeed(seed) {
 
 /**
  * @param {string} [hospital='PGH'] hospital name (abbreviated automatically) to prefix with
- * @param {number|string} [queueNumber] real queue number for a booking, used as the seed
- *   fallback when no explicit seed is given
+ * @param {number|string} [queueNumber] real queue number for a booking — note this alone is
+ *   NOT unique (it's a per-hospital-per-specialty counter, so two different specialties at the
+ *   same hospital can both start at 1), so it's combined with the other fields below rather
+ *   than used on its own.
  * @param {string|number} [seed] stable identifier (e.g. appointment id) to derive the
- *   digit + letter blocks from; falls back to `queueNumber` when omitted
+ *   digit + letter blocks from
+ * @param {string} [specialty] department/specialty, folded in as extra entropy so a queue
+ *   number collision across specialties can't produce the same reference
  */
-export function makeRefNo(hospital = 'PGH', queueNumber, seed) {
+export function makeRefNo(hospital = 'PGH', queueNumber, seed, specialty) {
   const abbr = abbreviateHospital(hospital);
-  const anchor = seed != null && seed !== '' ? seed : queueNumber;
-  if (anchor != null && anchor !== '') {
+  // Combine every distinguishing field we have, instead of falling back to just one — a
+  // missing/duplicate value in any single field (e.g. a fresh per-specialty queue counter
+  // that also starts at 1) must not be able to collide with another booking's reference.
+  const parts = [seed, queueNumber, hospital, specialty].filter((v) => v != null && v !== '');
+  if (parts.length) {
+    const anchor = parts.join('|');
     return `${abbr}-${digitsFromSeed(anchor)}-${lettersFromSeed(anchor)}`;
   }
   return `${abbr}-${randDigits(4)}-${randLetters(2)}`;

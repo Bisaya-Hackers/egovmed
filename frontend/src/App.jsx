@@ -126,7 +126,7 @@ export default function App() {
               specialty: a.specialty,
               hospital: a.hospital || 'PGH',
               slotLabel: formatSlot(a.scheduledFor, p.lang) || p.slotLabel,
-              refNo: makeRefNo(a.hospital || 'PGH', a.queueNumber, a.id || a.queueNumber),
+              refNo: makeRefNo(a.hospital || 'PGH', a.queueNumber, a.id || a.queueNumber, a.specialty),
               queueNumber: a.queueNumber,
               paid: Array.isArray(pays) && pays.some((pay) => pay.appointmentId === a.id && SETTLED.includes(String(pay.status || '').toLowerCase())),
             }));
@@ -350,7 +350,7 @@ export default function App() {
       const specialty = S.triage?.specialty || CONST.dept;
       const [res] = await Promise.all([tryApi(api.book(specialty, S.hospital, undefined, S.triage?.id)), delay(1500)]);
       const appt = res?.appointment;
-      const refNo = appt ? makeRefNo(appt.hospital || 'PGH', appt.queueNumber, appt.id || appt.queueNumber) : null;
+      const refNo = appt ? makeRefNo(appt.hospital || 'PGH', appt.queueNumber, appt.id || appt.queueNumber, specialty) : null;
       // Optimistic confirmation bubble so Messages feels instant; A.loadMessages() below reconciles
       // it with the real, server-persisted row (with its real msg_… id) a moment later.
       const optimistic = {
@@ -362,7 +362,7 @@ export default function App() {
       // instead of replacing them.
       const newCard = appt ? {
         id: appt.id, specialty, hospital: appt.hospital || S.hospital,
-        slotLabel, refNo: refNo || makeRefNo(appt.hospital || S.hospital), queueNumber: appt.queueNumber, paid: false,
+        slotLabel, refNo: refNo || makeRefNo(appt.hospital || S.hospital, appt.queueNumber, appt.id, specialty), queueNumber: appt.queueNumber, paid: false,
       } : null;
       set((p) => ({
         booking: false, booked: true, slotLabel, refNo: refNo || p.refNo,
