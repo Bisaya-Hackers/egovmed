@@ -16,10 +16,11 @@ export default function Book({ c, lang, S, A }) {
         <span style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--teal-50)', color: 'var(--teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
           <Hospital size={24} />
         </span>
-        <div>
-          <div style={{ fontWeight: 800 }}>{CONST.hospital}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 800 }}>{S.hospital || CONST.hospital}</div>
           <div style={{ fontSize: '0.85em', fontWeight: 700, color: 'var(--teal)', marginTop: 2 }}>{c.deptPre}: {dept}</div>
         </div>
+        <button onClick={A.toggleHospitalPicker} className="chip add" style={{ fontWeight: 800, flex: 'none' }}>{c.changeHospital}</button>
       </div>
 
       <div className="overline" style={{ marginTop: 22, marginBottom: 10 }}>{c.pickSlot}</div>

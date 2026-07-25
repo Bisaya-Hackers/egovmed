@@ -55,8 +55,8 @@ export const api = {
   startLiveness: () => req('/identity/liveness', { method: 'POST', body: {} }),
   verifyIdentity: (livenessSessionId) => req('/identity/verify', { method: 'POST', body: { consent: true, livenessSessionId } }),
   // Appointments + eMessage
-  book: (specialty, scheduledFor, triageId) => req('/appointments', {
-    method: 'POST', body: { specialty, ...(scheduledFor ? { scheduledFor } : {}), ...(triageId ? { triageId } : {}) },
+  book: (specialty, hospital, scheduledFor, triageId) => req('/appointments', {
+    method: 'POST', body: { specialty, ...(hospital ? { hospital } : {}), ...(scheduledFor ? { scheduledFor } : {}), ...(triageId ? { triageId } : {}) },
   }),
   appointments: () => req('/appointments'),
   messages: () => req('/messages'),

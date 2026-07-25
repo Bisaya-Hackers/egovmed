@@ -64,7 +64,7 @@ export default function Home({ c, lang, S, A }) {
             <div>
               <div style={{ fontWeight: 800, fontSize: '1.05em' }}>{dept}</div>
               <div className="sub" style={{ margin: '4px 0 0' }}>{S.slotLabel || 'Today · 2:30 PM'}</div>
-              <div className="sub" style={{ margin: '2px 0 0' }}>{CONST.hospital}</div>
+              <div className="sub" style={{ margin: '2px 0 0' }}>{S.hospital || CONST.hospital}</div>
             </div>
             <span style={{ display: 'flex', gap: 6 }}>
               <span className="pill green">{c.verifiedBadge}</span>

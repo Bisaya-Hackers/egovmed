@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
-import { DICT, CONST, CHANNELS } from './i18n/dict.js';
+import { DICT, CONST, CHANNELS, HOSPITALS } from './i18n/dict.js';
 import { api, getToken, setToken } from './lib/api.js';
 import { fallbackTriage } from './lib/triageFallback.js';
 import { Gear, Bell, Check } from './components/Icons.jsx';
@@ -21,7 +21,7 @@ import Account from './screens/Account.jsx';
 import Report from './screens/Report.jsx';
 import Tokens from './screens/Tokens.jsx';
 import BottomNav from './components/BottomNav.jsx';
-import { DemoSheet, TimeoutModal, Toast } from './components/Overlays.jsx';
+import { DemoSheet, TimeoutModal, Toast, HospitalSheet } from './components/Overlays.jsx';
 
 const FONT = { 0: 17, 1: 19, 2: 21 };
 const initial = () => ({
@@ -32,9 +32,11 @@ const initial = () => ({
   emergency: false, liveness: 'idle', livenessSessionId: null,
   triage: null,
   slotsLoading: false, selectedSlot: null, booking: false, booked: false, slotLabel: '', refNo: CONST.refNo,
+  hospital: CONST.hospital, showHospitalPicker: false,
   channel: null, paying: false, paid: false, paymentStatus: null,
   messages: [], unreadMessages: 0,
   reportStage: 'form', reportCat: null, reportDesc: '', caseNo: CONST.caseNo,
+  trackCaseNo: '', trackLoading: false, trackError: null, trackResult: null,
   showDemo: false, showTimeout: false, toast: null,
 });
 
@@ -116,6 +118,7 @@ export default function App() {
               ? new Date(active.scheduledFor).toLocaleString(p.lang === 'tl' ? 'fil-PH' : 'en-PH', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
               : p.slotLabel,
             refNo: `${active.hospital || 'PGH'}-${String(active.queueNumber || '').padStart(4, '0')}`,
+            hospital: active.hospital && active.hospital !== 'PGH' ? active.hospital : p.hospital,
             paid: p.paid || latestPaid,
           }));
         }
@@ -310,18 +313,24 @@ export default function App() {
     // Booking + eMessage
     goBook: () => { A.go('book'); set({ slotsLoading: true, selectedSlot: null }); after(1100, () => set({ slotsLoading: false })); },
     selectSlot: (i) => set({ selectedSlot: i }),
+    toggleHospitalPicker: () => set((p) => ({ showHospitalPicker: !p.showHospitalPicker })),
+    // Switching hospitals re-queries slots for that facility (mocked with the same short delay as goBook).
+    setHospital: (name) => {
+      set({ hospital: name, showHospitalPicker: false, selectedSlot: null, slotsLoading: true });
+      after(900, () => set({ slotsLoading: false }));
+    },
     doBook: async (slotLabel) => {
       if (S.selectedSlot == null || S.booking) return;
       set({ booking: true });
       const specialty = S.triage?.specialty || CONST.dept;
-      const [res] = await Promise.all([tryApi(api.book(specialty, undefined, S.triage?.id)), delay(1500)]);
+      const [res] = await Promise.all([tryApi(api.book(specialty, S.hospital, undefined, S.triage?.id)), delay(1500)]);
       const appt = res?.appointment;
       const refNo = appt ? `${appt.hospital || 'PGH'}-${String(appt.queueNumber || '').padStart(4, '0')}` : null;
       // Optimistic confirmation bubble so Messages feels instant; A.loadMessages() below reconciles
       // it with the real, server-persisted row (with its real msg_… id) a moment later.
       const optimistic = {
         id: 'local_' + Date.now(), kind: 'confirmation', status: 'sent', channel: 'sms', provider: 'mock',
-        createdAt: new Date().toISOString(), meta: { specialty, hospital: appt?.hospital || CONST.hospital, queueNumber: appt?.queueNumber },
+        createdAt: new Date().toISOString(), meta: { specialty, hospital: appt?.hospital || S.hospital, queueNumber: appt?.queueNumber },
       };
       set((p) => ({
         booking: false, booked: true, slotLabel, refNo: refNo || p.refNo,
@@ -372,7 +381,7 @@ export default function App() {
 
     // Records + Report
     goRecords: () => A.go('records'),
-    openReport: () => { set({ reportStage: 'form', reportCat: null, reportDesc: '' }); A.go('report'); },
+    openReport: () => { set({ reportStage: 'form', reportCat: null, reportDesc: '', trackCaseNo: '', trackError: null, trackResult: null }); A.go('report'); },
     setCat: (i) => set({ reportCat: i }),
     setDesc: (v) => set({ reportDesc: v }),
     submitReport: () => { if (S.reportCat == null || !S.reportDesc.trim()) return; set({ reportStage: 'otp' }); },
@@ -382,8 +391,23 @@ export default function App() {
       if (res?.caseNumber) set({ caseNo: res.caseNumber });
     },
 
+    // Check the status of a previously filed report (GET /reports/:caseNumber)
+    openTrackReport: () => set({ reportStage: 'track', trackCaseNo: '', trackError: null, trackResult: null }),
+    setTrackCaseNo: (v) => set({ trackCaseNo: v.toUpperCase(), trackError: null }),
+    submitTrackCase: async () => {
+      const caseNo = S.trackCaseNo.trim();
+      if (!/^EGM-\d{4}-\d{6}$/.test(caseNo)) { set({ trackError: 'invalid' }); return; }
+      set({ trackLoading: true, trackError: null, trackResult: null });
+      try {
+        const res = await api.trackCase(caseNo);
+        set({ trackLoading: false, trackResult: res || null, trackError: res ? null : 'notfound' });
+      } catch {
+        set({ trackLoading: false, trackError: 'notfound' });
+      }
+    },
+
     // Overlays / demo controls
-    resetToHome: () => set({ screen: 'home', stack: [], selectedSlot: null, channel: null, paid: false, paying: false, reportStage: 'form', reportCat: null, reportDesc: '' }),
+    resetToHome: () => set({ screen: 'home', stack: [], selectedSlot: null, channel: null, paid: false, paying: false, reportStage: 'form', reportCat: null, reportDesc: '', trackCaseNo: '', trackResult: null, trackError: null }),
     toggleDemo: () => set((p) => ({ showDemo: !p.showDemo })),
     toggleEmergency: () => set((p) => ({ emergency: !p.emergency })),
     triggerTimeout: () => set({ showDemo: false, showTimeout: true }),
@@ -430,6 +454,7 @@ export default function App() {
       {S.toast && <Toast msg={S.toast} icon={<Check size={16} />} />}
       {S.showTimeout && <TimeoutModal c={c} A={A} />}
       {S.showDemo && <DemoSheet c={c} S={S} A={A} />}
+      {S.showHospitalPicker && <HospitalSheet c={c} S={S} A={A} hospitals={HOSPITALS} />}
     </div>
   );
 }
