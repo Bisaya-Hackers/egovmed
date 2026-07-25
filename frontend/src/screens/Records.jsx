@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ScreenHeader, Btn } from '../components/ui.jsx';
-import { Check, ShieldTick, HeartPulse } from '../components/Icons.jsx';
+import { Check, ShieldTick, HeartPulse, FileUp, ChevronRight } from '../components/Icons.jsx';
 import { RECORDS } from '../i18n/dict.js';
 import { api } from '../lib/api.js';
 
@@ -25,6 +25,23 @@ export default function Records({ c, lang, A }) {
   const [openId, setOpenId] = useState(null); // record id whose detail sheet is open
   const [summary, setSummary] = useState(null); // { summary: string, verifiedLabs: [], recordCount, triageCount }
   const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryOpen, setSummaryOpen] = useState(false); // health summary starts collapsed
+  const [uploading, setUploading] = useState(false); // whether the upload sheet is open
+
+  // Patient-uploaded record — file content itself isn't sent anywhere (no OCR/storage yet, just
+  // metadata), so the doctor summary and record list can still reference what was added.
+  const addUploadedRecord = (saved) => {
+    setRecords((prev) => [{
+      id: saved.id,
+      name: saved.title,
+      date: formatDate(saved.createdAt, lang),
+      source: saved.sourceFacility,
+      type: saved.type,
+      summary: saved.summary,
+      verified: !!(saved.anchor && saved.anchor.verified),
+      isDemo: false,
+    }, ...prev]);
+  };
 
   // Upgrade to live eGovChain-anchored records + fetch the AI doctor summary in parallel.
   useEffect(() => {
@@ -57,14 +74,27 @@ export default function Records({ c, lang, A }) {
       <ScreenHeader onBack={A.back} label={c.recordsTitle} />
       <h1 className="h1" data-stagger>{c.recordsTitle}</h1>
       <p className="sub" data-stagger>{c.recordsSub}</p>
+      <button
+        data-stagger
+        onClick={() => setUploading(true)}
+        className="card"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, border: '1.5px dashed var(--border)', background: 'transparent', color: 'var(--primary)', fontWeight: 700, width: '100%' }}
+      >
+        <FileUp size={18} /> {c.uploadRecord}
+      </button>
 
       {(summary || summaryLoading) && (
         <div data-stagger className="card tint" style={{ marginTop: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <span className="icirc" style={{ width: 32, height: 32, background: 'rgba(20,82,240,.14)' }}><HeartPulse size={18} color="var(--primary)" /></span>
-            <span className="overline" style={{ color: 'var(--primary)' }}>{lang === 'tl' ? 'Buod ng iyong kalusugan' : 'Your health summary'}</span>
-          </div>
-          {summaryLoading ? (
+          <button
+            onClick={() => setSummaryOpen((v) => !v)}
+            aria-expanded={summaryOpen}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', background: 'none', border: 'none', padding: 0, marginBottom: summaryOpen ? 8 : 0, textAlign: 'left' }}
+          >
+            <span className="icirc" style={{ width: 32, height: 32, background: 'rgba(20,82,240,.14)', flex: 'none' }}><HeartPulse size={18} color="var(--primary)" /></span>
+            <span className="overline" style={{ color: 'var(--primary)', flex: 1 }}>{lang === 'tl' ? 'Buod ng iyong kalusugan' : 'Your health summary'}</span>
+            <ChevronRight size={18} color="var(--primary)" style={{ flex: 'none', transform: summaryOpen ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform 0.15s ease' }} />
+          </button>
+          {summaryOpen && (summaryLoading ? (
             <div className="sub">{lang === 'tl' ? 'Sinusuri ang iyong rekord…' : 'Reviewing your records…'}</div>
           ) : (
             <>
@@ -79,7 +109,7 @@ export default function Records({ c, lang, A }) {
                   : `From ${summary.recordCount} record${summary.recordCount === 1 ? '' : 's'} and ${summary.triageCount} triage · AI, still needs doctor confirmation`}
               </div>
             </>
-          )}
+          ))}
         </div>
       )}
 
@@ -110,8 +140,139 @@ export default function Records({ c, lang, A }) {
       </div>
 
       {openId && <RecordSheet record={records.find((r) => r.id === openId)} lang={lang} c={c} onClose={() => setOpenId(null)} />}
+      {uploading && (
+        <UploadSheet
+          lang={lang}
+          c={c}
+          onClose={() => setUploading(false)}
+          onSaved={(saved) => { addUploadedRecord(saved); setUploading(false); }}
+        />
+      )}
     </div>
   );
+}
+
+const RECORD_TYPES = [
+  ['lab', (c) => c.recordTypeLab],
+  ['imaging', (c) => c.recordTypeImaging],
+  ['prescription', (c) => c.recordTypePrescription],
+  ['other', (c) => c.recordTypeOther],
+];
+
+function UploadSheet({ lang, c, onClose, onSaved }) {
+  const [file, setFile] = useState(null);
+  const [title, setTitle] = useState('');
+  const [type, setType] = useState('lab');
+  const [source, setSource] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const submit = async () => {
+    if (!file) { setError(c.uploadRecordNeedFile); return; }
+    if (title.trim().length < 2) { setError(c.uploadRecordTitleTooShort); return; }
+    if (source.trim() && source.trim().length < 2) { setError(c.uploadRecordSourceTooShort); return; }
+    setError(null);
+    setSaving(true);
+    try {
+      // No OCR/camera reading yet — we just record what was attached (name/type/size) as
+      // metadata alongside the fields the patient filled in.
+      const saved = await api.createRecord({
+        type,
+        title: title.trim(),
+        sourceFacility: source.trim() || undefined,
+        summary: (lang === 'tl' ? 'In-upload ng pasyente: ' : 'Uploaded by patient: ') + file.name,
+        data: { fileName: file.name, fileType: file.type || 'unknown', fileSizeBytes: file.size },
+      });
+      onSaved(saved);
+    } catch (e) {
+      const detail = Array.isArray(e.data?.error?.details) && e.data.error.details[0];
+      setError((detail && `${detail.path}: ${detail.message}`) || e.message || c.uploadRecordError);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const overlay = (
+    <div className="scrim" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={c.uploadRecord} onClick={(e) => e.stopPropagation()} style={{ maxHeight: '85vh', overflowY: 'auto' }}>
+        <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--line)', margin: '0 auto 14px' }} />
+        <h2 className="h2" style={{ margin: '0 0 14px' }}>{c.uploadRecord}</h2>
+
+        <div className="stack">
+          <div>
+            <label className="overline" style={{ display: 'block', marginBottom: 6 }}>{c.uploadRecordFile}</label>
+            <label
+              style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 12, border: '1.5px dashed var(--border)', padding: '11px 13px', cursor: 'pointer', fontWeight: 600, color: file ? 'var(--ink)' : 'var(--muted)' }}
+            >
+              <FileUp size={18} color="var(--primary)" />
+              {file ? `${file.name} · 1 ${c.uploadRecordChosen}` : c.uploadRecordChoose}
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+              />
+            </label>
+          </div>
+
+          <div>
+            <label className="overline" style={{ display: 'block', marginBottom: 6 }}>{c.uploadRecordTitle}</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={c.uploadRecordTitlePh}
+              style={{ width: '100%', borderRadius: 12, border: '1.5px solid var(--line)', padding: '11px 13px', font: 'inherit' }}
+            />
+          </div>
+
+          <div>
+            <label className="overline" style={{ display: 'block', marginBottom: 6 }}>{c.uploadRecordType}</label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {RECORD_TYPES.map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setType(key)}
+                  aria-pressed={type === key}
+                  className="chip"
+                  style={{ background: type === key ? 'var(--primary)' : 'var(--surface)', color: type === key ? '#fff' : 'var(--ink)', border: type === key ? 'none' : '1.5px solid var(--line)', fontWeight: 700 }}
+                >
+                  {label(c)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="overline" style={{ display: 'block', marginBottom: 6 }}>{c.uploadRecordSource}</label>
+            <input
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              placeholder={c.uploadRecordSourcePh}
+              style={{ width: '100%', borderRadius: 12, border: '1.5px solid var(--line)', padding: '11px 13px', font: 'inherit' }}
+            />
+          </div>
+        </div>
+
+        {error && <p role="alert" style={{ color: 'var(--red)', fontSize: '0.9em', marginTop: 12 }}>{error}</p>}
+
+        <div className="stack" style={{ marginTop: 18 }}>
+          <Btn onClick={submit} disabled={saving}>
+            {saving ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}><span className="spinner white" /> {c.uploadRecordSaving}</span> : c.uploadRecordSave}
+          </Btn>
+          <Btn variant="secondary" onClick={onClose}>{c.uploadRecordCancel}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+
+  const host = typeof document !== 'undefined' ? document.querySelector('.device') : null;
+  return host ? createPortal(overlay, host) : overlay;
 }
 
 function RecordSheet({ record, lang, c, onClose }) {

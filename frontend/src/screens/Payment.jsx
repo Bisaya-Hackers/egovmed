@@ -91,7 +91,9 @@ export default function Payment({ c, lang, S, A }) {
         })}
       </div>
 
-      <div style={{ marginTop: 20 }}>
+      <p className="sub" style={{ marginTop: 10, fontSize: '0.85em' }}>{c.payHostedNote}</p>
+
+      <div style={{ marginTop: 14 }}>
         <Btn disabled={S.channel == null || S.paying} onClick={() => A.doPay(BILL)}>
           {S.paying ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}><span className="spinner white" /> {c.processing}</span> : `${c.payNow} · ${balance}`}
         </Btn>

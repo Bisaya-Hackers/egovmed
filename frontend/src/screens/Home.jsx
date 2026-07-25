@@ -1,4 +1,4 @@
-import { HeartPulse, FileText, Card, Flag, Chat, ChevronRight } from '../components/Icons.jsx';
+import { HeartPulse, FileText, Card, Flag, Chat, ChevronRight, ShieldTick } from '../components/Icons.jsx';
 import { CONST } from '../i18n/dict.js';
 import rosaAvatar from '../assets/home-avatar-rosa.png';
 import digitalIdArt from '../assets/home-digital-id.png';
@@ -51,30 +51,42 @@ export default function Home({ c, lang, S, A }) {
       {/* quick services */}
       <div data-stagger style={{ display: 'flex', gap: 6, marginTop: 20 }}>
         <Service icon={<FileText size={24} />} label={c.navRecords} onClick={A.goRecords} />
-        <Service icon={<Card size={24} />} label={c.navPay} color="var(--teal)" onClick={() => (S.booked ? A.goPayment() : A.toast(c.noAppts))} />
+        <Service icon={<Card size={24} />} label={c.navPay} color="var(--teal)" onClick={A.goPayments} />
         <Service icon={<Flag size={24} />} label={c.navReport} color="var(--red)" badge={lang === 'tl' ? 'Bago' : 'New'} onClick={A.openReport} />
-        <Service icon={<Chat size={24} />} label={c.navMessages} onClick={() => A.go('messages')} />
+        <Service icon={<Chat size={24} />} label={c.navMessages} badge={S.unreadMessages > 0 ? String(S.unreadMessages) : undefined} onClick={() => A.go('messages')} />
       </div>
 
-      {/* upcoming appointment */}
+      {/* upcoming appointments — every active booking gets its own card, not just the latest one */}
       <div className="overline" style={{ marginTop: 24, marginBottom: 10 }}>{c.upcoming}</div>
-      {S.booked ? (
-        <div data-stagger className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-            <div>
-              <div style={{ fontWeight: 800, fontSize: '1.05em' }}>{dept}</div>
-              <div className="sub" style={{ margin: '4px 0 0' }}>{S.slotLabel || 'Today · 2:30 PM'}</div>
-              <div className="sub" style={{ margin: '2px 0 0' }}>{CONST.hospital}</div>
+      {S.appointments.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {S.appointments.map((appt) => (
+            <div key={appt.id} data-stagger className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '1.05em' }}>{appt.specialty || dept}</div>
+                  <div className="sub" style={{ margin: '4px 0 0' }}>{appt.slotLabel || 'Today · 2:30 PM'}</div>
+                  <div className="sub" style={{ margin: '2px 0 0' }}>{appt.hospital || CONST.hospital}</div>
+                </div>
+                <span style={{ display: 'flex', gap: 6 }}>
+                  {appt.verified ? (
+                    <span className="pill green">{c.verifiedBadge}</span>
+                  ) : (
+                    <span className="pill red">{c.notVerifiedBadge}</span>
+                  )}
+                </span>
+              </div>
+              <div className="rowsep" />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="mono" style={{ fontSize: '0.9em', color: 'var(--muted)' }}>{appt.refNo}</span>
+                {appt.paid ? (
+                  <span className="chip paid" style={{ fontWeight: 800 }}>{c.paidBadge}</span>
+                ) : (
+                  <button onClick={() => A.goPayment(appt.id)} className="chip add" style={{ fontWeight: 800 }}>{c.payNow}</button>
+                )}
+              </div>
             </div>
-            <span className="pill green">{c.verifiedBadge}</span>
-          </div>
-          <div className="rowsep" />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="mono" style={{ fontSize: '0.9em', color: 'var(--muted)' }}>{S.refNo}</span>
-            {!S.paid && (
-              <button onClick={A.goPayment} className="chip add" style={{ fontWeight: 800 }}>{c.payNow}</button>
-            )}
-          </div>
+          ))}
         </div>
       ) : (
         <div data-stagger className="card" style={{ border: '1.5px dashed var(--border)', background: 'transparent', textAlign: 'center' }}>
@@ -92,6 +104,29 @@ export default function Home({ c, lang, S, A }) {
         </div>
         <img src={verifiedLabsArt} alt="Verified lab records shared across hospitals" style={{ width: 76, height: 60, borderRadius: 12, objectFit: 'contain', flex: 'none' }} />
       </div>
+      <div data-stagger className="card tint" style={{ display: 'flex', gap: 14, alignItems: 'center', marginTop: 10 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 800 }}>{c.featuredTitle2}</div>
+          <p className="sub" style={{ margin: '5px 0 0' }}>{c.featuredSub2}</p>
+        </div>
+        <span style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(255,255,255,.6)', color: 'var(--teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+          <ShieldTick size={26} />
+        </span>
+      </div>
+      <button
+        data-stagger
+        onClick={() => A.go('messages')}
+        className="card tint"
+        style={{ display: 'flex', gap: 14, alignItems: 'center', marginTop: 10, width: '100%', textAlign: 'left', border: 'none' }}
+      >
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 800 }}>{c.featuredTitle3}</div>
+          <p className="sub" style={{ margin: '5px 0 0' }}>{c.featuredSub3}</p>
+        </div>
+        <span style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(255,255,255,.6)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+          <Chat size={26} />
+        </span>
+      </button>
     </div>
   );
 }

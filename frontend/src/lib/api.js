@@ -49,23 +49,27 @@ export const api = {
   // In live mode the exchange code comes from the eGovPH redirect query string.
   login: (exchangeCode = 'demo') => req('/auth/egov/exchange', { method: 'POST', body: { exchangeCode } }),
   me: () => req('/patients/me'),
+  activateBenefit: (key) => req(`/patients/me/benefits/${encodeURIComponent(key)}`, { method: 'PATCH' }),
   // eGovAI triage
   triage: (text, language) => req('/triage', { method: 'POST', body: { text, language: language === 'tl' ? 'tl' : 'en' } }),
   // National ID eVerify + Face Liveness
   startLiveness: () => req('/identity/liveness', { method: 'POST', body: {} }),
   verifyIdentity: (livenessSessionId) => req('/identity/verify', { method: 'POST', body: { consent: true, livenessSessionId } }),
   // Appointments + eMessage
-  book: (specialty, scheduledFor, triageId) => req('/appointments', {
-    method: 'POST', body: { specialty, ...(scheduledFor ? { scheduledFor } : {}), ...(triageId ? { triageId } : {}) },
+  book: (specialty, hospital, scheduledFor, triageId) => req('/appointments', {
+    method: 'POST', body: { specialty, ...(hospital ? { hospital } : {}), ...(scheduledFor ? { scheduledFor } : {}), ...(triageId ? { triageId } : {}) },
   }),
   appointments: () => req('/appointments'),
   messages: () => req('/messages'),
+  replyToMessage: (id, text) => req(`/messages/${encodeURIComponent(id)}/reply`, { method: 'POST', body: { text } }),
   // eGovPay (benefits mock-labeled by the backend)
   quote: (billAmount) => req('/payments/quote', { method: 'POST', body: { billAmount } }),
-  pay: (billAmount, channel) => req('/payments', { method: 'POST', body: { billAmount, channel } }),
+  pay: (billAmount, channel, appointmentId) => req('/payments', { method: 'POST', body: { billAmount, channel, ...(appointmentId ? { appointmentId } : {}) } }),
   paymentStatus: (billId) => req(`/payments/${encodeURIComponent(billId)}/status`),
+  payments: () => req('/payments'),
   // eGovChain-anchored records
   records: () => req('/records'),
+  createRecord: (record) => req('/records', { method: 'POST', body: record }),
   getRecord: (id) => req(`/records/${encodeURIComponent(id)}`),
   verifyRecord: (id) => req(`/records/${encodeURIComponent(id)}/verify`),
   doctorSummary: () => req('/records/doctor-summary'),

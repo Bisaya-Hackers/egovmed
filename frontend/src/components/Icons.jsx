@@ -16,6 +16,7 @@ export {
   Fingerprint,
   Settings as Gear,
   DocumentText as FileText,
+  DocumentUpload as FileUp,
   FileCheck,
   Card,
   Money,
