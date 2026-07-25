@@ -59,9 +59,14 @@ async function classifySymptoms({ text, language = 'auto', patientContext = {} }
       const res = await http.post(`${cfg.baseUrl}/api/v1/egov/integration/ai_assistant/generate`, {
         prompt, category: cfg.category,
       }, { headers: { Authorization: `Bearer ${token}` }, timeoutMs: 25000 });
-      return sanitize(parseJsonFromText(res?.data), text); // sanitize() applies the rule-based emergency floor
+      const result = sanitize(parseJsonFromText(res?.data), text); // sanitize() applies the rule-based emergency floor
+      // Surface silent degradation so a dead upstream shows up in Vercel logs instead of looking normal.
+      if (result.engine === 'rule-based-fallback') {
+        logger.warn('eGov AI returned unusable output — silently degraded to rule-based fallback', { integration: 'egovAi', fallback: 'sanitize' });
+      }
+      return result;
     } catch (err) {
-      logger.warn('eGov AI live call failed — using rule-based fallback', { err: err.message });
+      logger.warn('eGov AI live call failed — using rule-based fallback', { integration: 'egovAi', fallback: 'exception', err: err.message });
     }
   }
   return ruleBasedTriage(text);

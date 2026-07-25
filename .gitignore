@@ -42,3 +42,6 @@ desktop.ini
 # ─── Logs / temp ─────────────────────────────────────────
 *.log
 tmp/
+
+# Claude Code local config and worktrees
+.claude/

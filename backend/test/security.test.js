@@ -5,6 +5,38 @@ process.env.PHI_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcd
 process.env.STORE_DRIVER = 'memory';
 process.env.INTEGRATION_MODE = 'mock';
 process.env.APP_URL = 'http://localhost:3000';
+process.env.ADMIN_KEY = 'test-only-admin-key-0123456789abcdef0123456789abcdef';
+
+// Sentinel credential values — the /integrations/status leak test asserts these
+// are NOT present in the response body under any input. Previously the test
+// grepped for credential FIELD NAMES ("secret", "apiKey"), which the handler
+// never emits by construction, so the assertion was unfalsifiable. Now we grep
+// for the actual values, which would appear if any field were accidentally
+// serialized. Includes a URL with embedded userinfo/api-key to regression-cover
+// the rpcUrl-carries-credentials finding.
+const CREDENTIAL_SENTINELS = {
+  EGOVPH_PARTNER_CODE: 'SENTINEL-egovph-partner-code',
+  EGOVPH_PARTNER_SECRET: 'SENTINEL-egovph-partner-secret',
+  EGOV_AI_ACCESS_CODE: 'SENTINEL-egov-ai-access-code',
+  EVERIFY_CLIENT_ID: 'SENTINEL-everify-client-id',
+  EVERIFY_CLIENT_SECRET: 'SENTINEL-everify-client-secret',
+  EVERIFY_PUBKEY: 'SENTINEL-everify-pubkey',
+  FACE_LIVENESS_API_KEY: 'SENTINEL-face-liveness-api-key',
+  EMESSAGE_AUTH_TOKEN: 'SENTINEL-emessage-auth-token',
+  EGOVCHAIN_CONTRACT_ADDRESS: 'SENTINEL-egovchain-contract',
+  // Deliberately-invalid hex so warnIfMisconfigured's live-mode format check would
+  // catch it if the mode were flipped — but INTEGRATION_MODE=mock here, so it doesn't.
+  EGOVCHAIN_PRIVATE_KEY: 'SENTINEL-egovchain-private-key',
+  // URL carries userinfo and an api-key path segment — safeOrigin() in the status
+  // route must strip both. If the whole string leaks, s3cret_pw or api_key_ABC will
+  // appear in the response body and the sentinel assertion below will fail.
+  EGOVCHAIN_RPC_URL: 'https://user:s3cret_pw@rpc.example.invalid/v3/api_key_ABC',
+  EGOVPAY_TOKEN: 'SENTINEL-egovpay-token',
+  EGOVPAY_SETTLEMENT_TEMPLATE_UUID: 'SENTINEL-egovpay-settlement-uuid',
+  EREPORT_ACCESS_CODE: 'SENTINEL-ereport-access-code',
+  EREPORT_VIEW_TOKEN: 'SENTINEL-ereport-view-token',
+};
+Object.assign(process.env, CREDENTIAL_SENTINELS);
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -340,6 +372,34 @@ test('security regression suite', async (t) => {
     });
     assert.notEqual(mock.status, 0);
     assert.match(mock.stderr, /Production cannot use mock/);
+  });
+
+  await t.test('/integrations/status is admin-gated and leaks no credential values', async () => {
+    await resetWithPatients();
+    // Missing admin key → 403 (never 200)
+    assert.equal((await request('/integrations/status')).status, 403);
+    // Wrong admin key → 403
+    assert.equal((await request('/integrations/status', { headers: { 'x-admin-key': 'nope' } })).status, 403);
+    // Correct admin key → 200 with structured payload
+    const ok = await json(await request('/integrations/status', { headers: { 'x-admin-key': process.env.ADMIN_KEY } }));
+    assert.equal(ok.response.status, 200);
+    assert.equal(typeof ok.value.globalMode, 'string');
+    for (const integ of Object.values(ok.value.integrations)) {
+      assert.equal(typeof integ.mode, 'string');
+      assert.equal(typeof integ.hasCredentials, 'boolean');
+    }
+    const raw = JSON.stringify(ok.value);
+    // The real assertion: NONE of the sentinel credential values must appear in the response.
+    // Because the sentinels are set as the actual env values (see top of file), a handler that
+    // serialized any credential-carrying field would emit its sentinel and fail this check.
+    for (const [name, value] of Object.entries(CREDENTIAL_SENTINELS)) {
+      assert.equal(raw.includes(value), false, `${name} sentinel leaked into /integrations/status response`);
+    }
+    // Regression cover for the "rpcUrl embeds credentials" finding — even the parsed pieces
+    // (userinfo + api-key path segment) must not survive safeOrigin() stripping.
+    assert.equal(raw.includes('s3cret_pw'), false, 'rpcUrl userinfo password leaked');
+    assert.equal(raw.includes('api_key_ABC'), false, 'rpcUrl path api key leaked');
+    assert.equal(raw.includes('user:s3cret_pw'), false, 'rpcUrl userinfo pair leaked');
   });
 
   await t.test('authentication attempts are rate limited', async () => {

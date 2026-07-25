@@ -31,6 +31,9 @@ async function fileReport({ category, description, patient = {}, contact }) {
       last_name: patient.lastName || 'Patient',
       gender: patient.sex === 'F' ? 'Female' : 'Male',
       complainant_email: patient.email || contact || 'noreply@egovmed.ph',
+      // eReport enum. Default 'red_tape' predates portal docs — real valid values come from
+      // GET /api/integration/datasets/report_types (portal docs show 'crime' as an example).
+      // Confirm the enum for health-facility complaints with the eGov admin before flipping.
       report_type: cfg.reportType,
       subject: category,
       message: description,
@@ -47,12 +50,23 @@ async function fileReport({ category, description, patient = {}, contact }) {
 
 /**
  * Track a case → GET /api/integration/reports/:case_number.
- * Reads require an OTP-confirmed report_view_token (X-EReport-View-Token) — provided via config.
+ *
+ * IMPORTANT (portal docs, 2026-07): the view token model is per-complainant AND time-limited.
+ * Flow: submit_complaint → returns case_number only (no token).
+ *       Later, POST /verify/request { email } → OTP sent.
+ *       POST /verify/confirm { email, otp } → returns { report_view_token, expires_at }.
+ *       GET /api/integration/reports/:case_number with `Authorization: Bearer <report_view_token>`.
+ *
+ * The single env-wide EREPORT_VIEW_TOKEN cannot satisfy arbitrary complainants — this live path
+ * only works for the specific complainant whose OTP minted the token, and only until expires_at.
+ * Correct fix for MVP (per handoff option A): drop status auto-track, show the case number and
+ * tell the patient to check on eReport directly. Kept here as-is until that UX decision lands.
+ * Auth header is Bearer (docs), NOT the X-EReport-View-Token that was previously assumed.
  */
 async function getStatus(caseNumber) {
   if (isLive() && cfg.viewToken) {
     const res = await http.get(`${cfg.baseUrl}/api/integration/reports/${encodeURIComponent(caseNumber)}`, {
-      headers: { 'X-EReport-View-Token': cfg.viewToken },
+      headers: { Authorization: `Bearer ${cfg.viewToken}` },
     });
     const data = (res && (res.data || res)) || {};
     return { caseNumber, status: String(data.status || 'PENDING').toLowerCase(), provider: 'ereport' };

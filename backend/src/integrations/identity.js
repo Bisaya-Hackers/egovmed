@@ -44,8 +44,14 @@ async function verifyPhilSys({ firstName, middleName, lastName, suffix, birthDat
       face_liveness_session_id: faceLivenessSessionId,
     }, { headers: { Authorization: `Bearer ${token}` } });
     const data = res && (res.data || res);
-    const matched = data && (data.verified ?? data.match ?? data.matched);
-    return { verified: !!matched, score: data.score, reference: data.reference_id || data.reference, provider: 'everify' };
+    // Confirmed response shape (portal docs, 2026-07): envelope is { data: { code, reference, ... } }.
+    // Success indicator is the six-char status code, NOT a boolean field. AAA000 = success;
+    // other codes (e.g. AAA001+, EEE...) indicate mismatch / not found / errors.
+    // `reference` is the PhilSys reference (no `_id` suffix). Response also carries full PII
+    // (full_name, gender, marital_status, blood_type, mobile_number, addresses) — do not surface
+    // beyond what identityService already stores. NO `score` field is returned by /api/query.
+    const verified = data && data.code === 'AAA000';
+    return { verified, reference: data && data.reference, code: data && data.code, provider: 'everify' };
   }
 
   // mock: verifies as long as a name is present (demo runs offline)
