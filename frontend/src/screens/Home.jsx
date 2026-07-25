@@ -51,7 +51,7 @@ export default function Home({ c, lang, S, A }) {
       {/* quick services */}
       <div data-stagger style={{ display: 'flex', gap: 6, marginTop: 20 }}>
         <Service icon={<FileText size={24} />} label={c.navRecords} onClick={A.goRecords} />
-        <Service icon={<Card size={24} />} label={c.navPay} color="var(--teal)" onClick={() => (S.appointments.length ? A.goPayment(S.appointments[0].id) : A.toast(c.noAppts))} />
+        <Service icon={<Card size={24} />} label={c.navPay} color="var(--teal)" onClick={A.goPayments} />
         <Service icon={<Flag size={24} />} label={c.navReport} color="var(--red)" badge={lang === 'tl' ? 'Bago' : 'New'} onClick={A.openReport} />
         <Service icon={<Chat size={24} />} label={c.navMessages} badge={S.unreadMessages > 0 ? String(S.unreadMessages) : undefined} onClick={() => A.go('messages')} />
       </div>
@@ -76,7 +76,9 @@ export default function Home({ c, lang, S, A }) {
               <div className="rowsep" />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span className="mono" style={{ fontSize: '0.9em', color: 'var(--muted)' }}>{appt.refNo}</span>
-                {!appt.paid && (
+                {appt.paid ? (
+                  <span className="chip" style={{ fontWeight: 800, color: 'var(--green)', borderColor: 'var(--green-50)', background: 'var(--green-50)' }}>{c.paidBadge}</span>
+                ) : (
                   <button onClick={() => A.goPayment(appt.id)} className="chip add" style={{ fontWeight: 800 }}>{c.payNow}</button>
                 )}
               </div>

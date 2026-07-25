@@ -16,6 +16,7 @@ import Liveness from './screens/Liveness.jsx';
 import Book from './screens/Book.jsx';
 import Confirm from './screens/Confirm.jsx';
 import Payment from './screens/Payment.jsx';
+import Payments from './screens/Payments.jsx';
 import Records from './screens/Records.jsx';
 import Messages from './screens/Messages.jsx';
 import Account from './screens/Account.jsx';
@@ -45,7 +46,7 @@ const initial = () => ({
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const tryApi = async (p) => { try { return await p; } catch { return null; } };
 
-const SCREENS = { signin: SignIn, home: Home, symptom: Symptom, triage: Triage, consent: Consent, liveness: Liveness, book: Book, confirm: Confirm, payment: Payment, records: Records, messages: Messages, account: Account, report: Report, tokens: Tokens };
+const SCREENS = { signin: SignIn, home: Home, symptom: Symptom, triage: Triage, consent: Consent, liveness: Liveness, book: Book, confirm: Confirm, payment: Payment, payments: Payments, records: Records, messages: Messages, account: Account, report: Report, tokens: Tokens };
 const NAV_SCREENS = new Set(['home', 'records', 'messages', 'account']);
 
 export default function App() {
@@ -377,6 +378,8 @@ export default function App() {
     // apptId identifies which appointment card this payment is for, so multiple bookings can
     // each be paid independently instead of sharing one global paid flag.
     goPayment: (apptId) => { set({ payingApptId: apptId || null }); A.go('payment'); },
+    // Payments tab: history + what's still unpaid, instead of dropping straight into checkout.
+    goPayments: () => A.go('payments'),
     setChannel: (i) => set({ channel: i }),
     doPay: async (amount = 300) => {
       if (S.channel == null || S.paying) return;
