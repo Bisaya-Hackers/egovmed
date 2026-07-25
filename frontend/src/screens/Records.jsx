@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ScreenHeader, Btn } from '../components/ui.jsx';
-import { Check, ShieldTick, HeartPulse, FileUp } from '../components/Icons.jsx';
+import { Check, ShieldTick, HeartPulse, FileUp, ChevronRight } from '../components/Icons.jsx';
 import { RECORDS } from '../i18n/dict.js';
 import { api } from '../lib/api.js';
 
@@ -25,6 +25,7 @@ export default function Records({ c, lang, A }) {
   const [openId, setOpenId] = useState(null); // record id whose detail sheet is open
   const [summary, setSummary] = useState(null); // { summary: string, verifiedLabs: [], recordCount, triageCount }
   const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryOpen, setSummaryOpen] = useState(false); // health summary starts collapsed
   const [uploading, setUploading] = useState(false); // whether the upload sheet is open
 
   // Patient-uploaded record — file content itself isn't sent anywhere (no OCR/storage yet, just
@@ -84,11 +85,16 @@ export default function Records({ c, lang, A }) {
 
       {(summary || summaryLoading) && (
         <div data-stagger className="card tint" style={{ marginTop: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <span className="icirc" style={{ width: 32, height: 32, background: 'rgba(20,82,240,.14)' }}><HeartPulse size={18} color="var(--primary)" /></span>
-            <span className="overline" style={{ color: 'var(--primary)' }}>{lang === 'tl' ? 'Buod ng iyong kalusugan' : 'Your health summary'}</span>
-          </div>
-          {summaryLoading ? (
+          <button
+            onClick={() => setSummaryOpen((v) => !v)}
+            aria-expanded={summaryOpen}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', background: 'none', border: 'none', padding: 0, marginBottom: summaryOpen ? 8 : 0, textAlign: 'left' }}
+          >
+            <span className="icirc" style={{ width: 32, height: 32, background: 'rgba(20,82,240,.14)', flex: 'none' }}><HeartPulse size={18} color="var(--primary)" /></span>
+            <span className="overline" style={{ color: 'var(--primary)', flex: 1 }}>{lang === 'tl' ? 'Buod ng iyong kalusugan' : 'Your health summary'}</span>
+            <ChevronRight size={18} color="var(--primary)" style={{ flex: 'none', transform: summaryOpen ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform 0.15s ease' }} />
+          </button>
+          {summaryOpen && (summaryLoading ? (
             <div className="sub">{lang === 'tl' ? 'Sinusuri ang iyong rekord…' : 'Reviewing your records…'}</div>
           ) : (
             <>
@@ -103,7 +109,7 @@ export default function Records({ c, lang, A }) {
                   : `From ${summary.recordCount} record${summary.recordCount === 1 ? '' : 's'} and ${summary.triageCount} triage · AI, still needs doctor confirmation`}
               </div>
             </>
-          )}
+          ))}
         </div>
       )}
 
