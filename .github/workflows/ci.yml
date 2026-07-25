@@ -28,13 +28,25 @@ jobs:
       # validated against the issuing provider), but SLOWER on private repos. If the run
       # gets too slow, drop --only-verified and accept some noise. We use trufflehog rather
       # than gitleaks-action because gitleaks-action@v2 requires a paid license for orgs.
+      # On pull_request: diff scan (PR head vs merge base). On push (incl. post-merge to main):
+      # full filesystem scan of the checkout. The push-event workaround exists because
+      # trufflehog-action's default base=default_branch, head=HEAD makes BASE==HEAD after a merge
+      # to main and the action errors out ("BASE and HEAD commits are the same"). Passing empty
+      # base/head triggers filesystem mode instead.
+      #
+      # --results=verified only (dropping "unknown"): unverified findings are pattern matches
+      # that couldn't be actively validated against an issuing provider. On a repo of any size
+      # they turn up regularly on things like example URLs in docs, package-lock.json resolved
+      # URLs, and JWTs baked into API fixtures — all not real secrets. Standard CI practice is
+      # verified-only to keep the signal strong; if you ever want to hunt down noise, run
+      # `trufflehog git file://.` locally and inspect each hit.
       - name: Detect committed secrets
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --results=verified,unknown
+          base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          head: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
+          extra_args: --results=verified
 
   backend:
     name: Backend (tests + audit)
