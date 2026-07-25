@@ -49,6 +49,9 @@ export const api = {
   // In live mode the exchange code comes from the eGovPH redirect query string.
   login: (exchangeCode = 'demo') => req('/auth/egov/exchange', { method: 'POST', body: { exchangeCode } }),
   me: () => req('/patients/me'),
+  // Update the citizen's own contact fields (phone / email). Backend accepts either or both,
+  // rejects anything else via zod .strict() — names and DOB stay locked to the SSO source.
+  updateContact: (patch) => req('/patients/me', { method: 'PATCH', body: patch }),
   activateBenefit: (key) => req(`/patients/me/benefits/${encodeURIComponent(key)}`, { method: 'PATCH' }),
   // eGovAI triage
   triage: (text, language) => req('/triage', { method: 'POST', body: { text, language: language === 'tl' ? 'tl' : 'en' } }),

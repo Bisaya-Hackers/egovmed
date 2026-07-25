@@ -27,6 +27,81 @@ const BENEFIT_CATALOG = [
 ];
 const WIRED_BENEFIT_KEYS = ['philhealth', 'whiteCard', 'sss'];
 
+// Accepts common PH mobile formats the user is likely to type (09XX, +63, 63, with or without
+// spaces/dashes) and returns canonical E.164 (+63XXXXXXXXXX) or null if it doesn't match.
+// Matches the backend's z.string().regex(/^\+63\d{10}$/) after normalization.
+function normalizePhone(raw) {
+  const cleaned = String(raw || '').replace(/[\s\-()]/g, '');
+  if (/^\+63\d{10}$/.test(cleaned)) return cleaned;
+  if (/^63\d{10}$/.test(cleaned)) return '+' + cleaned;
+  if (/^09\d{9}$/.test(cleaned)) return '+63' + cleaned.slice(1);
+  return null;
+}
+
+// Trivial email sanity check — the real validation happens server-side. Just enough to catch
+// obvious typos before we round-trip.
+const looksLikeEmail = (raw) => /^\S+@\S+\.\S+$/.test(String(raw || '').trim());
+
+// Inline-editable row for phone / email. Shows read-only text with an Edit button; when
+// editing, swaps to an input + Save/Cancel pair. Validates client-side before submit so bad
+// input gets a friendly message rather than a 400 round-trip.
+function ContactRow({ field, value, placeholder, label, hint, invalidMsg, c, onSave, editing, setEditing, saving }) {
+  const [draft, setDraft] = useState(value || '');
+  const [err, setErr] = useState(null);
+  const isEditing = editing === field;
+  const missing = !value;
+
+  useEffect(() => { if (isEditing) { setDraft(value || ''); setErr(null); } }, [isEditing, value]);
+
+  const submit = async () => {
+    const trimmed = draft.trim();
+    if (!trimmed) { setErr(invalidMsg); return; }
+    const normalized = field === 'phone' ? normalizePhone(trimmed) : (looksLikeEmail(trimmed) ? trimmed.toLowerCase() : null);
+    if (!normalized) { setErr(invalidMsg); return; }
+    setErr(null);
+    await onSave(field, normalized);
+  };
+
+  if (isEditing) {
+    return (
+      <div>
+        <div className="overline" style={{ marginBottom: 6 }}>{label}</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') setEditing(null); }}
+            placeholder={placeholder}
+            type={field === 'email' ? 'email' : 'tel'}
+            inputMode={field === 'email' ? 'email' : 'tel'}
+            autoFocus
+            style={{ flex: 1, borderRadius: 12, border: '1.5px solid var(--line)', padding: '10px 13px', font: 'inherit' }}
+          />
+          <button onClick={submit} disabled={saving} className="chip add" style={{ fontWeight: 800, padding: '0 14px', flex: 'none' }}>
+            {saving ? c.contactSaving : c.contactSave}
+          </button>
+          <button onClick={() => setEditing(null)} disabled={saving} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontWeight: 700, padding: '0 10px' }}>
+            {c.contactCancel}
+          </button>
+        </div>
+        {err && <p role="alert" style={{ color: 'var(--red)', margin: '6px 0 0', fontSize: '0.85em' }}>{err}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ overflowWrap: 'anywhere' }}>{value || c.notAvailable}</div>
+        {missing && hint && <div className="sub" style={{ margin: '3px 0 0', fontSize: '0.82em' }}>{hint}</div>}
+      </div>
+      <button onClick={() => setEditing(field)} style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 700, padding: 0, flex: 'none' }}>
+        {c.contactEdit}
+      </button>
+    </div>
+  );
+}
+
 function BenefitRow({ label, active, c }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -63,6 +138,23 @@ export default function Account({ c, S, A }) {
   const [error, setError] = useState(false);
   const [showAddBenefit, setShowAddBenefit] = useState(false);
   const [addingKey, setAddingKey] = useState(null);
+  const [editingField, setEditingField] = useState(null); // 'phone' | 'email' | null
+  const [savingContact, setSavingContact] = useState(false);
+
+  const saveContact = async (field, value) => {
+    if (savingContact) return;
+    setSavingContact(true);
+    try {
+      const updated = await api.updateContact({ [field]: value });
+      setPatient(updated);
+      setEditingField(null);
+      A.toast(c.contactSaved);
+    } catch {
+      A.toast(c.contactSaveError);
+    } finally {
+      setSavingContact(false);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -118,9 +210,32 @@ export default function Account({ c, S, A }) {
               </div>
             </div>
             <div className="rowsep" />
-            <div className="stack" style={{ color: 'var(--muted)', fontSize: '0.9em', overflowWrap: 'anywhere' }}>
-              <div>{patient.phone || c.notAvailable}</div>
-              <div>{patient.email || c.notAvailable}</div>
+            <div className="stack" style={{ color: 'var(--muted)', fontSize: '0.9em' }}>
+              <ContactRow
+                field="phone"
+                value={patient.phone}
+                placeholder={c.phonePlaceholder}
+                label={c.phoneLabel}
+                hint={c.phoneMissingHint}
+                invalidMsg={c.phoneInvalid}
+                c={c}
+                onSave={saveContact}
+                editing={editingField}
+                setEditing={setEditingField}
+                saving={savingContact}
+              />
+              <ContactRow
+                field="email"
+                value={patient.email}
+                placeholder={c.emailPlaceholder}
+                label={c.emailLabel}
+                invalidMsg={c.emailInvalid}
+                c={c}
+                onSave={saveContact}
+                editing={editingField}
+                setEditing={setEditingField}
+                saving={savingContact}
+              />
             </div>
           </section>
 
