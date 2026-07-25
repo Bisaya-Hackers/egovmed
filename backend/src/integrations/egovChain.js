@@ -24,6 +24,13 @@ function loadEthers() {
   return ethersMod;
 }
 
+// Redact any 0x-prefixed hex run of 40+ chars from a log message. Covers private keys (64 hex)
+// and addresses (40 hex) — the latter aren't sensitive but over-redacting costs nothing.
+// Defense in depth against libraries (ethers included) that echo unvalidated input into errors.
+function scrubSecrets(msg) {
+  return String(msg == null ? '' : msg).replace(/0x[0-9a-fA-F]{40,}/g, '0x<redacted>');
+}
+
 /**
  * Anchor a record fingerprint (hash) on eGovChain (Besu) for tamper-evidence.
  * Raw PHI never leaves the off-chain store — only the sha256 hash is anchored (Data Privacy Act 2012).
@@ -39,7 +46,7 @@ async function anchorHash(recordHash, meta = {}) {
     try {
       return await anchorLive(recordHash, meta);
     } catch (err) {
-      logger.error('eGovChain live anchor failed', { integration: 'egovChain', err: err.message });
+      logger.error('eGovChain live anchor failed', { integration: 'egovChain', err: scrubSecrets(err.message) });
       throw err;
     }
   }
@@ -100,7 +107,7 @@ async function verifyAnchor(recordHash, txHash) {
     const verified = ts !== undefined && ts !== null && BigInt(ts) > 0n;
     return { verified, recordHash, txHash, anchoredAt: verified ? Number(ts) : null };
   } catch (err) {
-    logger.warn('anchor verify RPC failed — silently degrading', { integration: 'egovChain', fallback: 'rpc_unavailable', err: err.message });
+    logger.warn('anchor verify RPC failed — silently degrading', { integration: 'egovChain', fallback: 'rpc_unavailable', err: scrubSecrets(err.message) });
     return { verified: false, recordHash, txHash, error: 'rpc_unavailable' };
   }
 }

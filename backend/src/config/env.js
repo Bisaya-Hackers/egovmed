@@ -90,7 +90,12 @@ const env = {
     rpcUrl: process.env.EGOVCHAIN_RPC_URL || 'https://hackathon-blockchain.e.gov.ph',
     chainId: int(process.env.EGOVCHAIN_CHAIN_ID, 13371),
     contractAddress: process.env.EGOVCHAIN_CONTRACT_ADDRESS || '',
-    privateKey: process.env.EGOVCHAIN_PRIVATE_KEY || '',
+    // .trim() collapses the most common paste-error path (trailing newline / space / CR).
+    // Without this, ethers.getBytes rejects the whitespaced value and echoes the FULL
+    // still-valid key into err.message — which the anchorHash catch block would then log.
+    // Belt-and-braces: warnIfMisconfigured also validates the shape below, and egovChain.js
+    // scrubs any long hex substring from log lines regardless of source.
+    privateKey: (process.env.EGOVCHAIN_PRIVATE_KEY || '').trim(),
   },
   egovPay: {
     mode: modeFor('EGOVPAY'),
@@ -143,6 +148,12 @@ function warnIfMisconfigured(log) {
   if (env.isProd && env.adminKey && env.adminKey.length < 32) {
     throw new Error('ADMIN_KEY must be at least 32 characters when configured in production.');
   }
+  // Validate the eGovChain signer key BEFORE it can reach ethers.Wallet — an ethers rejection
+  // on a whitespaced key echoes the still-valid key material into the exception message, which
+  // any catch/log path would then persist. Live-mode gated so mock deploys don't need a key.
+  if (env.egovChain.mode === 'live' && !/^0x[0-9a-fA-F]{64}$/.test(env.egovChain.privateKey)) {
+    throw new Error('EGOVCHAIN_PRIVATE_KEY must be "0x" + 64 hex chars (check for trailing whitespace, quotes, or CRLF from a paste).');
+  }
   if (env.isProd && !env.allowMockInProduction) {
     // All eight eGov integrations must be live + credentialed once the mock escape hatch is off.
     // A silent mock in production could serve fake triage, identity, or payment data to a real citizen.
@@ -150,9 +161,12 @@ function warnIfMisconfigured(log) {
       [env.egovph.mode === 'live' && env.egovph.partnerCode && env.egovph.partnerSecret, 'eGovPH SSO'],
       [env.everify.mode === 'live' && env.everify.clientId && env.everify.clientSecret, 'eVerify'],
       [env.faceLiveness.mode === 'live' && env.faceLiveness.apiKey, 'Face Liveness'],
-      [env.egovPay.mode === 'live' && env.egovPay.token, 'eGovPay'],
+      // settlementTemplateUuid is required by egovPay.createBill — unify with /integrations/status
+      [env.egovPay.mode === 'live' && env.egovPay.token && env.egovPay.settlementTemplateUuid, 'eGovPay'],
       [env.eMessage.mode === 'live' && env.eMessage.authToken, 'eMessage'],
-      [env.eReport.mode === 'live' && env.eReport.accessCode
+      // eReport.baseUrl has no default (env.js:108). Without it, boot succeeds but every
+      // fileReport 500s at request time — moved to boot so the failure is loud not lazy.
+      [env.eReport.mode === 'live' && env.eReport.baseUrl && env.eReport.accessCode
         && env.eReport.location.regionCode && env.eReport.location.provinceCode
         && env.eReport.location.municipalityCode && env.eReport.location.barangayCode, 'eReport'],
       [env.egovChain.mode === 'live' && env.egovChain.contractAddress && env.egovChain.privateKey, 'eGovChain'],
