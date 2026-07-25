@@ -5,6 +5,7 @@ process.env.PHI_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcd
 process.env.STORE_DRIVER = 'memory';
 process.env.INTEGRATION_MODE = 'mock';
 process.env.APP_URL = 'http://localhost:3000';
+process.env.ADMIN_KEY = 'test-only-admin-key-0123456789abcdef0123456789abcdef';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -232,6 +233,32 @@ test('security regression suite', async (t) => {
     });
     assert.notEqual(mock.status, 0);
     assert.match(mock.stderr, /Production cannot use mock/);
+  });
+
+  await t.test('/integrations/status is admin-gated and leaks no credential values', async () => {
+    await resetWithPatients();
+    // Missing admin key → 403 (never 200)
+    assert.equal((await request('/integrations/status')).status, 403);
+    // Wrong admin key → 403
+    assert.equal((await request('/integrations/status', { headers: { 'x-admin-key': 'nope' } })).status, 403);
+    // Correct admin key → 200 with structured payload
+    const ok = await json(await request('/integrations/status', { headers: { 'x-admin-key': process.env.ADMIN_KEY } }));
+    assert.equal(ok.response.status, 200);
+    assert.equal(typeof ok.value.globalMode, 'string');
+    for (const integ of Object.values(ok.value.integrations)) {
+      assert.equal(typeof integ.mode, 'string');
+      assert.equal(typeof integ.hasCredentials, 'boolean');
+    }
+    // Response must not carry any credential value — same rule as /auth/config
+    const raw = JSON.stringify(ok.value);
+    assert.equal(raw.includes('secret'), false);
+    assert.equal(raw.includes('client_secret'), false);
+    assert.equal(raw.includes('partner_secret'), false);
+    assert.equal(raw.includes('private_key'), false);
+    assert.equal(raw.includes('privateKey'), false);
+    assert.equal(raw.includes('accessCode'), false);
+    assert.equal(raw.includes('authToken'), false);
+    assert.equal(raw.includes('apiKey'), false);
   });
 
   await t.test('authentication attempts are rate limited', async () => {
