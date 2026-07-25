@@ -51,7 +51,7 @@ export default function Book({ c, lang, S, A }) {
               >
                 <span>
                   <span style={{ display: 'block', fontWeight: 700 }}>{s[0]}</span>
-                  <span style={{ display: 'block', fontSize: '0.82em', color: 'var(--muted)' }}>{s[1]}</span>
+                  <span style={{ display: 'block', fontSize: '0.82em', color: 'var(--muted)' }}>{dept}</span>
                 </span>
                 <span style={{ width: 22, height: 22, borderRadius: '50%', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: sel ? 'var(--primary)' : 'transparent', border: sel ? 'none' : '2px solid var(--line)' }}>
                   {sel && <Check size={14} color="#fff" />}
