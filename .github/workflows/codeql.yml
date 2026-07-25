@@ -49,6 +49,9 @@ jobs:
           # security-and-quality includes the security-extended pack plus code-quality rules.
           # security-extended alone is fine if you want less noise; upgrade later if useful.
           queries: security-extended
+          # Suppresses js/missing-rate-limiting (custom middleware not detectable by the rule).
+          # Every other rule in security-extended still runs.
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
