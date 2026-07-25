@@ -1,10 +1,31 @@
 import { useEffect, useState } from 'react';
 import { ScreenHeader, Btn } from '../components/ui.jsx';
-import { Check, ShieldTick, User } from '../components/Icons.jsx';
+import { Check, ShieldTick, User, Plus, ChevronRight } from '../components/Icons.jsx';
 import { api } from '../lib/api.js';
 import rosaAvatar from '../assets/home-avatar-rosa.png';
 
 const displayName = (patient) => [patient?.firstName, patient?.middleName, patient?.lastName].filter(Boolean).join(' ');
+
+// Real Philippine benefit/discount programs a patient could plausibly have. Only the first 3
+// (philhealth/whiteCard/sss) are wired into the eGovPay benefit engine (see backend
+// paymentService.BENEFIT_RULES) — those get a working "Add" button. The rest are genuine
+// programs but this demo doesn't compute coverage for them yet, so they're labeled honestly
+// as coming soon rather than pretending to activate something the payment math never reads.
+const BENEFIT_CATALOG = [
+  { key: 'philhealth', label: 'PhilHealth' },
+  { key: 'whiteCard', label: 'White Card (indigent)' },
+  { key: 'sss', label: 'SSS' },
+  { key: 'gsis', label: 'GSIS' },
+  { key: 'pagibig', label: 'Pag-IBIG Fund' },
+  { key: 'fourps', label: '4Ps (Pantawid Pamilyang Pilipino Program)' },
+  { key: 'pwd', label: 'PWD ID discount' },
+  { key: 'senior', label: 'Senior Citizen discount' },
+  { key: 'soloParent', label: 'Solo Parent ID discount' },
+  { key: 'owwa', label: 'OWWA' },
+  { key: 'ecc', label: 'ECC (Employees\u2019 Compensation)' },
+  { key: 'aics', label: 'DSWD AICS' },
+];
+const WIRED_BENEFIT_KEYS = ['philhealth', 'whiteCard', 'sss'];
 
 function BenefitRow({ label, active, c }) {
   return (
@@ -17,10 +38,31 @@ function BenefitRow({ label, active, c }) {
   );
 }
 
+// Row shown inside the "add a benefit" catalog: Active (already on), a working Add button for
+// wired programs, or a muted "Coming soon" for real programs this demo can't compute yet.
+function CatalogRow({ label, active, wired, busy, onAdd, c }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <span style={{ fontWeight: 700 }}>{label}</span>
+      {active ? (
+        <span className="pill green"><Check size={13} />{c.benefitOn}</span>
+      ) : wired ? (
+        <button onClick={onAdd} disabled={busy} className="chip add" style={{ fontWeight: 800, padding: '6px 12px', fontSize: '0.85em' }}>
+          {busy ? c.benefitAdding : c.benefitAdd}
+        </button>
+      ) : (
+        <span className="pill" style={{ background: 'var(--line-2)', color: 'var(--muted)' }}>{c.benefitComingSoon}</span>
+      )}
+    </div>
+  );
+}
+
 export default function Account({ c, S, A }) {
   const [patient, setPatient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [showAddBenefit, setShowAddBenefit] = useState(false);
+  const [addingKey, setAddingKey] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -30,6 +72,22 @@ export default function Account({ c, S, A }) {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
+
+  const handleAddBenefit = async (key) => {
+    if (addingKey) return;
+    setAddingKey(key);
+    try {
+      const updated = await api.activateBenefit(key);
+      setPatient(updated);
+      A.toast(S.lang === 'tl' ? 'Idinagdag ang benepisyo' : 'Benefit added');
+    } catch {
+      A.toast(S.lang === 'tl' ? 'Hindi maidagdag ang benepisyo' : 'Couldn\u2019t add that benefit');
+    } finally {
+      setAddingKey(null);
+    }
+  };
+
+  const activeBenefits = BENEFIT_CATALOG.filter((b) => patient?.benefits?.[b.key]);
 
   return (
     <div className="screen">
@@ -68,11 +126,42 @@ export default function Account({ c, S, A }) {
 
           <div className="overline" style={{ marginTop: 20, marginBottom: 9 }}>{c.accountBenefits}</div>
           <section data-stagger className="card stack">
-            <BenefitRow label="PhilHealth" active={patient.benefits?.philhealth} c={c} />
+            {activeBenefits.length > 0 ? activeBenefits.map((b, i) => (
+              <div key={b.key}>
+                {i > 0 && <div className="rowsep" />}
+                <BenefitRow label={b.label} active c={c} />
+              </div>
+            )) : (
+              <p className="sub" style={{ margin: 0 }}>{c.benefitsNone}</p>
+            )}
             <div className="rowsep" />
-            <BenefitRow label="White Card" active={patient.benefits?.whiteCard} c={c} />
-            <div className="rowsep" />
-            <BenefitRow label="SSS" active={patient.benefits?.sss} c={c} />
+            <button
+              onClick={() => setShowAddBenefit((v) => !v)}
+              style={{ border: 'none', background: 'transparent', color: 'var(--primary)', padding: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', fontWeight: 800 }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={16} />{c.benefitAddCta}</span>
+              <ChevronRight size={16} style={{ transform: showAddBenefit ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} />
+            </button>
+            {showAddBenefit && (
+              <>
+                <div className="rowsep" />
+                <div className="stack">
+                  {BENEFIT_CATALOG.map((b, i) => (
+                    <div key={b.key}>
+                      {i > 0 && <div className="rowsep" />}
+                      <CatalogRow
+                        label={b.label}
+                        active={!!patient.benefits?.[b.key]}
+                        wired={WIRED_BENEFIT_KEYS.includes(b.key)}
+                        busy={addingKey === b.key}
+                        onAdd={() => handleAddBenefit(b.key)}
+                        c={c}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </section>
         </>
       )}

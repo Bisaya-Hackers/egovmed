@@ -49,6 +49,7 @@ export const api = {
   // In live mode the exchange code comes from the eGovPH redirect query string.
   login: (exchangeCode = 'demo') => req('/auth/egov/exchange', { method: 'POST', body: { exchangeCode } }),
   me: () => req('/patients/me'),
+  activateBenefit: (key) => req(`/patients/me/benefits/${encodeURIComponent(key)}`, { method: 'PATCH' }),
   // eGovAI triage
   triage: (text, language) => req('/triage', { method: 'POST', body: { text, language: language === 'tl' ? 'tl' : 'en' } }),
   // National ID eVerify + Face Liveness

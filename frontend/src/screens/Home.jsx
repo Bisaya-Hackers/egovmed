@@ -113,6 +113,20 @@ export default function Home({ c, lang, S, A }) {
           <ShieldTick size={26} />
         </span>
       </div>
+      <button
+        data-stagger
+        onClick={() => A.go('messages')}
+        className="card tint"
+        style={{ display: 'flex', gap: 14, alignItems: 'center', marginTop: 10, width: '100%', textAlign: 'left', border: 'none' }}
+      >
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 800 }}>{c.featuredTitle3}</div>
+          <p className="sub" style={{ margin: '5px 0 0' }}>{c.featuredSub3}</p>
+        </div>
+        <span style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(255,255,255,.6)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+          <Chat size={26} />
+        </span>
+      </button>
     </div>
   );
 }
