@@ -4,6 +4,7 @@ import gsap from 'gsap';
 import { DICT, CONST, CHANNELS, HOSPITALS } from './i18n/dict.js';
 import { api, getToken, setToken } from './lib/api.js';
 import { fallbackTriage } from './lib/triageFallback.js';
+import { makeRefNo } from './lib/refNo.js';
 import { Gear, Bell, Check } from './components/Icons.jsx';
 
 import SignIn from './screens/SignIn.jsx';
@@ -31,7 +32,7 @@ const initial = () => ({
   symptom: '', recording: false, recSec: 0, thinking: false,
   emergency: false, liveness: 'idle', livenessSessionId: null,
   triage: null,
-  slotsLoading: false, selectedSlot: null, booking: false, booked: false, slotLabel: '', refNo: CONST.refNo,
+  slotsLoading: false, selectedSlot: null, booking: false, booked: false, slotLabel: '', refNo: makeRefNo(CONST.hospital),
   hospital: CONST.hospital, showHospitalPicker: false,
   channel: null, paying: false, paid: false, paymentStatus: null,
   messages: [], unreadMessages: 0,
@@ -117,7 +118,7 @@ export default function App() {
             slotLabel: active.scheduledFor
               ? new Date(active.scheduledFor).toLocaleString(p.lang === 'tl' ? 'fil-PH' : 'en-PH', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
               : p.slotLabel,
-            refNo: `${active.hospital || 'PGH'}-${String(active.queueNumber || '').padStart(4, '0')}`,
+            refNo: makeRefNo(active.hospital || 'PGH', active.queueNumber, active.id || active.queueNumber),
             hospital: active.hospital && active.hospital !== 'PGH' ? active.hospital : p.hospital,
             paid: p.paid || latestPaid,
           }));
@@ -325,7 +326,7 @@ export default function App() {
       const specialty = S.triage?.specialty || CONST.dept;
       const [res] = await Promise.all([tryApi(api.book(specialty, S.hospital, undefined, S.triage?.id)), delay(1500)]);
       const appt = res?.appointment;
-      const refNo = appt ? `${appt.hospital || 'PGH'}-${String(appt.queueNumber || '').padStart(4, '0')}` : null;
+      const refNo = appt ? makeRefNo(appt.hospital || 'PGH', appt.queueNumber, appt.id || appt.queueNumber) : null;
       // Optimistic confirmation bubble so Messages feels instant; A.loadMessages() below reconciles
       // it with the real, server-persisted row (with its real msg_… id) a moment later.
       const optimistic = {
