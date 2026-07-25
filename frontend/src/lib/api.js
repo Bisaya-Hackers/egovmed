@@ -60,10 +60,12 @@ export const api = {
   }),
   appointments: () => req('/appointments'),
   messages: () => req('/messages'),
+  replyToMessage: (id, text) => req(`/messages/${encodeURIComponent(id)}/reply`, { method: 'POST', body: { text } }),
   // eGovPay (benefits mock-labeled by the backend)
   quote: (billAmount) => req('/payments/quote', { method: 'POST', body: { billAmount } }),
   pay: (billAmount, channel) => req('/payments', { method: 'POST', body: { billAmount, channel } }),
   paymentStatus: (billId) => req(`/payments/${encodeURIComponent(billId)}/status`),
+  payments: () => req('/payments'),
   // eGovChain-anchored records
   records: () => req('/records'),
   getRecord: (id) => req(`/records/${encodeURIComponent(id)}`),

@@ -33,6 +33,7 @@ const initial = () => ({
   triage: null,
   slotsLoading: false, selectedSlot: null, booking: false, booked: false, slotLabel: '', refNo: CONST.refNo,
   channel: null, paying: false, paid: false, paymentStatus: null,
+  messages: [], unreadMessages: 0,
   reportStage: 'form', reportCat: null, reportDesc: '', caseNo: CONST.caseNo,
   showDemo: false, showTimeout: false, toast: null,
 });
@@ -94,6 +95,33 @@ export default function App() {
       return latest;
     };
 
+    // Re-derive the appointment/payment/message state from the backend. This is what keeps the
+    // Home "upcoming appointment" card (and its paid state) alive across full-page navigations —
+    // e.g. the eGovPay hosted-checkout redirect reloads the app and wipes in-memory React state,
+    // so without this the card would silently vanish even though the booking still exists server-side.
+    const SETTLED = ['paid', 'settled', 'success', 'successful', 'completed'];
+    const syncPatientState = async () => {
+      const [appts, pays, msgs] = await Promise.all([tryApi(api.appointments()), tryApi(api.payments()), tryApi(api.messages())]);
+      if (Array.isArray(msgs)) set({ messages: msgs });
+      if (Array.isArray(appts) && appts.length) {
+        const active = [...appts]
+          .filter((a) => a.status !== 'cancelled')
+          .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0];
+        if (active) {
+          const latestPaid = Array.isArray(pays) && pays.some((p) => SETTLED.includes(String(p.status || '').toLowerCase()));
+          set((p) => ({
+            booked: true,
+            triage: { ...(p.triage || {}), specialty: active.specialty },
+            slotLabel: active.scheduledFor
+              ? new Date(active.scheduledFor).toLocaleString(p.lang === 'tl' ? 'fil-PH' : 'en-PH', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+              : p.slotLabel,
+            refNo: `${active.hospital || 'PGH'}-${String(active.queueNumber || '').padStart(4, '0')}`,
+            paid: p.paid || latestPaid,
+          }));
+        }
+      }
+    };
+
     (async () => {
       try {
         const auth = await api.authConfig();
@@ -107,6 +135,7 @@ export default function App() {
           const result = await api.login(exchangeCode);
           if (!result?.token) throw new Error('eGovPH returned no session token');
           setToken(result.token);
+          await syncPatientState();
           set({ signingIn: false, screen: 'home', stack: [] });
           return;
         }
@@ -133,11 +162,13 @@ export default function App() {
           const status = String(payment?.status || '').toLowerCase();
           const paid = ['paid', 'settled', 'success', 'successful', 'completed'].includes(status);
           set({ paying: false, paid, paymentStatus: status, flowError: paid ? null : `Payment status: ${status || 'pending'}` });
+          await syncPatientState();
           return;
         }
 
         if (getToken()) {
           await api.me();
+          await syncPatientState();
           set({ screen: 'home', stack: [] });
         }
       } catch (err) {
@@ -156,7 +187,7 @@ export default function App() {
   const A = {
     setLang: (l) => set({ lang: l }),
     cycleText: () => set((p) => ({ textScale: (p.textScale + 1) % 3 })),
-    go: (screen) => set((p) => ({ screen, stack: [...p.stack, p.screen] })),
+    go: (screen) => set((p) => ({ screen, stack: [...p.stack, p.screen], ...(screen === 'messages' ? { unreadMessages: 0 } : {}) })),
     back: () => set((p) => { const k = [...p.stack]; const prev = k.pop() || 'home'; return { screen: prev, stack: k }; }),
     toast,
 
@@ -284,8 +315,21 @@ export default function App() {
       set({ booking: true });
       const specialty = S.triage?.specialty || CONST.dept;
       const [res] = await Promise.all([tryApi(api.book(specialty, undefined, S.triage?.id)), delay(1500)]);
-      set((p) => ({ booking: false, booked: true, slotLabel, refNo: res?.appointment?.reference_no || p.refNo, screen: 'confirm', stack: ['home'] }));
+      const appt = res?.appointment;
+      const refNo = appt ? `${appt.hospital || 'PGH'}-${String(appt.queueNumber || '').padStart(4, '0')}` : null;
+      // Optimistic confirmation bubble so Messages feels instant; A.loadMessages() below reconciles
+      // it with the real, server-persisted row (with its real msg_… id) a moment later.
+      const optimistic = {
+        id: 'local_' + Date.now(), kind: 'confirmation', status: 'sent', channel: 'sms', provider: 'mock',
+        createdAt: new Date().toISOString(), meta: { specialty, hospital: appt?.hospital || CONST.hospital, queueNumber: appt?.queueNumber },
+      };
+      set((p) => ({
+        booking: false, booked: true, slotLabel, refNo: refNo || p.refNo,
+        messages: [optimistic, ...p.messages], unreadMessages: p.unreadMessages + 1,
+        screen: 'confirm', stack: ['home'],
+      }));
       toast(S.lang === 'tl' ? 'Ipinadala ang kumpirmasyon sa SMS' : 'Confirmation texted to you');
+      after(1200, A.loadMessages);
     },
 
     // Payment (eGovPay)
@@ -311,6 +355,19 @@ export default function App() {
       } catch (err) {
         set({ paying: false, flowError: err.message || 'Payment failed' });
       }
+    },
+
+    // Messages (eMessage) — list refresh + reply thread
+    loadMessages: async () => {
+      const rows = await tryApi(api.messages());
+      if (Array.isArray(rows)) set({ messages: rows });
+      return rows;
+    },
+    sendMessageReply: async (id, text) => {
+      const res = await tryApi(api.replyToMessage(id, text));
+      if (res?.reply) set((p) => ({ messages: [res.reply, ...p.messages] }));
+      if (res?.ack) after(1000, () => set((p) => ({ messages: [res.ack, ...p.messages] })));
+      return res;
     },
 
     // Records + Report
