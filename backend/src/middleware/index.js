@@ -105,13 +105,18 @@ const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, ne
 
 /* eslint-disable no-unused-vars */
 function errorHandler(err, req, res, _next) {
+  const isJsonParseError = err instanceof SyntaxError && err?.type === 'entity.parse.failed';
   const status = err instanceof AppError ? err.status
     : err?.type === 'entity.too.large' ? 413
-      : err instanceof SyntaxError && err?.type === 'entity.parse.failed' ? 400
+      : isJsonParseError ? 400
         : 500;
   if (status >= 500) logger.error('unhandled error', { path: req.path, err: err.message, stack: err.stack });
+  // Only body-parser-level failures (actual malformed JSON) get the generic message — the raw
+  // parser error can leak input snippets. AppError-derived 400s (validation, badRequest, etc.)
+  // carry their own developer-authored, already-safe message and should surface it as-is so
+  // clients/logs can tell "bad JSON" apart from "bad request for reason X".
   const safeMessage = status === 413 ? 'Request body too large'
-    : status === 400 ? 'Malformed JSON request body'
+    : isJsonParseError ? 'Malformed JSON request body'
       : status >= 500 && env.isProd ? 'Internal server error'
         : err.message;
   res.status(status).json({
