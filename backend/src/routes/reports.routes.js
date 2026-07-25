@@ -5,7 +5,11 @@ const { rateLimit, requireAuth, requireAdmin, validate, asyncHandler } = require
 const reportService = require('../services/reportService');
 
 const router = Router();
-const caseParams = z.object({ caseNumber: z.string().regex(/^EGM-\d{4}-\d{6}$/) }).strict();
+// EGM-YYYY-###### is the mock (self-generated) format; PFM-MMDDYY-#### is the live eReport
+// format (portal docs: e.g. PFM-071826-0014). Accept either so live lookups don't 404 after flip.
+const caseParams = z.object({
+  caseNumber: z.string().regex(/^(EGM-\d{4}-\d{6}|PFM-\d{6}-\d{4})$/),
+}).strict();
 const adminLimit = rateLimit({ scope: 'admin', max: 10, windowMs: 15 * 60_000, key: (req) => req.ip });
 
 // POST /reports  { category, description, contact? } → { caseNumber, status }
