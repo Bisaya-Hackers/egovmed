@@ -1,0 +1,50 @@
+name: CodeQL
+
+# Runs GitHub's semantic code analysis for common JS/TS security antipatterns —
+# SQL/NoSQL injection, XSS sinks, path traversal, unsafe deserialization, prototype
+# pollution, etc. Findings appear under Security > Code scanning alerts on the repo.
+#
+# Free for public repos. Rules are managed by GitHub, no config needed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly baseline scan so a new CVE-worthy pattern in the ruleset applies to code
+    # that hasn't been touched in a while. Sunday 12:34 UTC (odd time avoids the top-of-hour
+    # queue rush on shared runners).
+    - cron: '34 12 * * 0'
+
+jobs:
+  analyze:
+    name: CodeQL analysis (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # Required so CodeQL can upload SARIF results to the Security tab.
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # security-and-quality includes the security-extended pack plus code-quality rules.
+          # security-extended alone is fine if you want less noise; upgrade later if useful.
+          queries: security-extended
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'

@@ -12,8 +12,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so gitleaks scans every commit on this ref, not just the tip.
+          # Catches secrets that were committed and then removed in a later commit.
+          fetch-depth: 0
+
+      # Blocks PRs that introduce any hardcoded API key, private key, JWT, cloud credential,
+      # or generic high-entropy string. Uses gitleaks' default ruleset — no config file needed.
+      # Fails the job on any finding, so an accidental commit of `.env` never reaches main.
+      - name: Detect committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   backend:
-    name: Backend (tests)
+    name: Backend (tests + audit)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -33,6 +51,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Fails on any high-or-critical vulnerability in a production dep. Moderate/low are
+      # noted in the log but don't block — Dependabot picks those up asynchronously.
+      # Runtime deps only (--omit=dev) so a dev-only vuln in ethers-testkit or similar
+      # doesn't block a PR that never ships that code.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       # 16 regression tests (11 baseline + 5 added for /integrations/status, credential-leak
       # sentinels, benefits reflection, cross-tenant payment attribution, rate limit).
       # This is the merge gate — the mock-to-live rollout depends on these staying green.
@@ -40,7 +65,7 @@ jobs:
         run: npm test
 
   frontend:
-    name: Frontend (build)
+    name: Frontend (build + audit)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -57,6 +82,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Frontend has no runtime backend, so dev deps ARE the shipped surface (vite bundles
+      # them into dist). Scan everything, high-and-above blocks. This is what would have
+      # caught the vite 5→6 CVEs earlier.
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
 
       # Full production build — catches Vite/React errors, missing imports, and unresolved
       # module references before they reach a Vercel preview deploy.
