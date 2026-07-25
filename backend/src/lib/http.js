@@ -7,8 +7,25 @@ const logger = require('./logger');
  * - JSON in / JSON out by default
  * - request timeout via AbortController
  * - normalizes non-2xx into an AppError (502) with the upstream body attached
+ *
+ * SSRF invariant (defense in depth against CodeQL js/request-forgery pattern):
+ * every call site MUST pass an https:// URL whose HOST comes from env config
+ * (env.<integration>.baseUrl or rpcUrl), never from request input. Path segments
+ * may include values from our own store or encodeURIComponent'd request data —
+ * even a hostile path stays on the same host per RFC 3986 URL resolution.
+ * The assertion below fails-closed at the transport rather than trusting every
+ * caller to keep the invariant intact after a future refactor.
  */
 async function request(url, { method = 'GET', headers = {}, body, timeoutMs = 15000, raw = false } = {}) {
+  // Reject non-https and file:// / http:// / gopher:// / any URL parser can accept.
+  // In dev the RPC/mock endpoints are http://localhost; allow http on loopback only.
+  let parsed;
+  try { parsed = new URL(url); } catch { throw upstream(`Refusing request to malformed URL: ${url}`); }
+  const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLoopback)) {
+    throw upstream(`Refusing non-https outbound request: ${parsed.protocol}//${parsed.hostname}`);
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const opts = { method, headers: { Accept: 'application/json', ...headers }, signal: controller.signal };
