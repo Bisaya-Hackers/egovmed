@@ -143,6 +143,51 @@ test('security regression suite', async (t) => {
     assert.equal(messageAudits.length, 2);
   });
 
+  await t.test('patient replies write a reply + staff-ack pair, never persist the text, and are tenant-scoped', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const attacker = sign({ sub: 'pat_attacker' });
+
+    await request('/appointments', { token: owner, method: 'POST', body: { specialty: 'Cardiology' } });
+    const initial = await json(await request('/messages', { token: owner }));
+    const confirmation = initial.value[0];
+    assert.equal(confirmation.kind, 'confirmation');
+
+    // an attacker cannot reply to another patient's message thread
+    assert.equal((await request(`/messages/${confirmation.id}/reply`, {
+      token: attacker, method: 'POST', body: { text: 'not mine' },
+    })).status, 404);
+
+    // an empty body is rejected before anything is written
+    assert.equal((await request(`/messages/${confirmation.id}/reply`, {
+      token: owner, method: 'POST', body: { text: '' },
+    })).status, 400);
+
+    const replied = await json(await request(`/messages/${confirmation.id}/reply`, {
+      token: owner, method: 'POST', body: { text: 'When should I arrive?' },
+    }));
+    assert.equal(replied.response.status, 201);
+    assert.equal(replied.value.reply.kind, 'reply_sent');
+    assert.equal(replied.value.reply.meta.inReplyTo, confirmation.id);
+    assert.equal(replied.value.ack.kind, 'staff_ack');
+    assert.equal(replied.value.ack.meta.inReplyTo, confirmation.id);
+    // the reply text itself must never come back in the response or be persisted
+    assert.equal(JSON.stringify(replied.value).includes('When should I arrive'), false);
+
+    const stored = await store.findAll(COLLECTIONS.MESSAGES);
+    const storedReply = stored.find((m) => m.id === replied.value.reply.id);
+    assert.equal(storedReply.text, undefined);
+    assert.equal(storedReply.body, undefined);
+
+    const thread = await json(await request('/messages', { token: owner }));
+    assert.equal(thread.value.length, 3); // confirmation + reply_sent + staff_ack
+
+    // replying to a nonexistent message id is a 404, not a 500
+    assert.equal((await request('/messages/msg_doesnotexist/reply', {
+      token: owner, method: 'POST', body: { text: 'hi' },
+    })).status, 404);
+  });
+
   await t.test('triage symptoms and report narratives are encrypted at rest', async () => {
     const ownerId = await resetWithPatients();
     const owner = sign({ sub: ownerId });
