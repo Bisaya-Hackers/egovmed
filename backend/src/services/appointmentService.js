@@ -4,7 +4,7 @@ const { getStore, COLLECTIONS } = require('../store');
 const { randomId } = require('../lib/crypto');
 const { notFound, conflict } = require('../lib/errors');
 
-const messageAudit = (notification, patientId, kind) => ({
+const messageAudit = (notification, patientId, kind, meta) => ({
   id: notification.id,
   patientId,
   kind,
@@ -12,6 +12,9 @@ const messageAudit = (notification, patientId, kind) => ({
   channel: notification.channel,
   provider: notification.provider,
   createdAt: new Date().toISOString(),
+  // Non-PHI context (department/hospital/queue no.) only — never the message body — so the
+  // Messages screen can render a real subject line instead of a generic "You have an update".
+  ...(meta ? { meta } : {}),
 });
 
 async function book({ patientId, specialty, hospital = 'PGH', scheduledFor, triageId }) {
@@ -49,7 +52,7 @@ async function book({ patientId, specialty, hospital = 'PGH', scheduledFor, tria
         subject: 'eGovMed appointment confirmed',
         body: `Hi ${patient.firstName}, your ${specialty} appointment at ${hospital} is booked. Queue #${queueNumber}.`,
       });
-      await store.create(COLLECTIONS.MESSAGES, messageAudit(notification, patientId, 'confirmation'));
+      await store.create(COLLECTIONS.MESSAGES, messageAudit(notification, patientId, 'confirmation', { specialty, hospital, queueNumber, scheduledFor: appt.scheduledFor }));
     } catch (err) {
       notification = { status: 'failed', reason: 'notification_failed' };
     }
@@ -82,7 +85,7 @@ async function sendReminder(appointmentId, patientId) {
     subject: 'Appointment reminder',
     body: `Reminder: your ${appt.specialty} appointment at ${appt.hospital}. Queue #${appt.queueNumber}.`,
   });
-  await store.create(COLLECTIONS.MESSAGES, messageAudit(notification, appt.patientId, 'reminder'));
+  await store.create(COLLECTIONS.MESSAGES, messageAudit(notification, appt.patientId, 'reminder', { specialty: appt.specialty, hospital: appt.hospital, queueNumber: appt.queueNumber, scheduledFor: appt.scheduledFor }));
   const { id, status, channel, provider } = notification;
   return { id, status, channel, provider };
 }

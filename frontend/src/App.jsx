@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
-import { DICT, CONST, CHANNELS } from './i18n/dict.js';
+import { DICT, CONST, CHANNELS, HOSPITALS } from './i18n/dict.js';
 import { api, getToken, setToken } from './lib/api.js';
 import { fallbackTriage } from './lib/triageFallback.js';
+import { makeRefNo } from './lib/refNo.js';
 import { Gear, Bell, Check } from './components/Icons.jsx';
 
 import SignIn from './screens/SignIn.jsx';
@@ -15,13 +16,14 @@ import Liveness from './screens/Liveness.jsx';
 import Book from './screens/Book.jsx';
 import Confirm from './screens/Confirm.jsx';
 import Payment from './screens/Payment.jsx';
+import Payments from './screens/Payments.jsx';
 import Records from './screens/Records.jsx';
 import Messages from './screens/Messages.jsx';
 import Account from './screens/Account.jsx';
 import Report from './screens/Report.jsx';
 import Tokens from './screens/Tokens.jsx';
 import BottomNav from './components/BottomNav.jsx';
-import { DemoSheet, TimeoutModal, Toast } from './components/Overlays.jsx';
+import { DemoSheet, TimeoutModal, Toast, HospitalSheet } from './components/Overlays.jsx';
 
 const FONT = { 0: 17, 1: 19, 2: 21 };
 const initial = () => ({
@@ -31,16 +33,20 @@ const initial = () => ({
   symptom: '', recording: false, recSec: 0, thinking: false,
   emergency: false, liveness: 'idle', livenessSessionId: null,
   triage: null,
-  slotsLoading: false, selectedSlot: null, booking: false, booked: false, slotLabel: '', refNo: CONST.refNo,
+  slotsLoading: false, selectedSlot: null, booking: false, booked: false, slotLabel: '', refNo: makeRefNo(CONST.hospital),
+  appointments: [], payingApptId: null,
+  hospital: CONST.hospital, showHospitalPicker: false,
   channel: null, paying: false, paid: false, paymentStatus: null,
+  messages: [], unreadMessages: 0,
   reportStage: 'form', reportCat: null, reportDesc: '', caseNo: CONST.caseNo,
+  trackCaseNo: '', trackLoading: false, trackError: null, trackResult: null,
   showDemo: false, showTimeout: false, toast: null,
 });
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const tryApi = async (p) => { try { return await p; } catch { return null; } };
 
-const SCREENS = { signin: SignIn, home: Home, symptom: Symptom, triage: Triage, consent: Consent, liveness: Liveness, book: Book, confirm: Confirm, payment: Payment, records: Records, messages: Messages, account: Account, report: Report, tokens: Tokens };
+const SCREENS = { signin: SignIn, home: Home, symptom: Symptom, triage: Triage, consent: Consent, liveness: Liveness, book: Book, confirm: Confirm, payment: Payment, payments: Payments, records: Records, messages: Messages, account: Account, report: Report, tokens: Tokens };
 const NAV_SCREENS = new Set(['home', 'records', 'messages', 'account']);
 
 export default function App() {
@@ -94,6 +100,55 @@ export default function App() {
       return latest;
     };
 
+    // Re-derive the appointment/payment/message state from the backend. This is what keeps the
+    // Home "upcoming appointment" card (and its paid state) alive across full-page navigations —
+    // e.g. the eGovPay hosted-checkout redirect reloads the app and wipes in-memory React state,
+    // so without this the card would silently vanish even though the booking still exists server-side.
+    const SETTLED = ['paid', 'settled', 'success', 'successful', 'completed'];
+    const formatSlot = (scheduledFor, lang) => (scheduledFor
+      ? new Date(scheduledFor).toLocaleString(lang === 'tl' ? 'fil-PH' : 'en-PH', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+      : null);
+    // Every active (non-cancelled) appointment gets its own card — not just the most recent one —
+    // so booking a 2nd, 3rd, etc. appointment doesn't silently push earlier ones out of view.
+    // Payments are matched back to their appointment via `appointmentId` so each card shows its
+    // own paid/unpaid state independently.
+    const syncPatientState = async () => {
+      const [appts, pays, msgs] = await Promise.all([tryApi(api.appointments()), tryApi(api.payments()), tryApi(api.messages())]);
+      if (Array.isArray(msgs)) set({ messages: msgs });
+      if (Array.isArray(appts) && appts.length) {
+        const activeAppts = [...appts]
+          .filter((a) => a.status !== 'cancelled')
+          .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+        if (activeAppts.length) {
+          set((p) => {
+            const appointments = activeAppts.map((a) => ({
+              id: a.id,
+              specialty: a.specialty,
+              hospital: a.hospital || 'PGH',
+              slotLabel: formatSlot(a.scheduledFor, p.lang) || p.slotLabel,
+              refNo: makeRefNo(a.hospital || 'PGH', a.queueNumber, a.id || a.queueNumber, a.specialty),
+              queueNumber: a.queueNumber,
+              paid: Array.isArray(pays) && pays.some((pay) => pay.appointmentId === a.id && SETTLED.includes(String(pay.status || '').toLowerCase())),
+              verified: p.liveness === 'verified',
+            }));
+            const active = activeAppts[0];
+            // Legacy/unlinked payments (made before appointmentId existed) still settle the
+            // singular flow used right after booking (Confirm screen, etc.).
+            const legacyPaid = Array.isArray(pays) && pays.some((pay) => !pay.appointmentId && SETTLED.includes(String(pay.status || '').toLowerCase()));
+            return {
+              appointments,
+              booked: true,
+              triage: { ...(p.triage || {}), specialty: active.specialty },
+              slotLabel: appointments[0]?.slotLabel || p.slotLabel,
+              refNo: appointments[0]?.refNo || p.refNo,
+              hospital: active.hospital && active.hospital !== 'PGH' ? active.hospital : p.hospital,
+              paid: p.paid || appointments[0]?.paid || legacyPaid,
+            };
+          });
+        }
+      }
+    };
+
     (async () => {
       try {
         const auth = await api.authConfig();
@@ -107,6 +162,7 @@ export default function App() {
           const result = await api.login(exchangeCode);
           if (!result?.token) throw new Error('eGovPH returned no session token');
           setToken(result.token);
+          await syncPatientState();
           set({ signingIn: false, screen: 'home', stack: [] });
           return;
         }
@@ -126,18 +182,23 @@ export default function App() {
         if (current.pathname.endsWith('/payment/return')) {
           cleanUrl();
           const billId = window.sessionStorage.getItem('egovmed.pendingBillId');
+          const pendingApptId = window.sessionStorage.getItem('egovmed.pendingApptId');
           if (!getToken() || !billId) throw new Error('The payment session could not be resumed');
-          set({ screen: 'payment', stack: ['home'], paying: true, channel: 0, flowError: null });
+          set({ screen: 'payment', stack: ['home'], paying: true, channel: 0, payingApptId: pendingApptId || null, flowError: null });
           const payment = await finishPayment(billId);
           window.sessionStorage.removeItem('egovmed.pendingBillId');
+          window.sessionStorage.removeItem('egovmed.pendingApptId');
           const status = String(payment?.status || '').toLowerCase();
           const paid = ['paid', 'settled', 'success', 'successful', 'completed'].includes(status);
           set({ paying: false, paid, paymentStatus: status, flowError: paid ? null : `Payment status: ${status || 'pending'}` });
+          await syncPatientState();
           return;
         }
 
         if (getToken()) {
-          await api.me();
+          const me = await api.me();
+          if (me?.identityVerified) set({ liveness: 'verified' });
+          await syncPatientState();
           set({ screen: 'home', stack: [] });
         }
       } catch (err) {
@@ -156,7 +217,7 @@ export default function App() {
   const A = {
     setLang: (l) => set({ lang: l }),
     cycleText: () => set((p) => ({ textScale: (p.textScale + 1) % 3 })),
-    go: (screen) => set((p) => ({ screen, stack: [...p.stack, p.screen] })),
+    go: (screen) => set((p) => ({ screen, stack: [...p.stack, p.screen], ...(screen === 'messages' ? { unreadMessages: 0 } : {}) })),
     back: () => set((p) => { const k = [...p.stack]; const prev = k.pop() || 'home'; return { screen: prev, stack: k }; }),
     toast,
 
@@ -250,7 +311,13 @@ export default function App() {
     continueTriage: () => A.go('consent'),
 
     // Consent + Face Liveness (National ID eVerify)
-    declineConsent: () => A.back(),
+    // "Not now" means declining verification altogether — you can't book without it, so
+    // stepping back to Triage would just loop you right back into this same screen.
+    // Exit the flow entirely instead.
+    declineConsent: () => {
+      A.resetToHome();
+      toast(S.lang === 'tl' ? 'Kailangan ang pag-verify para makapag-book ng appointment' : "You'll need to verify your identity to book an appointment");
+    },
     acceptConsent: async () => {
       set((p) => ({ screen: 'liveness', stack: [...p.stack, 'consent'], liveness: 'capturing', flowError: null }));
       try {
@@ -279,43 +346,94 @@ export default function App() {
     // Booking + eMessage
     goBook: () => { A.go('book'); set({ slotsLoading: true, selectedSlot: null }); after(1100, () => set({ slotsLoading: false })); },
     selectSlot: (i) => set({ selectedSlot: i }),
+    toggleHospitalPicker: () => set((p) => ({ showHospitalPicker: !p.showHospitalPicker })),
+    // Switching hospitals re-queries slots for that facility (mocked with the same short delay as goBook).
+    setHospital: (name) => {
+      set({ hospital: name, showHospitalPicker: false, selectedSlot: null, slotsLoading: true });
+      after(900, () => set({ slotsLoading: false }));
+    },
     doBook: async (slotLabel) => {
       if (S.selectedSlot == null || S.booking) return;
       set({ booking: true });
       const specialty = S.triage?.specialty || CONST.dept;
-      const [res] = await Promise.all([tryApi(api.book(specialty, undefined, S.triage?.id)), delay(1500)]);
-      set((p) => ({ booking: false, booked: true, slotLabel, refNo: res?.appointment?.reference_no || p.refNo, screen: 'confirm', stack: ['home'] }));
+      const [res] = await Promise.all([tryApi(api.book(specialty, S.hospital, undefined, S.triage?.id)), delay(1500)]);
+      const appt = res?.appointment;
+      const refNo = appt ? makeRefNo(appt.hospital || 'PGH', appt.queueNumber, appt.id || appt.queueNumber, specialty) : null;
+      // Optimistic confirmation bubble so Messages feels instant; A.loadMessages() below reconciles
+      // it with the real, server-persisted row (with its real msg_… id) a moment later.
+      const optimistic = {
+        id: 'local_' + Date.now(), kind: 'confirmation', status: 'sent', channel: 'sms', provider: 'mock',
+        createdAt: new Date().toISOString(), meta: { specialty, hospital: appt?.hospital || S.hospital, queueNumber: appt?.queueNumber },
+      };
+      // New card on Home in addition to the singular fields (which drive the Confirm screen
+      // right after this booking) — so a 2nd/3rd booking shows up alongside earlier ones
+      // instead of replacing them.
+      const newCard = appt ? {
+        id: appt.id, specialty, hospital: appt.hospital || S.hospital,
+        slotLabel, refNo: refNo || makeRefNo(appt.hospital || S.hospital, appt.queueNumber, appt.id, specialty), queueNumber: appt.queueNumber, paid: false,
+        verified: S.liveness === 'verified',
+      } : null;
+      set((p) => ({
+        booking: false, booked: true, slotLabel, refNo: refNo || p.refNo,
+        appointments: newCard ? [newCard, ...p.appointments.filter((a) => a.id !== newCard.id)] : p.appointments,
+        messages: [optimistic, ...p.messages], unreadMessages: p.unreadMessages + 1,
+        screen: 'confirm', stack: ['home'],
+      }));
       toast(S.lang === 'tl' ? 'Ipinadala ang kumpirmasyon sa SMS' : 'Confirmation texted to you');
+      after(1200, A.loadMessages);
     },
 
     // Payment (eGovPay)
-    goPayment: () => A.go('payment'),
+    // apptId identifies which appointment card this payment is for, so multiple bookings can
+    // each be paid independently instead of sharing one global paid flag.
+    goPayment: (apptId) => { set({ payingApptId: apptId || null }); A.go('payment'); },
+    // Payments tab: history + what's still unpaid, instead of dropping straight into checkout.
+    goPayments: () => A.go('payments'),
     setChannel: (i) => set({ channel: i }),
     doPay: async (amount = 300) => {
       if (S.channel == null || S.paying) return;
       set({ paying: true, flowError: null });
       try {
-        const payment = await api.pay(amount, CHANNELS[S.channel]?.[0] || 'card');
+        const payment = await api.pay(amount, CHANNELS[S.channel]?.[0] || 'card', S.payingApptId);
         if (payment?.provider !== 'mock' && payment?.checkoutUrl) {
           const checkout = new URL(payment.checkoutUrl);
           if (checkout.protocol !== 'https:') throw new Error('Payment provider returned an insecure checkout URL');
           window.sessionStorage.setItem('egovmed.pendingBillId', payment.id);
+          if (S.payingApptId) window.sessionStorage.setItem('egovmed.pendingApptId', S.payingApptId);
           window.location.assign(checkout.href);
           return;
         }
         const refreshed = payment?.id ? await api.paymentStatus(payment.id) : payment;
         const status = String(refreshed?.status || '').toLowerCase();
         const paid = ['paid', 'settled', 'success', 'successful', 'completed'].includes(status);
-        set({ paying: false, paid, paymentStatus: status, flowError: paid ? null : `Payment status: ${status || 'pending'}` });
+        set((p) => ({
+          paying: false, paid, paymentStatus: status, flowError: paid ? null : `Payment status: ${status || 'pending'}`,
+          appointments: paid && p.payingApptId
+            ? p.appointments.map((a) => (a.id === p.payingApptId ? { ...a, paid: true } : a))
+            : p.appointments,
+        }));
         if (paid) toast(S.lang === 'tl' ? 'Ipinadala ang resibo sa SMS' : 'Receipt texted to you');
       } catch (err) {
         set({ paying: false, flowError: err.message || 'Payment failed' });
       }
     },
 
+    // Messages (eMessage) — list refresh + reply thread
+    loadMessages: async () => {
+      const rows = await tryApi(api.messages());
+      if (Array.isArray(rows)) set({ messages: rows });
+      return rows;
+    },
+    sendMessageReply: async (id, text) => {
+      const res = await tryApi(api.replyToMessage(id, text));
+      if (res?.reply) set((p) => ({ messages: [res.reply, ...p.messages] }));
+      if (res?.ack) after(1000, () => set((p) => ({ messages: [res.ack, ...p.messages] })));
+      return res;
+    },
+
     // Records + Report
     goRecords: () => A.go('records'),
-    openReport: () => { set({ reportStage: 'form', reportCat: null, reportDesc: '' }); A.go('report'); },
+    openReport: () => { set({ reportStage: 'form', reportCat: null, reportDesc: '', trackCaseNo: '', trackError: null, trackResult: null }); A.go('report'); },
     setCat: (i) => set({ reportCat: i }),
     setDesc: (v) => set({ reportDesc: v }),
     submitReport: () => { if (S.reportCat == null || !S.reportDesc.trim()) return; set({ reportStage: 'otp' }); },
@@ -325,8 +443,25 @@ export default function App() {
       if (res?.caseNumber) set({ caseNo: res.caseNumber });
     },
 
+    // Check the status of a previously filed report (GET /reports/:caseNumber)
+    openTrackReport: () => set({ reportStage: 'track', trackCaseNo: '', trackError: null, trackResult: null }),
+    setTrackCaseNo: (v) => set({ trackCaseNo: v.toUpperCase(), trackError: null }),
+    submitTrackCase: async () => {
+      const caseNo = S.trackCaseNo.trim();
+      // EGM-YYYY-###### = self-generated (mock); PFM-MMDDYY-#### = live eReport format.
+      // Backend accepts both, keep this in sync so live case numbers don't fail client-side.
+      if (!/^(EGM-\d{4}-\d{6}|PFM-\d{6}-\d{4})$/.test(caseNo)) { set({ trackError: 'invalid' }); return; }
+      set({ trackLoading: true, trackError: null, trackResult: null });
+      try {
+        const res = await api.trackCase(caseNo);
+        set({ trackLoading: false, trackResult: res || null, trackError: res ? null : 'notfound' });
+      } catch {
+        set({ trackLoading: false, trackError: 'notfound' });
+      }
+    },
+
     // Overlays / demo controls
-    resetToHome: () => set({ screen: 'home', stack: [], selectedSlot: null, channel: null, paid: false, paying: false, reportStage: 'form', reportCat: null, reportDesc: '' }),
+    resetToHome: () => set({ screen: 'home', stack: [], selectedSlot: null, channel: null, paid: false, paying: false, reportStage: 'form', reportCat: null, reportDesc: '', trackCaseNo: '', trackResult: null, trackError: null }),
     toggleDemo: () => set((p) => ({ showDemo: !p.showDemo })),
     toggleEmergency: () => set((p) => ({ emergency: !p.emergency })),
     triggerTimeout: () => set({ showDemo: false, showTimeout: true }),
@@ -373,6 +508,7 @@ export default function App() {
       {S.toast && <Toast msg={S.toast} icon={<Check size={16} />} />}
       {S.showTimeout && <TimeoutModal c={c} A={A} />}
       {S.showDemo && <DemoSheet c={c} S={S} A={A} />}
+      {S.showHospitalPicker && <HospitalSheet c={c} S={S} A={A} hospitals={HOSPITALS} />}
     </div>
   );
 }

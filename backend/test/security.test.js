@@ -175,6 +175,114 @@ test('security regression suite', async (t) => {
     assert.equal(messageAudits.length, 2);
   });
 
+  await t.test('patient replies write a reply + staff-ack pair, never persist the text, and are tenant-scoped', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const attacker = sign({ sub: 'pat_attacker' });
+
+    await request('/appointments', { token: owner, method: 'POST', body: { specialty: 'Cardiology' } });
+    const initial = await json(await request('/messages', { token: owner }));
+    const confirmation = initial.value[0];
+    assert.equal(confirmation.kind, 'confirmation');
+
+    // an attacker cannot reply to another patient's message thread
+    assert.equal((await request(`/messages/${confirmation.id}/reply`, {
+      token: attacker, method: 'POST', body: { text: 'not mine' },
+    })).status, 404);
+
+    // an empty body is rejected before anything is written
+    assert.equal((await request(`/messages/${confirmation.id}/reply`, {
+      token: owner, method: 'POST', body: { text: '' },
+    })).status, 400);
+
+    const replied = await json(await request(`/messages/${confirmation.id}/reply`, {
+      token: owner, method: 'POST', body: { text: 'When should I arrive?' },
+    }));
+    assert.equal(replied.response.status, 201);
+    assert.equal(replied.value.reply.kind, 'reply_sent');
+    assert.equal(replied.value.reply.meta.inReplyTo, confirmation.id);
+    assert.equal(replied.value.ack.kind, 'staff_ack');
+    assert.equal(replied.value.ack.meta.inReplyTo, confirmation.id);
+    // the reply text itself must never come back in the response or be persisted
+    assert.equal(JSON.stringify(replied.value).includes('When should I arrive'), false);
+
+    const stored = await store.findAll(COLLECTIONS.MESSAGES);
+    const storedReply = stored.find((m) => m.id === replied.value.reply.id);
+    assert.equal(storedReply.text, undefined);
+    assert.equal(storedReply.body, undefined);
+
+    const thread = await json(await request('/messages', { token: owner }));
+    assert.equal(thread.value.length, 3); // confirmation + reply_sent + staff_ack
+
+    // replying to a nonexistent message id is a 404, not a 500
+    assert.equal((await request('/messages/msg_doesnotexist/reply', {
+      token: owner, method: 'POST', body: { text: 'hi' },
+    })).status, 404);
+  });
+
+  await t.test('PATCH benefits: unknown key does not reflect raw input into the response message', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    // A rejected key must NOT surface the raw URL segment in the error's `message` field —
+    // otherwise a caller can steer the message text by crafting the path. The value may
+    // appear in `details` (that's typed developer data), but the top-level message must be static.
+    const marker = '<img-onerror-alert>';
+    const res = await json(await request(`/patients/me/benefits/${encodeURIComponent(marker)}`, {
+      token: owner, method: 'PATCH',
+    }));
+    assert.equal(res.response.status, 400);
+    assert.equal(res.value.error.message, 'Unsupported benefit');
+    assert.equal(res.value.error.message.includes(marker), false);
+  });
+
+  await t.test('PATCH benefits: rate-limited per user (spam does not overwhelm the store)', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const statuses = [];
+    for (let i = 0; i < 22; i += 1) {
+      statuses.push((await request('/patients/me/benefits/philhealth', { token: owner, method: 'PATCH' })).status);
+    }
+    // First 20 succeed (200), then the limiter kicks in with 429s. No 5xx.
+    assert.equal(statuses.filter((s) => s === 200).length, 20);
+    assert.ok(statuses.slice(20).every((s) => s === 429), `expected 429s after the 20th request; got ${statuses.slice(20).join(',')}`);
+  });
+
+  await t.test('POST /payments rejects a cross-tenant appointmentId (no misattribution)', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const attacker = sign({ sub: 'pat_attacker' });
+
+    // Owner books an appointment — attacker tries to attach a payment to it.
+    const booked = await json(await request('/appointments', {
+      token: owner, method: 'POST', body: { specialty: 'Cardiology' },
+    }));
+    const ownersApptId = booked.value.appointment.id;
+
+    // Cross-tenant attach must be rejected (404 to avoid disclosing appointment existence),
+    // and no payment row should be persisted for that attacker.
+    const attempt = await request('/payments', {
+      token: attacker, method: 'POST',
+      body: { billAmount: 300, appointmentId: ownersApptId },
+    });
+    assert.equal(attempt.status, 404);
+    const attackerPayments = await store.findAll(COLLECTIONS.PAYMENTS, (p) => p.patientId === 'pat_attacker');
+    assert.equal(attackerPayments.length, 0);
+
+    // Owner's own bill with their own appointmentId still succeeds, with the linkage stored.
+    const ok = await json(await request('/payments', {
+      token: owner, method: 'POST',
+      body: { billAmount: 300, appointmentId: ownersApptId },
+    }));
+    assert.equal(ok.response.status, 201);
+    assert.equal(ok.value.appointmentId, ownersApptId);
+
+    // A completely made-up appointmentId (matches the regex but doesn't exist) is also 404.
+    assert.equal((await request('/payments', {
+      token: owner, method: 'POST',
+      body: { billAmount: 300, appointmentId: 'apt_does_not_exist_anywhere' },
+    })).status, 404);
+  });
+
   await t.test('triage symptoms and report narratives are encrypted at rest', async () => {
     const ownerId = await resetWithPatients();
     const owner = sign({ sub: ownerId });
