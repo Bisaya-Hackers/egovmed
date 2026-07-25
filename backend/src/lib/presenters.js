@@ -1,4 +1,5 @@
 'use strict';
+const { SUPPORTED_BENEFIT_KEYS } = require('../services/paymentService');
 
 /** Minimum patient shape safe to return to the citizen client. */
 const publicPatient = (p) => ({
@@ -13,11 +14,7 @@ const publicPatient = (p) => ({
   phone: p.phone,
   nationality: p.nationality,
   identityVerified: !!p.identityVerified,
-  benefits: {
-    philhealth: !!p.benefits?.philhealth?.active,
-    whiteCard: !!p.benefits?.whiteCard?.active,
-    sss: !!p.benefits?.sss?.active,
-  },
+  benefits: Object.fromEntries(SUPPORTED_BENEFIT_KEYS.map((key) => [key, !!p.benefits?.[key]?.active])),
 });
 
 module.exports = { publicPatient };
