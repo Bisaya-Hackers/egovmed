@@ -2,7 +2,7 @@ import { ScreenHeader, Btn } from '../components/ui.jsx';
 import { Shield, Check } from '../components/Icons.jsx';
 import { CONSENT_POINTS } from '../i18n/dict.js';
 
-export default function Consent({ c, lang, A }) {
+export default function Consent({ c, lang, S, A }) {
   return (
     <div className="screen">
       <ScreenHeader onBack={A.back} step={3} label={c.stepVerify} />
@@ -10,7 +10,7 @@ export default function Consent({ c, lang, A }) {
         <Shield size={28} />
       </div>
       <h1 className="h1" data-stagger style={{ marginTop: 16 }}>{c.consentTitle}</h1>
-      <p className="sub" data-stagger>{c.consentSub}</p>
+      <p className="sub" data-stagger>{c.consentSub(S.hospital)}</p>
 
       <div className="card" data-stagger style={{ marginTop: 18 }}>
         <div className="stack">

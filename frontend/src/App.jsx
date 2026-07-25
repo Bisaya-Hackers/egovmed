@@ -309,7 +309,13 @@ export default function App() {
     continueTriage: () => A.go('consent'),
 
     // Consent + Face Liveness (National ID eVerify)
-    declineConsent: () => A.back(),
+    // "Not now" means declining verification altogether — you can't book without it, so
+    // stepping back to Triage would just loop you right back into this same screen.
+    // Exit the flow entirely instead.
+    declineConsent: () => {
+      A.resetToHome();
+      toast(S.lang === 'tl' ? 'Kailangan ang pag-verify para makapag-book ng appointment' : "You'll need to verify your identity to book an appointment");
+    },
     acceptConsent: async () => {
       set((p) => ({ screen: 'liveness', stack: [...p.stack, 'consent'], liveness: 'capturing', flowError: null }));
       try {
