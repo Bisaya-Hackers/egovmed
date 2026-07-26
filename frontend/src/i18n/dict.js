@@ -221,6 +221,10 @@ function randomTime() {
 }
 // Generates a fresh set of plausible-looking appointment slots (used so the
 // "Choose a time" list doesn't show the exact same demo data on every visit).
+// Each slot is [label, dept, disabled, scheduledForISO] — the 4th element is a real
+// date/time (today + dayIdx, at the picked hour/minute) so a booking can actually tell
+// the backend when it's for, which is what makes the "appointment upcoming" reminder
+// notification (see App.jsx's reminder effect) fire correctly instead of never firing.
 export function randomSlots(lang, dept) {
   const days = SLOT_DAYS[lang] || SLOT_DAYS.en;
   const seen = new Set();
@@ -235,7 +239,12 @@ export function randomSlots(lang, dept) {
   }
   picks.sort((a, b) => (a.dayIdx - b.dayIdx) || (a.minutesFromMidnight - b.minutesFromMidnight));
   const disabledAt = Math.floor(Math.random() * picks.length);
-  return picks.map((p, i) => [`${days[p.dayIdx]} · ${p.label}`, dept, i === disabledAt]);
+  return picks.map((p, i) => {
+    const when = new Date();
+    when.setDate(when.getDate() + p.dayIdx);
+    when.setHours(Math.floor(p.minutesFromMidnight / 60), p.minutesFromMidnight % 60, 0, 0);
+    return [`${days[p.dayIdx]} · ${p.label}`, dept, i === disabledAt, when.toISOString()];
+  });
 }
 export const RECORDS = {
   en: [['Complete Blood Count', '12 Jun 2026', 'St. Luke’s Medical Center'], ['Lipid Panel', '03 May 2026', 'Makati Medical Center'], ['ECG Report', '21 Apr 2026', 'Philippine Heart Center']],

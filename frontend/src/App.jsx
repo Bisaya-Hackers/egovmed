@@ -432,9 +432,11 @@ export default function App() {
       if (!ready.length || S.booking) return;
       set({ booking: true });
       const bookOne = async (b) => {
-        const slotLabel = b.slots[b.selectedSlot][0];
+        const slot = b.slots[b.selectedSlot];
+        const slotLabel = slot[0];
+        const scheduledFor = slot[3] || undefined;
         const triageId = S.triage?.specialty === b.specialty ? S.triage?.id : undefined;
-        const [res] = await Promise.all([tryApi(api.book(b.specialty, S.hospital, undefined, triageId)), delay(1200)]);
+        const [res] = await Promise.all([tryApi(api.book(b.specialty, S.hospital, scheduledFor, triageId)), delay(1200)]);
         const appt = res?.appointment;
         const refNo = appt ? makeRefNo(appt.hospital || 'PGH', appt.queueNumber, appt.id || appt.queueNumber, b.specialty) : null;
         return { specialty: b.specialty, slotLabel, appt, refNo };
