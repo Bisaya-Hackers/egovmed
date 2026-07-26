@@ -19,6 +19,7 @@ import Payment from './screens/Payment.jsx';
 import Payments from './screens/Payments.jsx';
 import Records from './screens/Records.jsx';
 import Messages from './screens/Messages.jsx';
+import Notifications from './screens/Notifications.jsx';
 import Account from './screens/Account.jsx';
 import Report from './screens/Report.jsx';
 import Tokens from './screens/Tokens.jsx';
@@ -39,6 +40,7 @@ const initial = () => ({
   hospital: CONST.hospital, showHospitalPicker: false,
   channel: null, paying: false, paid: false, paymentStatus: null,
   messages: [], unreadMessages: 0,
+  notifications: [], unreadNotifications: 0,
   reportStage: 'form', reportCat: null, reportDesc: '', caseNo: CONST.caseNo,
   trackCaseNo: '', trackLoading: false, trackError: null, trackResult: null,
   showDemo: false, showTimeout: false, toast: null,
@@ -47,8 +49,10 @@ const initial = () => ({
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const tryApi = async (p) => { try { return await p; } catch { return null; } };
 
-const SCREENS = { signin: SignIn, home: Home, symptom: Symptom, triage: Triage, consent: Consent, liveness: Liveness, book: Book, confirm: Confirm, payment: Payment, payments: Payments, records: Records, messages: Messages, account: Account, report: Report, tokens: Tokens };
-const NAV_SCREENS = new Set(['home', 'records', 'messages', 'account']);
+const SCREENS = { signin: SignIn, home: Home, symptom: Symptom, triage: Triage, consent: Consent, liveness: Liveness, book: Book, confirm: Confirm, payment: Payment, payments: Payments, records: Records, messages: Messages, notifications: Notifications, account: Account, report: Report, tokens: Tokens };
+// Notifications isn't a BottomNav destination itself (it's reached via the bell), but it's a
+// peer to Messages/Records/Account, so keep the nav visible while it's open too.
+const NAV_SCREENS = new Set(['home', 'records', 'messages', 'account', 'notifications']);
 
 export default function App() {
   const [S, setS] = useState(initial);
@@ -86,7 +90,9 @@ export default function App() {
 
   // Reminders normally arrive server-side over SMS on a schedule, which doesn't fire in this
   // demo. Synthesize an in-app "appointment coming up" notification the first time we see an
-  // active appointment land inside the reminder window, so the bell/Messages reflect it too.
+  // active appointment land inside the reminder window. This is a local-only stand-in — kept
+  // out of `messages` (real eMessage/SMS delivery history) and in `notifications` instead, so
+  // it's never confused with an actual server-sent 'reminder' SMS.
   useEffect(() => {
     const REMINDER_WINDOW_DAYS = 3;
     const due = S.appointments.filter((a) => {
@@ -96,13 +102,13 @@ export default function App() {
     });
     if (!due.length) return;
     const notes = due.map((a) => ({
-      id: 'local_reminder_' + a.id, kind: 'reminder', status: 'delivered', channel: 'in_app', provider: 'local',
+      id: 'local_reminder_' + a.id, kind: 'appointment_upcoming', status: 'delivered', channel: 'in_app', provider: 'local',
       createdAt: new Date().toISOString(),
       meta: { specialty: a.specialty, hospital: a.hospital, queueNumber: a.queueNumber, daysUntil: Math.floor((new Date(a.scheduledFor).getTime() - Date.now()) / 86400000) },
     }));
     set((p) => ({
-      messages: [...notes, ...p.messages],
-      unreadMessages: p.unreadMessages + notes.length,
+      notifications: [...notes, ...p.notifications],
+      unreadNotifications: p.unreadNotifications + notes.length,
       remindedApptIds: [...p.remindedApptIds, ...due.map((a) => a.id)],
     }));
   }, [S.appointments, S.remindedApptIds, set]);
@@ -218,8 +224,8 @@ export default function App() {
           set({ paying: false, paid, paymentStatus: status, flowError: paid ? null : `Payment status: ${status || 'pending'}` });
           if (paid) {
             set((p) => ({
-              messages: [{ id: `local_payment_confirmed_${Date.now()}`, kind: 'payment_confirmed', status: 'delivered', channel: 'in_app', provider: 'local', createdAt: new Date().toISOString(), meta: { apptId: pendingApptId || null } }, ...p.messages],
-              unreadMessages: p.unreadMessages + 1,
+              notifications: [{ id: `local_payment_confirmed_${Date.now()}`, kind: 'payment_confirmed', status: 'delivered', channel: 'in_app', provider: 'local', createdAt: new Date().toISOString(), meta: { apptId: pendingApptId || null } }, ...p.notifications],
+              unreadNotifications: p.unreadNotifications + 1,
             }));
           }
           await syncPatientState();
@@ -248,7 +254,11 @@ export default function App() {
   const A = {
     setLang: (l) => set({ lang: l }),
     cycleText: () => set((p) => ({ textScale: (p.textScale + 1) % 3 })),
-    go: (screen) => set((p) => ({ screen, stack: [...p.stack, p.screen], ...(screen === 'messages' ? { unreadMessages: 0 } : {}) })),
+    go: (screen) => set((p) => ({
+      screen, stack: [...p.stack, p.screen],
+      ...(screen === 'messages' ? { unreadMessages: 0 } : {}),
+      ...(screen === 'notifications' ? { unreadNotifications: 0 } : {}),
+    })),
     back: () => set((p) => { const k = [...p.stack]; const prev = k.pop() || 'home'; return { screen: prev, stack: k }; }),
     toast,
 
@@ -469,15 +479,14 @@ export default function App() {
       return res;
     },
     // Record uploads, benefit activation, payment receipts, and report filing don't hit
-    // eMessage/SMS — so surface a local, in-app-only notification instead. Same shape as a
-    // server message so Messages.jsx renders it identically; it just never round-trips to the
-    // backend or a real channel.
+    // eMessage/SMS — they're in-app-only pings, so they live in `notifications`, a separate
+    // feed from `messages` (which stays a pure mirror of real eMessage/SMS delivery history).
     pushNotification: (kind, meta) => {
       const note = {
         id: `local_${kind}_${Date.now()}`, kind, status: 'delivered', channel: 'in_app', provider: 'local',
         createdAt: new Date().toISOString(), meta,
       };
-      set((p) => ({ messages: [note, ...p.messages], unreadMessages: p.unreadMessages + 1 }));
+      set((p) => ({ notifications: [note, ...p.notifications], unreadNotifications: p.unreadNotifications + 1 }));
     },
     notifyRecordUploaded: (saved) => A.pushNotification('record_uploaded', { title: saved?.title || saved?.name }),
     notifyBenefitAdded: (label) => A.pushNotification('benefit_added', { title: label }),
@@ -539,9 +548,9 @@ export default function App() {
           <button className={'iconbtn' + (S.textScale ? ' active' : '')} onClick={A.cycleText} aria-label={c.textSize} title={c.textSize}>AA</button>
           <button className="iconbtn" onClick={A.toggleDemo} aria-label="Demo controls"><Gear size={17} /></button>
           {S.screen === 'home' && (
-            <button className="iconbtn" onClick={() => A.go('messages')} aria-label={c.notifications} style={{ position: 'relative' }}>
+            <button className="iconbtn" onClick={() => A.go('notifications')} aria-label={c.notifications} style={{ position: 'relative' }}>
               <Bell size={17} />
-              {S.unreadMessages > 0 && (
+              {S.unreadNotifications > 0 && (
                 <span style={{ position: 'absolute', top: 6, right: 7, width: 7, height: 7, borderRadius: 999, background: 'var(--red)' }} />
               )}
             </button>
