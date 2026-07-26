@@ -192,6 +192,37 @@ export const SLOTS = {
   en: [['Today · 2:30 PM', 'Cardiology', false], ['Tomorrow · 9:00 AM', 'Cardiology', false], ['Tomorrow · 11:15 AM', 'Cardiology', true], ['Fri · 3:45 PM', 'Cardiology', false]],
   tl: [['Ngayon · 2:30 PM', 'Cardiology', false], ['Bukas · 9:00 AM', 'Cardiology', false], ['Bukas · 11:15 AM', 'Cardiology', true], ['Biyernes · 3:45 PM', 'Cardiology', false]],
 };
+// Day labels used when generating a fresh, randomized batch of slots (index 0/1 stay
+// "Today"/"Tomorrow", further-out days cycle through short weekday names).
+const SLOT_DAYS = {
+  en: ['Today', 'Tomorrow', 'Wed', 'Thu', 'Fri', 'Sat'],
+  tl: ['Ngayon', 'Bukas', 'Miy', 'Huw', 'Biy', 'Sab'],
+};
+function randomTime() {
+  const hour = 8 + Math.floor(Math.random() * 9); // 8am – 4pm start hours
+  const minute = [0, 15, 30, 45][Math.floor(Math.random() * 4)];
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  const period = hour < 12 ? 'AM' : 'PM';
+  return { minutesFromMidnight: hour * 60 + minute, label: `${h12}:${String(minute).padStart(2, '0')} ${period}` };
+}
+// Generates a fresh set of plausible-looking appointment slots (used so the
+// "Choose a time" list doesn't show the exact same demo data on every visit).
+export function randomSlots(lang, dept) {
+  const days = SLOT_DAYS[lang] || SLOT_DAYS.en;
+  const seen = new Set();
+  const picks = [];
+  while (picks.length < 4) {
+    const dayIdx = Math.floor(Math.random() * 4); // keep within "Today" .. 4 days out
+    const t = randomTime();
+    const key = `${dayIdx}-${t.minutesFromMidnight}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    picks.push({ dayIdx, ...t });
+  }
+  picks.sort((a, b) => (a.dayIdx - b.dayIdx) || (a.minutesFromMidnight - b.minutesFromMidnight));
+  const disabledAt = Math.floor(Math.random() * picks.length);
+  return picks.map((p, i) => [`${days[p.dayIdx]} · ${p.label}`, dept, i === disabledAt]);
+}
 export const RECORDS = {
   en: [['Complete Blood Count', '12 Jun 2026', 'St. Luke’s Medical Center'], ['Lipid Panel', '03 May 2026', 'Makati Medical Center'], ['ECG Report', '21 Apr 2026', 'Philippine Heart Center']],
   tl: [['Complete Blood Count', '12 Hun 2026', 'St. Luke’s Medical Center'], ['Lipid Panel', '03 Mayo 2026', 'Makati Medical Center'], ['ECG Report', '21 Abr 2026', 'Philippine Heart Center']],

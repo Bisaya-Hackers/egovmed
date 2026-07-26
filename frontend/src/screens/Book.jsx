@@ -3,7 +3,7 @@ import { Hospital, Check } from '../components/Icons.jsx';
 import { SLOTS, CONST } from '../i18n/dict.js';
 
 export default function Book({ c, lang, S, A }) {
-  const slots = SLOTS[lang];
+  const slots = S.slots || SLOTS[lang];
   const dept = S.triage?.specialty || CONST.dept;
 
   return (
