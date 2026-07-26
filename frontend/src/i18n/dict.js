@@ -253,8 +253,8 @@ export const TRACKNOTE = {
   tl: ['Ngayon lang', 'Tantiyang 24 oras', '-', '-'],
 };
 export const CHIPS = {
-  en: ['Fever', 'Cough', 'Chest pain', 'Headache', 'Dizziness'],
-  tl: ['Lagnat', 'Ubo', 'Sakit ng dibdib', 'Sakit ng ulo', 'Hilo'],
+  en: ['Fever', 'Cough', 'Chest pain', 'Headache', 'Dizziness', 'Stomach pain', 'Skin rash'],
+  tl: ['Lagnat', 'Ubo', 'Sakit ng dibdib', 'Sakit ng ulo', 'Hilo', 'Sakit ng tiyan', 'Pantal sa balat'],
 };
 export const CONSENT_POINTS = {
   en: ['We check your National ID with PhilSys eVerify.', 'Only your name and ID status are shared with PGH.', 'Your symptoms stay private to your care team.'],

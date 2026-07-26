@@ -141,7 +141,7 @@ function ruleBasedTriage(text = '') {
 
   if (has('chest pain', 'sakit ng dibdib', 'palpitation', 'kabog')) specialty = 'Cardiology';
   else if (has('hindi makahinga', 'ubo', 'cough', 'hika', 'asthma', 'breathing')) specialty = 'Pulmonology';
-  else if (has('sakit ng ulo', 'headache', 'dizzy', 'hilo', 'seizure', 'numbness', 'manhid')) specialty = 'Neurology';
+  else if (has('sakit ng ulo', 'headache', 'dizz', 'hilo', 'seizure', 'numbness', 'manhid')) specialty = 'Neurology';
   else if (has('tiyan', 'abdomen', 'stomach', 'suka', 'vomit', 'diarrhea', 'lbm')) specialty = 'Gastroenterology';
   else if (has('buto', 'bone', 'fracture', 'bali', 'joint', 'kasukasuan')) specialty = 'Orthopedics';
   else if (has('bata', 'child', 'anak', 'infant', 'sanggol')) specialty = 'Pediatrics';
