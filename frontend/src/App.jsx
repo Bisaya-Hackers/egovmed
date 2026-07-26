@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
-import { DICT, CONST, CHANNELS, HOSPITALS } from './i18n/dict.js';
+import { DICT, CONST, CHANNELS, HOSPITALS, randomSlots } from './i18n/dict.js';
 import { api, getToken, setToken } from './lib/api.js';
 import { fallbackTriage } from './lib/triageFallback.js';
 import { makeRefNo } from './lib/refNo.js';
@@ -34,6 +34,7 @@ const initial = () => ({
   emergency: false, liveness: 'idle', livenessSessionId: null,
   triage: null,
   slotsLoading: false, selectedSlot: null, booking: false, booked: false, slotLabel: '', refNo: makeRefNo(CONST.hospital),
+  slots: null,
   appointments: [], payingApptId: null, remindedApptIds: [],
   hospital: CONST.hospital, showHospitalPicker: false,
   channel: null, paying: false, paid: false, paymentStatus: null,
@@ -368,13 +369,17 @@ export default function App() {
     retryLiveness: () => A.acceptConsent(),
 
     // Booking + eMessage
-    goBook: () => { A.go('book'); set({ slotsLoading: true, selectedSlot: null }); after(1100, () => set({ slotsLoading: false })); },
+    goBook: () => {
+      A.go('book'); set({ slotsLoading: true, selectedSlot: null });
+      after(1100, () => set((p) => ({ slotsLoading: false, slots: randomSlots(p.lang, p.triage?.specialty || CONST.dept) })));
+    },
     selectSlot: (i) => set({ selectedSlot: i }),
     toggleHospitalPicker: () => set((p) => ({ showHospitalPicker: !p.showHospitalPicker })),
-    // Switching hospitals re-queries slots for that facility (mocked with the same short delay as goBook).
+    // Switching hospitals re-queries slots for that facility (mocked with the same short delay as goBook),
+    // and rolls a brand new randomized batch of times so the list doesn't look static/demo-y.
     setHospital: (name) => {
       set({ hospital: name, showHospitalPicker: false, selectedSlot: null, slotsLoading: true });
-      after(900, () => set({ slotsLoading: false }));
+      after(900, () => set((p) => ({ slotsLoading: false, slots: randomSlots(p.lang, p.triage?.specialty || CONST.dept) })));
     },
     doBook: async (slotLabel) => {
       if (S.selectedSlot == null || S.booking) return;
