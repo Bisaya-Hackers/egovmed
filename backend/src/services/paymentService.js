@@ -36,15 +36,17 @@ function computeBenefits(billAmount, benefits = {}) {
   const applied = [];
   // Highest-impact programs first (e.g. White Card can fully cover) so more generous benefits
   // aren't crowded out by smaller ones when a patient has several active at once.
+  //
+  // Every *active* benefit is listed here, even ones that end up covering ₱0 because an
+  // earlier, higher-priority benefit already zeroed out the remaining balance. We used to
+  // `break` out of the loop as soon as `remaining` hit 0, which silently dropped any
+  // lower-priority benefit a patient had switched on from the "Benefits Applied" list — making
+  // it look like the app forgot they ticked it, when really it just had nothing left to cover.
   for (const key of BENEFIT_ORDER) {
-    if (remaining <= 0) break;
-    if (benefits[key]?.active) {
-      const covered = round2(Math.min(remaining, billAmount * BENEFIT_RULES[key].rate));
-      if (covered > 0) {
-        applied.push({ program: key, label: BENEFIT_RULES[key].label, amount: covered, mock: true });
-        remaining = round2(remaining - covered);
-      }
-    }
+    if (!benefits[key]?.active) continue;
+    const covered = round2(Math.min(remaining, billAmount * BENEFIT_RULES[key].rate));
+    applied.push({ program: key, label: BENEFIT_RULES[key].label, amount: covered, mock: true });
+    remaining = round2(remaining - covered);
   }
   return { applied, coveredTotal: round2(billAmount - remaining), balance: Math.max(0, round2(remaining)), ...mockMeta };
 }

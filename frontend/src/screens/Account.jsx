@@ -64,7 +64,7 @@ function ContactRow({ field, value, placeholder, label, hint, invalidMsg, c, onS
     return (
       <div>
         <div className="overline" style={{ marginBottom: 6 }}>{label}</div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'stretch' }}>
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -73,14 +73,16 @@ function ContactRow({ field, value, placeholder, label, hint, invalidMsg, c, onS
             type={field === 'email' ? 'email' : 'tel'}
             inputMode={field === 'email' ? 'email' : 'tel'}
             autoFocus
-            style={{ flex: 1, borderRadius: 12, border: '1.5px solid var(--line)', padding: '10px 13px', font: 'inherit' }}
+            style={{ flex: '1 1 160px', minWidth: 0, borderRadius: 12, border: '1.5px solid var(--line)', padding: '10px 13px', font: 'inherit' }}
           />
-          <button onClick={submit} disabled={saving} className="chip add" style={{ fontWeight: 800, padding: '0 14px', flex: 'none' }}>
-            {saving ? c.contactSaving : c.contactSave}
-          </button>
-          <button onClick={() => setEditing(null)} disabled={saving} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontWeight: 700, padding: '0 10px' }}>
-            {c.contactCancel}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
+            <button onClick={submit} disabled={saving} className="chip add" style={{ fontWeight: 800, padding: '0 14px', flex: 'none' }}>
+              {saving ? c.contactSaving : c.contactSave}
+            </button>
+            <button onClick={() => setEditing(null)} disabled={saving} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontWeight: 700, padding: '0 10px', flex: 'none', whiteSpace: 'nowrap' }}>
+              {c.contactCancel}
+            </button>
+          </div>
         </div>
         {err && <p role="alert" style={{ color: 'var(--red)', margin: '6px 0 0', fontSize: '0.85em' }}>{err}</p>}
       </div>
