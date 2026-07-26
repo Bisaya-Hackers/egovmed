@@ -53,6 +53,7 @@ export const api = {
   // rejects anything else via zod .strict() — names and DOB stay locked to the SSO source.
   updateContact: (patch) => req('/patients/me', { method: 'PATCH', body: patch }),
   activateBenefit: (key) => req(`/patients/me/benefits/${encodeURIComponent(key)}`, { method: 'PATCH' }),
+  removeBenefit: (key) => req(`/patients/me/benefits/${encodeURIComponent(key)}`, { method: 'DELETE' }),
   // eGovAI triage
   triage: (text, language) => req('/triage', { method: 'POST', body: { text, language: language === 'tl' ? 'tl' : 'en' } }),
   // National ID eVerify + Face Liveness

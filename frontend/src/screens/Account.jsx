@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ScreenHeader, Btn } from '../components/ui.jsx';
-import { Check, ShieldTick, User, Plus, ChevronRight } from '../components/Icons.jsx';
+import { Check, ShieldTick, User, Plus, ChevronRight, Trash } from '../components/Icons.jsx';
 import { api } from '../lib/api.js';
 import rosaAvatar from '../assets/home-avatar-rosa.png';
 
@@ -102,13 +102,32 @@ function ContactRow({ field, value, placeholder, label, hint, invalidMsg, c, onS
   );
 }
 
-function BenefitRow({ label, active, c }) {
+function BenefitRow({ label, active, removable, busy, onRemove, c }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-      <span style={{ fontWeight: 700 }}>{label}</span>
-      <span className={active ? 'pill green' : 'pill'} style={active ? undefined : { background: 'var(--line-2)', color: 'var(--muted)' }}>
-        {active && <Check size={13} />}{active ? c.benefitOn : c.benefitOff}
-      </span>
+      <span style={{ fontWeight: 700, minWidth: 0, overflowWrap: 'anywhere' }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
+        {removable && (
+          <button
+            onClick={onRemove}
+            disabled={busy}
+            aria-label={`${c.benefitRemove} ${label}`}
+            className="benefit-remove-btn"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 30, height: 30, flex: 'none', borderRadius: '50%', border: 'none',
+              background: 'var(--red-50)', color: 'var(--red)',
+              opacity: busy ? 0.5 : 1, cursor: busy ? 'default' : 'pointer',
+              transition: 'background .15s, transform .1s',
+            }}
+          >
+            {busy ? <span className="spinner" style={{ width: 13, height: 13 }} aria-hidden="true" /> : <Trash size={15} />}
+          </button>
+        )}
+        <span className={active ? 'pill green' : 'pill'} style={active ? undefined : { background: 'var(--line-2)', color: 'var(--muted)' }}>
+          {active && <Check size={13} />}{active ? c.benefitOn : c.benefitOff}
+        </span>
+      </div>
     </div>
   );
 }
@@ -137,6 +156,7 @@ export default function Account({ c, S, A }) {
   const [error, setError] = useState(false);
   const [showAddBenefit, setShowAddBenefit] = useState(false);
   const [addingKey, setAddingKey] = useState(null);
+  const [removingKey, setRemovingKey] = useState(null);
   const [editingField, setEditingField] = useState(null); // 'phone' | 'email' | null
   const [savingContact, setSavingContact] = useState(false);
 
@@ -177,6 +197,20 @@ export default function Account({ c, S, A }) {
       A.toast(S.lang === 'tl' ? 'Hindi maidagdag ang benepisyo' : 'Couldn\u2019t add that benefit');
     } finally {
       setAddingKey(null);
+    }
+  };
+
+  const handleRemoveBenefit = async (key) => {
+    if (removingKey) return;
+    setRemovingKey(key);
+    try {
+      const updated = await api.removeBenefit(key);
+      setPatient(updated);
+      A.toast(S.lang === 'tl' ? 'Inalis ang benepisyo' : 'Benefit removed');
+    } catch {
+      A.toast(S.lang === 'tl' ? 'Hindi maalis ang benepisyo' : 'Couldn\u2019t remove that benefit');
+    } finally {
+      setRemovingKey(null);
     }
   };
 
@@ -246,7 +280,14 @@ export default function Account({ c, S, A }) {
             {activeBenefits.length > 0 ? activeBenefits.map((b, i) => (
               <div key={b.key}>
                 {i > 0 && <div className="rowsep" />}
-                <BenefitRow label={b.label} active c={c} />
+                <BenefitRow
+                  label={b.label}
+                  active
+                  c={c}
+                  removable={showAddBenefit}
+                  busy={removingKey === b.key}
+                  onRemove={() => handleRemoveBenefit(b.key)}
+                />
               </div>
             )) : (
               <p className="sub" style={{ margin: 0 }}>{c.benefitsNone}</p>
