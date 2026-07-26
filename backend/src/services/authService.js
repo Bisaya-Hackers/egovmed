@@ -4,6 +4,7 @@ const { getStore, COLLECTIONS } = require('../store');
 const { sign } = require('../lib/jwt');
 const { sha256Hex } = require('../lib/crypto');
 const { publicPatient } = require('../lib/presenters');
+const { env } = require('../config/env');
 
 // Deterministic patient id from the eGov uniqid → a concurrent first login can't create two rows.
 const patientIdFor = (egovSub) => 'pat_' + sha256Hex('egovsub:' + egovSub).slice(2, 22);
@@ -30,6 +31,9 @@ async function loginWithAccessToken(accessToken) {
 async function upsertAndIssue(profile) {
   const store = getStore();
   const now = new Date().toISOString();
+  // Only true when this login came from the mock eGovPH branch (config-driven, never
+  // client-controlled) — real live SSO logins always keep their history.
+  const isDemoPatient = env.egovph.mode !== 'live';
   let patient = await store.findOne(COLLECTIONS.PATIENTS, (p) => p.egovSub === profile.egovSub);
 
   const incoming = {
@@ -62,6 +66,21 @@ async function upsertAndIssue(profile) {
   }
 
   const token = sign({ sub: patient.id });
+  if (!isDemoPatient) return { token, patient: publicPatient(patient) };
+
+  // Mock/demo mode has no real citizen behind it — it's the same "Juan Dela Cruz" profile for
+  // every visitor of the deployed demo. Left alone, appointments/payments/messages booked by
+  // one demo session pile up forever in the shared KV store and bleed into the next person's
+  // session. Wipe just those three transactional collections (never PATIENTS or the seeded
+  // RECORDS/benefits) on every fresh mock login, so each demo run starts clean — the same
+  // "resets every time" experience the in-memory local store gives for free.
+  await Promise.all(
+    [COLLECTIONS.APPOINTMENTS, COLLECTIONS.PAYMENTS, COLLECTIONS.MESSAGES].map(async (collection) => {
+      const rows = await store.findAll(collection, (r) => r.patientId === patient.id);
+      await Promise.all(rows.map((r) => store.remove(collection, r.id)));
+    }),
+  );
+
   return { token, patient: publicPatient(patient) };
 }
 
