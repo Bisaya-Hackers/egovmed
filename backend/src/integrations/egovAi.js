@@ -103,7 +103,7 @@ function sanitize(parsed, text) {
     urgency = 'emergency';
     specialty = 'Emergency Medicine';
     redFlags = Array.from(new Set([...redFlags, ...floor.redFlags]));
-    recommendedAction = 'Proceed to ER immediately — seek immediate human medical assessment';
+    recommendedAction = 'Proceed to ER immediately: seek immediate human medical assessment';
   }
 
   const confidence = Number.isFinite(p.confidence) ? Math.min(1, Math.max(0, p.confidence)) : 0.6;
@@ -200,7 +200,7 @@ async function summarizeHistory({ records = [], triage = [] }) {
       const labLines = records.filter((r) => r.type === 'lab').slice(-8).map((r) => {
         const date = r.createdAt ? String(r.createdAt).slice(0, 10) : 'unknown date';
         const src = r.sourceFacility || 'unknown facility';
-        const note = r.summary ? ` — ${String(r.summary).slice(0, 160)}` : '';
+        const note = r.summary ? `: ${String(r.summary).slice(0, 160)}` : '';
         return `- ${r.title} at ${src} on ${date}${note}`;
       });
       const triageLines = triage.slice(-5).map((t) => {
@@ -247,7 +247,7 @@ function fallbackSummary(records, triage) {
   const sortedLabs = labs.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   sortedLabs.slice(0, 5).forEach((r) => {
     const when = r.createdAt ? String(r.createdAt).slice(0, 10) : '';
-    const note = r.summary ? ` — ${r.summary}` : '';
+    const note = r.summary ? `: ${r.summary}` : '';
     bullets.push(`${r.title} (${r.sourceFacility}${when ? ', ' + when : ''})${note}`);
   });
   if (labs.length > 5) bullets.push(`…and ${labs.length - 5} older lab${labs.length - 5 === 1 ? '' : 's'} on file.`);
@@ -259,7 +259,7 @@ function fallbackSummary(records, triage) {
     const mostCommon = specialties.reduce((acc, s) => (acc[s] = (acc[s] || 0) + 1, acc), {});
     const [topSpec, topCount] = Object.entries(mostCommon).sort((a, b) => b[1] - a[1])[0] || [];
     bullets.push(`Latest triage on ${String(last.createdAt || '').slice(0, 10)}: ${last.specialty || 'General Medicine'} / ${last.urgency || 'routine'}.`);
-    if (topCount >= 3 && topSpec) bullets.push(`Recurring routing to ${topSpec} (${topCount} of ${triage.length} triage visits) — worth a focused follow-up.`);
+    if (topCount >= 3 && topSpec) bullets.push(`Recurring routing to ${topSpec} (${topCount} of ${triage.length} triage visits), worth a focused follow-up.`);
   } else {
     bullets.push('No prior triage.');
   }
