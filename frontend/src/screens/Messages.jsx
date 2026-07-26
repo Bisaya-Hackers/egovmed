@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ScreenHeader, Btn } from '../components/ui.jsx';
-import { Bell, Chat, ChevronRight, FileUp } from '../components/Icons.jsx';
+import { Bell, Chat, ChevronRight, FileUp, ShieldCheck, Money, Flag } from '../components/Icons.jsx';
 import { CONST } from '../i18n/dict.js';
 
 const kindLabel = (kind, c) => ({
@@ -12,6 +12,9 @@ const kindLabel = (kind, c) => ({
   reply_sent: c.messageReplySent,
   staff_ack: c.messageStaffAck,
   record_uploaded: c.messageRecordUploaded,
+  benefit_added: c.messageBenefitAdded,
+  payment_confirmed: c.messagePaymentConfirmed,
+  report_filed: c.messageReportFiled,
 }[kind] || c.messageGeneric);
 
 // Message bodies aren't stored server-side (privacy rule — only delivery metadata is persisted),
@@ -47,6 +50,16 @@ function messageBody(m, lang, c) {
     case 'record_uploaded': {
       const title = meta.title || (isTl ? 'iyong rekord' : 'your record');
       return isTl ? `Na-save ang "${title}" sa iyong Records.` : `"${title}" was saved to your Records.`;
+    }
+    case 'benefit_added': {
+      const title = meta.title || (isTl ? 'Bagong benepisyo' : 'A benefit');
+      return isTl ? `Idinagdag ang ${title} sa iyong account.` : `${title} was added to your account.`;
+    }
+    case 'payment_confirmed':
+      return isTl ? 'Nakumpirma ang bayad mo. Ipinadala ang resibo sa SMS.' : 'Your payment was confirmed. Receipt texted to you.';
+    case 'report_filed': {
+      const caseNo = meta.caseNo ? ` (${meta.caseNo})` : '';
+      return isTl ? `Naisumite ang iyong report${caseNo}.` : `Your report was filed${caseNo}.`;
     }
     default:
       return isTl ? 'May bagong update ka mula sa eGovMed.' : 'You have a new update from eGovMed.';
@@ -210,6 +223,9 @@ export default function Messages({ c, lang, S, A }) {
             const isReminder = ['appointment_reminder', 'reminder'].includes(message.kind);
             const isReply = ['reply_sent', 'staff_ack'].includes(message.kind);
             const isUpload = message.kind === 'record_uploaded';
+            const isBenefit = message.kind === 'benefit_added';
+            const isPayment = message.kind === 'payment_confirmed';
+            const isReport = message.kind === 'report_filed';
             return (
               <button
                 key={message.id}
@@ -220,9 +236,17 @@ export default function Messages({ c, lang, S, A }) {
               >
                 <span
                   className="icirc"
-                  style={isReminder ? { background: 'var(--amber-50)', color: 'var(--amber)' } : isReply ? { background: 'var(--green-50)', color: 'var(--green)' } : isUpload ? { background: 'var(--blue-50)', color: 'var(--blue)' } : undefined}
+                  style={
+                    isReminder ? { background: 'var(--amber-50)', color: 'var(--amber)' }
+                      : isReply ? { background: 'var(--green-50)', color: 'var(--green)' }
+                      : isUpload ? { background: 'var(--blue-50)', color: 'var(--blue)' }
+                      : isBenefit ? { background: 'var(--green-50)', color: 'var(--green)' }
+                      : isPayment ? { background: 'var(--green-50)', color: 'var(--green)' }
+                      : isReport ? { background: 'var(--amber-50)', color: 'var(--amber)' }
+                      : undefined
+                  }
                 >
-                  {isReminder ? <Bell size={21} /> : isUpload ? <FileUp size={21} /> : <Chat size={21} />}
+                  {isReminder ? <Bell size={21} /> : isUpload ? <FileUp size={21} /> : isBenefit ? <ShieldCheck size={21} /> : isPayment ? <Money size={21} /> : isReport ? <Flag size={21} /> : <Chat size={21} />}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 800 }}>{kindLabel(message.kind, c)}</div>

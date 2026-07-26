@@ -216,6 +216,12 @@ export default function App() {
           const status = String(payment?.status || '').toLowerCase();
           const paid = ['paid', 'settled', 'success', 'successful', 'completed'].includes(status);
           set({ paying: false, paid, paymentStatus: status, flowError: paid ? null : `Payment status: ${status || 'pending'}` });
+          if (paid) {
+            set((p) => ({
+              messages: [{ id: `local_payment_confirmed_${Date.now()}`, kind: 'payment_confirmed', status: 'delivered', channel: 'in_app', provider: 'local', createdAt: new Date().toISOString(), meta: { apptId: pendingApptId || null } }, ...p.messages],
+              unreadMessages: p.unreadMessages + 1,
+            }));
+          }
           await syncPatientState();
           return;
         }
@@ -441,7 +447,10 @@ export default function App() {
             ? p.appointments.map((a) => (a.id === p.payingApptId ? { ...a, paid: true } : a))
             : p.appointments,
         }));
-        if (paid) toast(S.lang === 'tl' ? 'Ipinadala ang resibo sa SMS' : 'Receipt texted to you');
+        if (paid) {
+          toast(S.lang === 'tl' ? 'Ipinadala ang resibo sa SMS' : 'Receipt texted to you');
+          A.pushNotification('payment_confirmed', { amount, apptId: S.payingApptId });
+        }
       } catch (err) {
         set({ paying: false, flowError: err.message || 'Payment failed' });
       }
@@ -459,16 +468,19 @@ export default function App() {
       if (res?.ack) after(1000, () => set((p) => ({ messages: [res.ack, ...p.messages] })));
       return res;
     },
-    // Record uploads don't hit eMessage/SMS (no PHI leaves the device for this), so surface a
-    // local, in-app-only notification instead — same shape as a server message so Messages.jsx
-    // renders it identically, it just never round-trips to the backend or a real channel.
-    notifyRecordUploaded: (saved) => {
+    // Record uploads, benefit activation, payment receipts, and report filing don't hit
+    // eMessage/SMS — so surface a local, in-app-only notification instead. Same shape as a
+    // server message so Messages.jsx renders it identically; it just never round-trips to the
+    // backend or a real channel.
+    pushNotification: (kind, meta) => {
       const note = {
-        id: 'local_upload_' + (saved?.id || Date.now()), kind: 'record_uploaded', status: 'delivered', channel: 'in_app', provider: 'local',
-        createdAt: new Date().toISOString(), meta: { title: saved?.title || saved?.name },
+        id: `local_${kind}_${Date.now()}`, kind, status: 'delivered', channel: 'in_app', provider: 'local',
+        createdAt: new Date().toISOString(), meta,
       };
       set((p) => ({ messages: [note, ...p.messages], unreadMessages: p.unreadMessages + 1 }));
     },
+    notifyRecordUploaded: (saved) => A.pushNotification('record_uploaded', { title: saved?.title || saved?.name }),
+    notifyBenefitAdded: (label) => A.pushNotification('benefit_added', { title: label }),
 
     // Records + Report
     goRecords: () => A.go('records'),
@@ -480,6 +492,7 @@ export default function App() {
       set({ reportStage: 'filed' });
       const res = await tryApi(api.fileReport(catLabel, S.reportDesc));
       if (res?.caseNumber) set({ caseNo: res.caseNumber });
+      A.pushNotification('report_filed', { caseNo: res?.caseNumber || S.caseNo, category: catLabel });
     },
 
     // Check the status of a previously filed report (GET /reports/:caseNumber)

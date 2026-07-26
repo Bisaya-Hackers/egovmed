@@ -169,6 +169,8 @@ export default function Account({ c, S, A }) {
       const updated = await api.activateBenefit(key);
       setPatient(updated);
       A.toast(S.lang === 'tl' ? 'Idinagdag ang benepisyo' : 'Benefit added');
+      const label = BENEFIT_CATALOG.find((b) => b.key === key)?.label || key;
+      A.notifyBenefitAdded(label);
     } catch {
       A.toast(S.lang === 'tl' ? 'Hindi maidagdag ang benepisyo' : 'Couldn\u2019t add that benefit');
     } finally {
