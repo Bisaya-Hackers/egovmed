@@ -34,8 +34,11 @@ const initial = () => ({
   symptom: '', recording: false, recSec: 0, thinking: false,
   emergency: false, liveness: 'idle', livenessSessionId: null,
   triage: null,
-  slotsLoading: false, selectedSlot: null, booking: false, booked: false, slotLabel: '', refNo: makeRefNo(CONST.hospital),
-  slots: null,
+  booking: false, booked: false, slotLabel: '', refNo: makeRefNo(CONST.hospital),
+  // One entry per department being booked this session. Starts with just the triaged
+  // specialty; addBookingDept() lets the patient queue up additional departments
+  // (e.g. General Medicine + Cardiology) before confirming them together.
+  bookings: [], lastBooked: [],
   appointments: [], payingApptId: null, remindedApptIds: [],
   hospital: CONST.hospital, showHospitalPicker: false,
   channel: null, paying: false, paid: false, paymentStatus: null,
@@ -386,45 +389,80 @@ export default function App() {
 
     // Booking + eMessage
     goBook: () => {
-      A.go('book'); set({ slotsLoading: true, selectedSlot: null });
-      after(1100, () => set((p) => ({ slotsLoading: false, slots: randomSlots(p.lang, p.triage?.specialty || CONST.dept) })));
+      A.go('book');
+      const primary = S.triage?.specialty || CONST.dept;
+      set({ bookings: [{ specialty: primary, slots: null, slotsLoading: true, selectedSlot: null }] });
+      after(1100, () => set((p) => ({
+        bookings: p.bookings.map((b) => (b.specialty === primary ? { ...b, slotsLoading: false, slots: randomSlots(p.lang, b.specialty) } : b)),
+      })));
     },
-    selectSlot: (i) => set({ selectedSlot: i }),
+    selectBookingSlot: (specialty, i) => set((p) => ({
+      bookings: p.bookings.map((b) => (b.specialty === specialty ? { ...b, selectedSlot: i } : b)),
+    })),
+    // Lets a patient add a 2nd (or 3rd+) department to this same visit — e.g. General Medicine
+    // for a routine checkup plus Cardiology for a heart concern — so both get booked together.
+    addBookingDept: (specialty) => {
+      if (!specialty || S.bookings.some((b) => b.specialty === specialty)) return;
+      set((p) => ({ bookings: [...p.bookings, { specialty, slots: null, slotsLoading: true, selectedSlot: null }] }));
+      after(900, () => set((p) => ({
+        bookings: p.bookings.map((b) => (b.specialty === specialty ? { ...b, slotsLoading: false, slots: randomSlots(p.lang, specialty) } : b)),
+      })));
+    },
+    removeBookingDept: (specialty) => set((p) => ({
+      bookings: p.bookings.length > 1 ? p.bookings.filter((b) => b.specialty !== specialty) : p.bookings,
+    })),
     toggleHospitalPicker: () => set((p) => ({ showHospitalPicker: !p.showHospitalPicker })),
     // Switching hospitals re-queries slots for that facility (mocked with the same short delay as goBook),
-    // and rolls a brand new randomized batch of times so the list doesn't look static/demo-y.
+    // and rolls a brand new randomized batch of times for every queued department so the list
+    // doesn't look static/demo-y.
     setHospital: (name) => {
-      set({ hospital: name, showHospitalPicker: false, selectedSlot: null, slotsLoading: true });
-      after(900, () => set((p) => ({ slotsLoading: false, slots: randomSlots(p.lang, p.triage?.specialty || CONST.dept) })));
-    },
-    doBook: async (slotLabel) => {
-      if (S.selectedSlot == null || S.booking) return;
-      set({ booking: true });
-      const specialty = S.triage?.specialty || CONST.dept;
-      const [res] = await Promise.all([tryApi(api.book(specialty, S.hospital, undefined, S.triage?.id)), delay(1500)]);
-      const appt = res?.appointment;
-      const refNo = appt ? makeRefNo(appt.hospital || 'PGH', appt.queueNumber, appt.id || appt.queueNumber, specialty) : null;
-      // Optimistic confirmation bubble so Messages feels instant; A.loadMessages() below reconciles
-      // it with the real, server-persisted row (with its real msg_… id) a moment later.
-      const optimistic = {
-        id: 'local_' + Date.now(), kind: 'confirmation', status: 'sent', channel: 'sms', provider: 'mock',
-        createdAt: new Date().toISOString(), meta: { specialty, hospital: appt?.hospital || S.hospital, queueNumber: appt?.queueNumber },
-      };
-      // New card on Home in addition to the singular fields (which drive the Confirm screen
-      // right after this booking) — so a 2nd/3rd booking shows up alongside earlier ones
-      // instead of replacing them.
-      const newCard = appt ? {
-        id: appt.id, specialty, hospital: appt.hospital || S.hospital,
-        slotLabel, scheduledFor: appt.scheduledFor || null, refNo: refNo || makeRefNo(appt.hospital || S.hospital, appt.queueNumber, appt.id, specialty), queueNumber: appt.queueNumber, paid: false,
-        verified: S.liveness === 'verified',
-      } : null;
       set((p) => ({
-        booking: false, booked: true, slotLabel, refNo: refNo || p.refNo,
-        appointments: newCard ? [newCard, ...p.appointments.filter((a) => a.id !== newCard.id)] : p.appointments,
-        messages: [optimistic, ...p.messages], unreadMessages: p.unreadMessages + 1,
+        hospital: name, showHospitalPicker: false,
+        bookings: p.bookings.map((b) => ({ ...b, selectedSlot: null, slotsLoading: true })),
+      }));
+      after(900, () => set((p) => ({
+        bookings: p.bookings.map((b) => ({ ...b, slotsLoading: false, slots: randomSlots(p.lang, b.specialty) })),
+      })));
+    },
+    // Books every queued department that has a slot picked, in one pass, so a patient who needs
+    // e.g. General Medicine + Cardiology gets both appointments (each its own queue number,
+    // reference number, and Home card) instead of only ever booking one at a time.
+    doBook: async () => {
+      const ready = S.bookings.filter((b) => b.selectedSlot != null && b.slots?.[b.selectedSlot]);
+      if (!ready.length || S.booking) return;
+      set({ booking: true });
+      const bookOne = async (b) => {
+        const slotLabel = b.slots[b.selectedSlot][0];
+        const triageId = S.triage?.specialty === b.specialty ? S.triage?.id : undefined;
+        const [res] = await Promise.all([tryApi(api.book(b.specialty, S.hospital, undefined, triageId)), delay(1200)]);
+        const appt = res?.appointment;
+        const refNo = appt ? makeRefNo(appt.hospital || 'PGH', appt.queueNumber, appt.id || appt.queueNumber, b.specialty) : null;
+        return { specialty: b.specialty, slotLabel, appt, refNo };
+      };
+      const settled = await Promise.all(ready.map(bookOne));
+      const newCards = settled.filter((r) => r.appt).map((r) => ({
+        id: r.appt.id, specialty: r.specialty, hospital: r.appt.hospital || S.hospital,
+        slotLabel: r.slotLabel, scheduledFor: r.appt.scheduledFor || null,
+        refNo: r.refNo || makeRefNo(r.appt.hospital || S.hospital, r.appt.queueNumber, r.appt.id, r.specialty),
+        queueNumber: r.appt.queueNumber, paid: false, verified: S.liveness === 'verified',
+      }));
+      // Optimistic confirmation bubbles so Messages feels instant; A.loadMessages() below
+      // reconciles them with the real, server-persisted rows (with real msg_… ids) a moment later.
+      const optimistic = newCards.map((card) => ({
+        id: 'local_' + card.id, kind: 'confirmation', status: 'sent', channel: 'sms', provider: 'mock',
+        createdAt: new Date().toISOString(), meta: { specialty: card.specialty, hospital: card.hospital, queueNumber: card.queueNumber },
+      }));
+      set((p) => ({
+        booking: false, booked: true,
+        lastBooked: settled,
+        slotLabel: newCards[0]?.slotLabel || p.slotLabel, refNo: newCards[0]?.refNo || p.refNo,
+        appointments: [...newCards, ...p.appointments.filter((a) => !newCards.some((n) => n.id === a.id))],
+        messages: [...optimistic, ...p.messages], unreadMessages: p.unreadMessages + optimistic.length,
         screen: 'confirm', stack: ['home'],
       }));
-      toast(S.lang === 'tl' ? 'Ipinadala ang kumpirmasyon sa SMS' : 'Confirmation texted to you');
+      toast(S.lang === 'tl'
+        ? (newCards.length > 1 ? 'Ipinadala ang mga kumpirmasyon sa SMS' : 'Ipinadala ang kumpirmasyon sa SMS')
+        : (newCards.length > 1 ? 'Confirmations texted to you' : 'Confirmation texted to you'));
       after(1200, A.loadMessages);
     },
 
@@ -522,7 +560,7 @@ export default function App() {
     },
 
     // Overlays / demo controls
-    resetToHome: () => set({ screen: 'home', stack: [], selectedSlot: null, channel: null, paid: false, paying: false, reportStage: 'form', reportCat: null, reportDesc: '', trackCaseNo: '', trackResult: null, trackError: null }),
+    resetToHome: () => set({ screen: 'home', stack: [], bookings: [], channel: null, paid: false, paying: false, reportStage: 'form', reportCat: null, reportDesc: '', trackCaseNo: '', trackResult: null, trackError: null }),
     toggleDemo: () => set((p) => ({ showDemo: !p.showDemo })),
     toggleEmergency: () => set((p) => ({ emergency: !p.emergency })),
     triggerTimeout: () => set({ showDemo: false, showTimeout: true }),

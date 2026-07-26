@@ -34,6 +34,10 @@ export const DICT = {
     loadingSlots: 'Finding available slots…', confirmBook: 'Confirm booking', booking: 'Booking your slot…',
     confirmTitle: "You're booked", refLabel: 'Reference number', prep: 'Before your visit',
     texted: "We've texted this to you", goPay: 'Continue to payment', backHome: 'Back to home',
+    addAnotherDept: '+ Add another department', pickDeptTitle: 'Which other department?',
+    removeDept: 'Remove', confirmBookN: (n) => (n > 1 ? `Confirm ${n} bookings` : 'Confirm booking'),
+    bookingN: (n) => (n > 1 ? `Booking your ${n} slots…` : 'Booking your slot…'),
+    multiApptNote: "You're booking more than one appointment — each gets its own queue number and reference.",
     payTitle: 'Payment', billFor: 'Consultation, Cardiology', benefits: 'Benefits applied', mockTag: 'demo · pending integration',
     balance: 'Amount to pay', payChannelTitle: 'Pay with', payNow: 'Pay now', processing: 'Processing payment…',
     payHostedNote: "You'll finish paying on eGovPay's secure page next. Tap your payment method there (e.g. Cash Payments), then Pay Now.",
@@ -123,6 +127,10 @@ export const DICT = {
     loadingSlots: 'Naghahanap ng bakanteng oras…', confirmBook: 'Kumpirmahin ang booking', booking: 'Bino-book ang iyong oras…',
     confirmTitle: 'Naka-book ka na', refLabel: 'Reference number', prep: 'Bago ang iyong konsulta',
     texted: 'Ipinadala namin ito sa iyong SMS', goPay: 'Magpatuloy sa bayad', backHome: 'Bumalik sa home',
+    addAnotherDept: '+ Magdagdag ng ibang departamento', pickDeptTitle: 'Aling ibang departamento?',
+    removeDept: 'Alisin', confirmBookN: (n) => (n > 1 ? `Kumpirmahin ang ${n} bookings` : 'Kumpirmahin ang booking'),
+    bookingN: (n) => (n > 1 ? `Bino-book ang iyong ${n} na oras…` : 'Bino-book ang iyong oras…'),
+    multiApptNote: 'Mag-book ka ng higit sa isang appointment — may sariling queue number at reference number ang bawat isa.',
     payTitle: 'Bayad', billFor: 'Konsulta, Cardiology', benefits: 'Mga benepisyong inilapat', mockTag: 'demo · nakabinbing integration',
     balance: 'Halagang babayaran', payChannelTitle: 'Magbayad gamit ang', payNow: 'Magbayad', processing: 'Pinoproseso ang bayad…',
     payHostedNote: 'Tatapusin mo ang bayad sa secure na page ng eGovPay. Pindutin doon ang paraan ng bayad (hal. Cash Payments), tapos Pay Now.',
@@ -252,6 +260,13 @@ export const TRACKNOTE = {
   en: ['Just now', 'Est. within 24 hours', '-', '-'],
   tl: ['Ngayon lang', 'Tantiyang 24 oras', '-', '-'],
 };
+// Kept in sync with SPECIALTIES in backend/src/integrations/egovAi.js. Used when a patient
+// wants to book more than one department in the same visit (e.g. General Medicine + Cardiology).
+export const SPECIALTIES = [
+  'General Medicine', 'Cardiology', 'Pulmonology', 'Neurology', 'Gastroenterology',
+  'Orthopedics', 'Pediatrics', 'OB-GYN', 'Dermatology', 'ENT', 'Ophthalmology',
+  'Psychiatry', 'Emergency Medicine', 'Surgery',
+];
 export const CHIPS = {
   en: ['Fever', 'Cough', 'Chest pain', 'Headache', 'Dizziness', 'Stomach pain', 'Skin rash'],
   tl: ['Lagnat', 'Ubo', 'Sakit ng dibdib', 'Sakit ng ulo', 'Hilo', 'Sakit ng tiyan', 'Pantal sa balat'],
