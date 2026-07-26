@@ -122,7 +122,7 @@ export default function Records({ c, lang, A }) {
             className="card"
             onClick={() => setOpenId(r.id)}
             style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }}
-            aria-label={`${r.name} — ${r.date}, ${lang === 'tl' ? 'pindutin para tingnan ang detalye' : 'tap for details'}`}
+            aria-label={`${r.name}, ${r.date}, ${lang === 'tl' ? 'pindutin para tingnan ang detalye' : 'tap for details'}`}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
               <div>

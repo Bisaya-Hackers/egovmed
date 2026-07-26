@@ -73,7 +73,7 @@ export default function Liveness({ c, S, A }) {
       )}
       {camera === 'denied' && !verified && !failed && (
         <p className="sub" style={{ textAlign: 'center', marginTop: 8, fontSize: '0.85em', color: 'var(--amber)' }}>
-          Camera permission was blocked — the flow will continue in demo mode.
+          Camera permission was blocked. The flow will continue in demo mode.
         </p>
       )}
 

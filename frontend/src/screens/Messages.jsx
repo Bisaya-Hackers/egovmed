@@ -38,7 +38,7 @@ function messageBody(m, lang, c) {
         : `Reminder: your ${specialty} appointment at ${hospital} is ${whenEn}. Queue${queue}.`;
     }
     case 'results_ready':
-      return isTl ? 'Handa na ang iyong resulta ng lab — tingnan sa Records.' : 'Your lab results are ready — check Records for details.';
+      return isTl ? 'Handa na ang iyong resulta ng lab, tingnan sa Records.' : 'Your lab results are ready, check Records for details.';
     case 'reply_sent':
       return isTl ? 'Naipadala ang iyong mensahe sa PGH Patient Services.' : 'You sent a message to PGH Patient Services.';
     case 'staff_ack':
