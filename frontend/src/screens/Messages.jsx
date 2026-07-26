@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ScreenHeader, Btn } from '../components/ui.jsx';
-import { Bell, Chat, ChevronRight } from '../components/Icons.jsx';
+import { Bell, Chat, ChevronRight, FileUp } from '../components/Icons.jsx';
 import { CONST } from '../i18n/dict.js';
 
 const kindLabel = (kind, c) => ({
@@ -11,6 +11,7 @@ const kindLabel = (kind, c) => ({
   results_ready: c.messageResultsReady,
   reply_sent: c.messageReplySent,
   staff_ack: c.messageStaffAck,
+  record_uploaded: c.messageRecordUploaded,
 }[kind] || c.messageGeneric);
 
 // Message bodies aren't stored server-side (privacy rule — only delivery metadata is persisted),
@@ -29,16 +30,24 @@ function messageBody(m, lang, c) {
         ? `Kumpirmado ang appointment mo sa ${specialty} sa ${hospital}. Pila${queue}.`
         : `Your ${specialty} appointment at ${hospital} is confirmed. Queue${queue}.`;
     case 'reminder':
-    case 'appointment_reminder':
+    case 'appointment_reminder': {
+      const days = meta.daysUntil;
+      const whenEn = days === 0 ? 'today' : days === 1 ? 'tomorrow' : Number.isFinite(days) ? `in ${days} days` : 'coming up';
+      const whenTl = days === 0 ? 'ngayon' : days === 1 ? 'bukas' : Number.isFinite(days) ? `sa loob ng ${days} araw` : 'paparating na';
       return isTl
-        ? `Paalala: paparating na ang appointment mo sa ${specialty} sa ${hospital}. Pila${queue}.`
-        : `Reminder: your ${specialty} appointment at ${hospital} is coming up. Queue${queue}.`;
+        ? `Paalala: ang appointment mo sa ${specialty} sa ${hospital} ay ${whenTl}. Pila${queue}.`
+        : `Reminder: your ${specialty} appointment at ${hospital} is ${whenEn}. Queue${queue}.`;
+    }
     case 'results_ready':
       return isTl ? 'Handa na ang iyong resulta ng lab — tingnan sa Records.' : 'Your lab results are ready — check Records for details.';
     case 'reply_sent':
       return isTl ? 'Naipadala ang iyong mensahe sa PGH Patient Services.' : 'You sent a message to PGH Patient Services.';
     case 'staff_ack':
       return isTl ? 'Natanggap ng PGH Patient Services ang iyong mensahe. Susundan ka nila sa lalong madaling panahon.' : 'PGH Patient Services received your message. They will follow up with you shortly.';
+    case 'record_uploaded': {
+      const title = meta.title || (isTl ? 'iyong rekord' : 'your record');
+      return isTl ? `Na-save ang "${title}" sa iyong Records.` : `"${title}" was saved to your Records.`;
+    }
     default:
       return isTl ? 'May bagong update ka mula sa eGovMed.' : 'You have a new update from eGovMed.';
   }
@@ -200,6 +209,7 @@ export default function Messages({ c, lang, S, A }) {
           {messages.map((message) => {
             const isReminder = ['appointment_reminder', 'reminder'].includes(message.kind);
             const isReply = ['reply_sent', 'staff_ack'].includes(message.kind);
+            const isUpload = message.kind === 'record_uploaded';
             return (
               <button
                 key={message.id}
@@ -210,9 +220,9 @@ export default function Messages({ c, lang, S, A }) {
               >
                 <span
                   className="icirc"
-                  style={isReminder ? { background: 'var(--amber-50)', color: 'var(--amber)' } : isReply ? { background: 'var(--green-50)', color: 'var(--green)' } : undefined}
+                  style={isReminder ? { background: 'var(--amber-50)', color: 'var(--amber)' } : isReply ? { background: 'var(--green-50)', color: 'var(--green)' } : isUpload ? { background: 'var(--blue-50)', color: 'var(--blue)' } : undefined}
                 >
-                  {isReminder ? <Bell size={21} /> : <Chat size={21} />}
+                  {isReminder ? <Bell size={21} /> : isUpload ? <FileUp size={21} /> : <Chat size={21} />}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 800 }}>{kindLabel(message.kind, c)}</div>

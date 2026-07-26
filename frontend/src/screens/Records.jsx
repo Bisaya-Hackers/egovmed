@@ -41,6 +41,7 @@ export default function Records({ c, lang, A }) {
       verified: !!(saved.anchor && saved.anchor.verified),
       isDemo: false,
     }, ...prev]);
+    A.notifyRecordUploaded(saved);
   };
 
   // Upgrade to live eGovChain-anchored records + fetch the AI doctor summary in parallel.

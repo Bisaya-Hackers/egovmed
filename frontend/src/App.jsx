@@ -34,7 +34,7 @@ const initial = () => ({
   emergency: false, liveness: 'idle', livenessSessionId: null,
   triage: null,
   slotsLoading: false, selectedSlot: null, booking: false, booked: false, slotLabel: '', refNo: makeRefNo(CONST.hospital),
-  appointments: [], payingApptId: null,
+  appointments: [], payingApptId: null, remindedApptIds: [],
   hospital: CONST.hospital, showHospitalPicker: false,
   channel: null, paying: false, paid: false, paymentStatus: null,
   messages: [], unreadMessages: 0,
@@ -83,6 +83,29 @@ export default function App() {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [S.screen]);
 
+  // Reminders normally arrive server-side over SMS on a schedule, which doesn't fire in this
+  // demo. Synthesize an in-app "appointment coming up" notification the first time we see an
+  // active appointment land inside the reminder window, so the bell/Messages reflect it too.
+  useEffect(() => {
+    const REMINDER_WINDOW_DAYS = 3;
+    const due = S.appointments.filter((a) => {
+      if (!a.scheduledFor || S.remindedApptIds.includes(a.id)) return false;
+      const daysUntil = Math.floor((new Date(a.scheduledFor).getTime() - Date.now()) / 86400000);
+      return daysUntil >= 0 && daysUntil <= REMINDER_WINDOW_DAYS;
+    });
+    if (!due.length) return;
+    const notes = due.map((a) => ({
+      id: 'local_reminder_' + a.id, kind: 'reminder', status: 'delivered', channel: 'in_app', provider: 'local',
+      createdAt: new Date().toISOString(),
+      meta: { specialty: a.specialty, hospital: a.hospital, queueNumber: a.queueNumber, daysUntil: Math.floor((new Date(a.scheduledFor).getTime() - Date.now()) / 86400000) },
+    }));
+    set((p) => ({
+      messages: [...notes, ...p.messages],
+      unreadMessages: p.unreadMessages + notes.length,
+      remindedApptIds: [...p.remindedApptIds, ...due.map((a) => a.id)],
+    }));
+  }, [S.appointments, S.remindedApptIds, set]);
+
   // Resume eGovPH, hosted-liveness, and eGovPay redirects. Session JWTs live in
   // sessionStorage so they survive same-tab provider redirects but disappear when the tab closes.
   useEffect(() => {
@@ -126,6 +149,7 @@ export default function App() {
               specialty: a.specialty,
               hospital: a.hospital || 'PGH',
               slotLabel: formatSlot(a.scheduledFor, p.lang) || p.slotLabel,
+              scheduledFor: a.scheduledFor || null,
               refNo: makeRefNo(a.hospital || 'PGH', a.queueNumber, a.id || a.queueNumber, a.specialty),
               queueNumber: a.queueNumber,
               paid: Array.isArray(pays) && pays.some((pay) => pay.appointmentId === a.id && SETTLED.includes(String(pay.status || '').toLowerCase())),
@@ -370,7 +394,7 @@ export default function App() {
       // instead of replacing them.
       const newCard = appt ? {
         id: appt.id, specialty, hospital: appt.hospital || S.hospital,
-        slotLabel, refNo: refNo || makeRefNo(appt.hospital || S.hospital, appt.queueNumber, appt.id, specialty), queueNumber: appt.queueNumber, paid: false,
+        slotLabel, scheduledFor: appt.scheduledFor || null, refNo: refNo || makeRefNo(appt.hospital || S.hospital, appt.queueNumber, appt.id, specialty), queueNumber: appt.queueNumber, paid: false,
         verified: S.liveness === 'verified',
       } : null;
       set((p) => ({
@@ -430,6 +454,16 @@ export default function App() {
       if (res?.ack) after(1000, () => set((p) => ({ messages: [res.ack, ...p.messages] })));
       return res;
     },
+    // Record uploads don't hit eMessage/SMS (no PHI leaves the device for this), so surface a
+    // local, in-app-only notification instead — same shape as a server message so Messages.jsx
+    // renders it identically, it just never round-trips to the backend or a real channel.
+    notifyRecordUploaded: (saved) => {
+      const note = {
+        id: 'local_upload_' + (saved?.id || Date.now()), kind: 'record_uploaded', status: 'delivered', channel: 'in_app', provider: 'local',
+        createdAt: new Date().toISOString(), meta: { title: saved?.title || saved?.name },
+      };
+      set((p) => ({ messages: [note, ...p.messages], unreadMessages: p.unreadMessages + 1 }));
+    },
 
     // Records + Report
     goRecords: () => A.go('records'),
@@ -487,9 +521,11 @@ export default function App() {
           <button className={'iconbtn' + (S.textScale ? ' active' : '')} onClick={A.cycleText} aria-label={c.textSize} title={c.textSize}>AA</button>
           <button className="iconbtn" onClick={A.toggleDemo} aria-label="Demo controls"><Gear size={17} /></button>
           {S.screen === 'home' && (
-            <button className="iconbtn" onClick={() => A.toast(c.notifications)} aria-label={c.notifications} style={{ position: 'relative' }}>
+            <button className="iconbtn" onClick={() => A.go('messages')} aria-label={c.notifications} style={{ position: 'relative' }}>
               <Bell size={17} />
-              <span style={{ position: 'absolute', top: 6, right: 7, width: 7, height: 7, borderRadius: 999, background: 'var(--red)' }} />
+              {S.unreadMessages > 0 && (
+                <span style={{ position: 'absolute', top: 6, right: 7, width: 7, height: 7, borderRadius: 999, background: 'var(--red)' }} />
+              )}
             </button>
           )}
         </div>
