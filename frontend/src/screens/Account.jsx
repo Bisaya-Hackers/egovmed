@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ScreenHeader, Btn } from '../components/ui.jsx';
 import { Check, ShieldTick, User, Plus, ChevronRight, Trash } from '../components/Icons.jsx';
 import { api } from '../lib/api.js';
+import { normalizePhone } from '../lib/phone.js';
 import rosaAvatar from '../assets/home-avatar-rosa.png';
 
 const displayName = (patient) => [patient?.firstName, patient?.middleName, patient?.lastName].filter(Boolean).join(' ');
@@ -24,17 +25,6 @@ const BENEFIT_CATALOG = [
   { key: 'aics', label: 'DSWD AICS' },
 ];
 const WIRED_BENEFIT_KEYS = BENEFIT_CATALOG.map((b) => b.key);
-
-// Accepts common PH mobile formats the user is likely to type (09XX, +63, 63, with or without
-// spaces/dashes) and returns canonical E.164 (+63XXXXXXXXXX) or null if it doesn't match.
-// Matches the backend's z.string().regex(/^\+63\d{10}$/) after normalization.
-function normalizePhone(raw) {
-  const cleaned = String(raw || '').replace(/[\s\-()]/g, '');
-  if (/^\+63\d{10}$/.test(cleaned)) return cleaned;
-  if (/^63\d{10}$/.test(cleaned)) return '+' + cleaned;
-  if (/^09\d{9}$/.test(cleaned)) return '+63' + cleaned.slice(1);
-  return null;
-}
 
 // Trivial email sanity check — the real validation happens server-side. Just enough to catch
 // obvious typos before we round-trip.

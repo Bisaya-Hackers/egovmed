@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import PinInput from '../components/PinInput.jsx';
+import { Btn } from '../components/ui.jsx';
 import { Fingerprint, Phone } from '../components/Icons.jsx';
-import { CONST } from '../i18n/dict.js';
+import { maskPhone } from '../lib/phone.js';
 import communityArt from '../assets/signin-filipino-community.png';
 
 export default function SignIn({ c, S, A }) {
@@ -41,7 +42,11 @@ export default function SignIn({ c, S, A }) {
           <span className="spinner" /> <span>{c.signingIn}</span>
         </div>
       ) : !live && !loading ? (
-        <button className="btn ghost" style={{ marginTop: 14 }} onClick={() => A.toast(c.forgotMpin)}>{c.forgotMpin}</button>
+        <button className="btn ghost" style={{ marginTop: 14 }} disabled={S.mpinResetSending} onClick={A.forgotMpin}>
+          {S.mpinResetSending
+            ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}><span className="spinner" /> {c.mpinResetSending}</span>
+            : c.forgotMpin}
+        </button>
       ) : null}
 
       <div className="rowsep" style={{ margin: '20px 0' }} />
@@ -68,14 +73,43 @@ export default function SignIn({ c, S, A }) {
         </p>
       )}
 
-      {!live && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, color: 'var(--muted)' }}>
+      {!live && !S.switchingAccount && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, color: 'var(--muted)' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: '1px solid var(--line)', borderRadius: 999, padding: '7px 14px', fontSize: '0.9em', fontWeight: 600 }}>
-          <Phone size={16} /> {CONST.phone}
+          <Phone size={16} /> {maskPhone(S.signInPhone)}
         </span>
       </div>}
-      {!live && <button className="btn ghost" style={{ marginTop: 10 }} onClick={() => A.toast(c.switchAccount)}>
+      {!live && !S.switchingAccount && <button className="btn ghost" style={{ marginTop: 10 }} onClick={A.openSwitchAccount}>
         {c.notYou} {c.switchAccount}
       </button>}
+
+      {!live && S.switchingAccount && (
+        <div className="card" style={{ marginTop: 14 }}>
+          <div style={{ fontWeight: 700 }}>{c.switchAccountTitle}</div>
+          <p className="sub" style={{ margin: '4px 0 0' }}>{c.switchAccountSub}</p>
+
+          <div className="overline" style={{ marginTop: 14, marginBottom: 8 }}>{c.switchPhoneLabel}</div>
+          <input
+            className="field" type="tel" inputMode="tel" autoComplete="tel" autoFocus
+            value={S.switchPhone}
+            onChange={(e) => A.setSwitchPhone(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') A.confirmSwitchAccount(); }}
+            placeholder={c.switchPhonePlaceholder}
+            aria-label={c.switchPhoneLabel}
+            aria-invalid={S.switchPhoneErr || undefined}
+            aria-describedby={S.switchPhoneErr ? 'switch-phone-err' : undefined}
+          />
+          {S.switchPhoneErr && (
+            <div id="switch-phone-err" role="alert" style={{ marginTop: 8, color: 'var(--red)', background: 'var(--red-50)', borderRadius: 14, padding: '10px 12px', fontSize: '0.85em', fontWeight: 600 }}>
+              {c.phoneInvalid}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+            <button className="btn ghost" style={{ flex: 1 }} onClick={A.cancelSwitchAccount}>{c.switchAccountCancel}</button>
+            <Btn style={{ flex: 1 }} disabled={!S.switchPhone.trim()} onClick={A.confirmSwitchAccount}>{c.switchAccountConfirm}</Btn>
+          </div>
+        </div>
+      )}
 
       <div className="spacer" style={{ minHeight: 16 }} />
       <img

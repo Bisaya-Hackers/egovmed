@@ -5,6 +5,7 @@ import { DICT, CONST, CHANNELS, HOSPITALS, randomSlots } from './i18n/dict.js';
 import { api, getToken, setToken } from './lib/api.js';
 import { fallbackTriage } from './lib/triageFallback.js';
 import { makeRefNo } from './lib/refNo.js';
+import { normalizePhone, maskPhone } from './lib/phone.js';
 import { Gear, Bell, Check } from './components/Icons.jsx';
 
 import SignIn from './screens/SignIn.jsx';
@@ -30,6 +31,10 @@ const FONT = { 0: 17, 1: 19, 2: 21 };
 const initial = () => ({
   lang: 'en', screen: 'signin', stack: [], textScale: 0,
   signingIn: false, signinErr: false,
+  // Sign-in screen: the number shown on the account pill, and the "use a different number"
+  // sub-form behind "Not you? Switch account".
+  signInPhone: CONST.phoneE164, switchingAccount: false, switchPhone: '', switchPhoneErr: false,
+  mpinResetSending: false,
   authMode: 'loading', authLaunchUrl: null, authCallbackUrl: null, flowError: null,
   symptom: '', recording: false, recSec: 0, thinking: false,
   emergency: false, liveness: 'idle', livenessSessionId: null,
@@ -289,6 +294,31 @@ export default function App() {
       } else {
         set({ signingIn: false, signinErr: true, flowError: 'Unable to sign in.' });
       }
+    },
+
+    // "Forgot MPIN?" — eGovPH owns MPIN recovery, so there's nothing for us to reset here. Tell
+    // the patient a reset code is on its way to the number on file (masked, since this screen is
+    // visible pre-auth) instead of echoing the button's own label back at them.
+    forgotMpin: () => {
+      if (S.mpinResetSending) return;
+      set({ mpinResetSending: true });
+      after(900, () => {
+        set({ mpinResetSending: false });
+        toast(c.mpinResetSent(maskPhone(S.signInPhone)));
+      });
+    },
+
+    // "Not you? Switch account" — opens an inline form for the mobile number of the eGovPH
+    // account to use instead. Same normalizer the Account screen uses, so 09XX / +63 / 63 all
+    // work and anything else is rejected before it can look like it succeeded.
+    openSwitchAccount: () => set({ switchingAccount: true, switchPhone: '', switchPhoneErr: false }),
+    cancelSwitchAccount: () => set({ switchingAccount: false, switchPhone: '', switchPhoneErr: false }),
+    setSwitchPhone: (v) => set({ switchPhone: v, switchPhoneErr: false }),
+    confirmSwitchAccount: () => {
+      const e164 = normalizePhone(S.switchPhone);
+      if (!e164) { set({ switchPhoneErr: true }); return; }
+      set({ signInPhone: e164, switchingAccount: false, switchPhone: '', switchPhoneErr: false, signinErr: false, flowError: null });
+      toast(c.switchAccountDone(maskPhone(e164)));
     },
 
     // Symptom intake
