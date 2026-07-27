@@ -145,9 +145,3 @@ a side effect of another change. Reasoning is recorded in
 - **The security middleware stack** (`backend/src/middleware/index.js`). `secureHeaders`,
   `jsonComplexity`, `rateLimit`, the timing-safe admin compare, and JWT verification.
 - **All 30 backend tests stay green at every commit.** Regressions block merge in CI.
-
-## Working with coding agents
-
-Agent branches follow the same convention. `claude/<slug>` is not a type, so name the branch for
-the change rather than for the tool that produced it. An agent that opens a PR should also
-delete nothing, close nothing, and touch no repo settings without being asked.
