@@ -50,6 +50,19 @@ const initial = () => ({
   showDemo: false, showTimeout: false, toast: null,
 });
 
+// State that outlives a session and must survive logout / resetFlow. Display preferences are
+// the user's, and the eGovPH auth config describes the deployment, not the person signed in.
+// authMode especially: it's fetched once by the ref-guarded mount effect, which never runs a
+// second time, so resetting it to 'loading' leaves SignIn stuck on "Checking eGovPH…" with its
+// button disabled and no MPIN pad — an unrecoverable screen short of a page reload.
+const preserved = (p) => ({
+  lang: p.lang,
+  textScale: p.textScale,
+  authMode: p.authMode,
+  authLaunchUrl: p.authLaunchUrl,
+  authCallbackUrl: p.authCallbackUrl,
+});
+
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const tryApi = async (p) => { try { return await p; } catch { return null; } };
 
@@ -581,9 +594,9 @@ export default function App() {
     toggleEmergency: () => set((p) => ({ emergency: !p.emergency })),
     triggerTimeout: () => set({ showDemo: false, showTimeout: true }),
     stayIn: () => set({ showTimeout: false }),
-    logout: () => { clearTimers(); setToken(null); window.sessionStorage.removeItem('egovmed.livenessSessionId'); window.sessionStorage.removeItem('egovmed.pendingBillId'); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
+    logout: () => { clearTimers(); setToken(null); window.sessionStorage.removeItem('egovmed.livenessSessionId'); window.sessionStorage.removeItem('egovmed.pendingBillId'); setS((p) => ({ ...initial(), ...preserved(p) })); },
     openTokens: () => { set({ showDemo: false }); A.go('tokens'); },
-    resetFlow: () => { clearTimers(); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
+    resetFlow: () => { clearTimers(); setS((p) => ({ ...initial(), ...preserved(p) })); },
   };
 
   const Screen = SCREENS[S.screen] || Home;
