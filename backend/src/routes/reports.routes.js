@@ -24,6 +24,14 @@ router.post('/', requireAuth,
     res.status(201).json(await reportService.fileReport({ patientId: req.user.sub, ...req.body }));
   }));
 
+// GET /reports → the caller's own reports, newest first. Declared before /:caseNumber so the
+// bare path can never be read as a case number. Summary rows only, no decrypted description.
+router.get('/', requireAuth,
+  rateLimit({ scope: 'report-list', max: 60, windowMs: 60_000 }),
+  asyncHandler(async (req, res) => {
+    res.json({ reports: await reportService.listForPatient(req.user.sub) });
+  }));
+
 // GET /reports/:caseNumber → track a case (owner-scoped)
 router.get('/:caseNumber', requireAuth,
   validate(caseParams, 'params'),

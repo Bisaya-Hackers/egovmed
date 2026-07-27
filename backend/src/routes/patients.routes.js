@@ -81,4 +81,21 @@ router.patch('/me/benefits/:key', requireAuth, benefitLimit, asyncHandler(async 
   res.json(publicPatient(updated));
 }));
 
+// DELETE /patients/me/benefits/:key → deactivate a previously-added benefit program. Same
+// SUPPORTED_BENEFIT_KEYS guard as activation; shares the activate rate-limit bucket since it's
+// the same low-frequency "editing my benefits list" action from the patient's point of view.
+router.delete('/me/benefits/:key', requireAuth, benefitLimit, asyncHandler(async (req, res) => {
+  const { key } = req.params;
+  if (!SUPPORTED_BENEFIT_KEYS.includes(key)) {
+    throw badRequest('Unsupported benefit', [{ path: 'key', message: `must be one of: ${SUPPORTED_BENEFIT_KEYS.join(', ')}` }]);
+  }
+  const store = getStore();
+  const patient = await store.findById(COLLECTIONS.PATIENTS, req.user.sub);
+  if (!patient) throw notFound('Patient not found');
+  const benefits = { ...(patient.benefits || {}) };
+  delete benefits[key];
+  const updated = await store.update(COLLECTIONS.PATIENTS, req.user.sub, { benefits });
+  res.json(publicPatient(updated));
+}));
+
 module.exports = router;

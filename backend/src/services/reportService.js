@@ -24,6 +24,19 @@ async function fileReport({ patientId, category, description, contact }) {
   return present(report);
 }
 
+/**
+ * A patient's own reports, newest first. Deliberately does NOT decrypt `description` — the list
+ * only needs to get you to a case number, and the detail view (getByCase) is where the narrative
+ * belongs. Keeps N encrypted PHI blobs from being decrypted just to render a list.
+ */
+async function listForPatient(patientId) {
+  const store = getStore();
+  const mine = await store.findAll(COLLECTIONS.REPORTS, (r) => r.patientId === patientId);
+  return mine
+    .map(({ id, caseNumber, category, status, escalated, createdAt }) => ({ id, caseNumber, category, status, escalated, createdAt }))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
 async function getByCase(caseNumber, requesterId) {
   const store = getStore();
   const report = await store.findOne(COLLECTIONS.REPORTS, (r) => r.caseNumber === caseNumber);
@@ -70,4 +83,4 @@ function present(report) {
   return report;
 }
 
-module.exports = { fileReport, getByCase, escalateStale, recurringErrors };
+module.exports = { fileReport, listForPatient, getByCase, escalateStale, recurringErrors };

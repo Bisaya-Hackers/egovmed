@@ -12,7 +12,7 @@ This body becomes the squash commit message on main. Write it for whoever reads 
 
 ## Verification
 
-- [ ] `cd backend && npm test` passes (18/18)
+- [ ] `cd backend && npm test` passes (19/19)
 - [ ] Integration adapters still work in **both** `mock` and `live` modes
 - [ ] No secrets in the diff
 
