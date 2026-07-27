@@ -8,6 +8,20 @@ const int = (v, d) => {
   return Number.isFinite(n) ? n : d; // never let a malformed value (NaN) leak into config
 };
 
+// Redis key namespace. Empty means "no prefix", which is what production uses — existing keys
+// keep their exact shape, so enabling this feature migrates nothing. A malformed value would
+// silently split the keyspace and make a deployment look like it lost its data, so reject
+// anything but a simple slug rather than sanitizing it into something unintended.
+const keyPrefix = (raw) => {
+  const v = String(raw == null ? '' : raw).trim();
+  if (!v) return '';
+  const slug = v.replace(/:+$/, '');
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(slug)) {
+    throw new Error(`STORE_KEY_PREFIX must be alphanumeric with - or _ (got "${v}").`);
+  }
+  return `${slug}:`;
+};
+
 const GLOBAL_MODE = (process.env.INTEGRATION_MODE || 'mock').toLowerCase();
 // Per-integration mode: explicit *_MODE wins, otherwise fall back to the global switch.
 const modeFor = (name) => (process.env[`${name}_MODE`] || GLOBAL_MODE).toLowerCase();
@@ -44,6 +58,11 @@ const env = {
       || process.env.UPSTASH_REDIS_REST_KV_REST_API_TOKEN
       || process.env.KV_REST_API_TOKEN
       || '',
+    // Namespaces every Redis key so a non-production deployment can share one Upstash database
+    // with production without colliding. Empty in production, so existing keys are untouched and
+    // no migration is needed. See keyPrefix() for the format and warnIfMisconfigured() for the
+    // guards that make the isolation mandatory rather than hoped-for.
+    keyPrefix: keyPrefix(process.env.STORE_KEY_PREFIX),
   },
 
   globalMode: GLOBAL_MODE,
@@ -149,6 +168,20 @@ function warnIfMisconfigured(log) {
   if (env.isProd && env.store.driver === 'kv' && (!env.store.upstashUrl || !env.store.upstashToken)) {
     throw new Error('Upstash credentials are required when STORE_DRIVER=kv in production.');
   }
+  // Staging shares production's single Upstash database (the account is Vercel-managed and cannot
+  // create a second one), so the ONLY thing separating the two is STORE_KEY_PREFIX. Both
+  // directions are fail-hard because both are silent data disasters:
+  //   - a prefix in production reads an empty keyspace, i.e. production looks wiped
+  //   - no prefix in preview writes straight into production's keys, corrupting real records
+  // VERCEL_ENV is set by the platform and distinguishes production from preview reliably, which
+  // NODE_ENV cannot do here — preview deliberately runs with NODE_ENV=production.
+  const vercelEnv = (process.env.VERCEL_ENV || '').toLowerCase();
+  if (vercelEnv === 'production' && env.store.keyPrefix) {
+    throw new Error(`STORE_KEY_PREFIX must be empty in production (got "${env.store.keyPrefix}"). A prefix here points production at an empty keyspace.`);
+  }
+  if (vercelEnv && vercelEnv !== 'production' && env.store.driver === 'kv' && !env.store.keyPrefix) {
+    throw new Error(`STORE_KEY_PREFIX is required when VERCEL_ENV=${vercelEnv} and STORE_DRIVER=kv. Without it this deployment writes into production's keyspace.`);
+  }
   if (env.isProd && env.appUrl === '*') {
     throw new Error('APP_URL must be an explicit trusted origin in production.');
   }
@@ -197,4 +230,4 @@ function publicUrl(base, path) {
   return `${String(base || '').replace(/\/$/, '')}/${String(path || '').replace(/^\//, '')}`;
 }
 
-module.exports = { env, bool, int, publicUrl, warnIfMisconfigured };
+module.exports = { env, bool, int, keyPrefix, publicUrl, warnIfMisconfigured };
