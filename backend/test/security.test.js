@@ -288,6 +288,25 @@ test('security regression suite', async (t) => {
     assert.equal(ownerAfter.value.phone, '+639175551234');
   });
 
+  await t.test('a manually-corrected contact field survives a later SSO re-login (per-field provenance)', async () => {
+    await resetWithPatients();
+    // Mock SSO always returns the same static profile, including email 'juan.delacruz@example.ph'.
+    const first = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo' } }));
+    assert.equal(first.value.patient.email, 'juan.delacruz@example.ph');
+    const owner = first.value.token;
+
+    const patched = await json(await request('/patients/me', {
+      token: owner, method: 'PATCH', body: { email: 'rosa.corrected@example.ph' },
+    }));
+    assert.equal(patched.response.status, 200);
+    assert.equal(patched.value.email, 'rosa.corrected@example.ph');
+
+    // Re-login (SSO returns the same static, now-stale email) must NOT clobber the manual fix.
+    const second = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo' } }));
+    assert.equal(second.response.status, 200);
+    assert.equal(second.value.patient.email, 'rosa.corrected@example.ph');
+  });
+
   await t.test('PATCH benefits: unknown key does not reflect raw input into the response message', async () => {
     const ownerId = await resetWithPatients();
     const owner = sign({ sub: ownerId });
