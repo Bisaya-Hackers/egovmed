@@ -502,6 +502,63 @@ test('security regression suite', async (t) => {
     assert.match(mock.stderr, /Production cannot use mock/);
   });
 
+  await t.test('staging cannot share production keyspace: STORE_KEY_PREFIX is fail-hard both ways', () => {
+    // Staging runs against production's single Upstash database (the Vercel-managed account
+    // cannot create a second), so STORE_KEY_PREFIX is the ONLY thing keeping them apart.
+    // Both misconfigurations are silent data disasters, so both must refuse to boot.
+    const cwd = path.join(__dirname, '..');
+    const common = {
+      ...process.env,
+      NODE_ENV: 'production',
+      PHI_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      JWT_SECRET: 'strong-production-secret-0123456789abcdef',
+      STORE_DRIVER: 'kv',
+      UPSTASH_REDIS_REST_URL: 'https://example.invalid',
+      UPSTASH_REDIS_REST_TOKEN: 'test-token',
+      APP_URL: 'https://app.example.invalid',
+      ALLOW_MOCK_IN_PRODUCTION: 'true',
+    };
+    const boot = (extra) => spawnSync(process.execPath, ['-e', "require('./src/app')"], {
+      cwd, encoding: 'utf8', env: { ...common, ...extra },
+    });
+
+    // Preview with no prefix would write straight into production's keys.
+    const unprefixedPreview = boot({ VERCEL_ENV: 'preview', STORE_KEY_PREFIX: '' });
+    assert.notEqual(unprefixedPreview.status, 0);
+    assert.match(unprefixedPreview.stderr, /STORE_KEY_PREFIX is required/);
+
+    // A prefix in production points it at an empty keyspace — production would look wiped.
+    const prefixedProd = boot({ VERCEL_ENV: 'production', STORE_KEY_PREFIX: 'staging' });
+    assert.notEqual(prefixedProd.status, 0);
+    assert.match(prefixedProd.stderr, /must be empty in production/);
+
+    // A malformed prefix must be rejected outright, never sanitized into a different keyspace.
+    const malformed = boot({ VERCEL_ENV: 'preview', STORE_KEY_PREFIX: 'stag ing:*' });
+    assert.notEqual(malformed.status, 0);
+    assert.match(malformed.stderr, /STORE_KEY_PREFIX must be alphanumeric/);
+
+    // The two correct configurations boot.
+    assert.equal(boot({ VERCEL_ENV: 'preview', STORE_KEY_PREFIX: 'staging' }).status, 0);
+    assert.equal(boot({ VERCEL_ENV: 'production', STORE_KEY_PREFIX: '' }).status, 0);
+  });
+
+  await t.test('key prefix namespaces every Redis keyspace, not just documents', () => {
+    // Prefixing documents alone would still let staging consume production's queue numbers
+    // (ctr:) and rate-limit budget (rl:), so assert all four namespaces carry it.
+    const { keyPrefix } = require('../src/config/env');
+    assert.equal(keyPrefix(''), '');
+    assert.equal(keyPrefix(undefined), '');
+    assert.equal(keyPrefix('staging'), 'staging:');
+    assert.equal(keyPrefix('staging:'), 'staging:', 'a trailing colon must not double up');
+    assert.throws(() => keyPrefix('bad prefix'), /alphanumeric/);
+    assert.throws(() => keyPrefix('doc:*'), /alphanumeric/);
+
+    const src = require('node:fs').readFileSync(path.join(__dirname, '..', 'src', 'store', 'kvStore.js'), 'utf8');
+    for (const ns of ['doc:', 'idx:', 'ctr:', 'rl:']) {
+      assert.match(src, new RegExp(`\\$\\{P\\}${ns}`), `${ns} keyspace must be prefixed`);
+    }
+  });
+
   await t.test('/integrations/status is admin-gated and leaks no credential values', async () => {
     await resetWithPatients();
     // Missing admin key → 403 (never 200)
