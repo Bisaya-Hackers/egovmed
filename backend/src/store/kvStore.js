@@ -4,16 +4,23 @@ const { env } = require('../config/env');
 
 /**
  * Upstash Redis store (HTTP-based → no connection pooling issues on serverless).
- * Layout:
- *   doc:{collection}:{id}   -> JSON document
- *   idx:{collection}        -> Set of ids in the collection
+ * Layout (P = env.store.keyPrefix, empty in production):
+ *   {P}doc:{collection}:{id}   -> JSON document
+ *   {P}idx:{collection}        -> Set of ids in the collection
+ *   {P}ctr:{key}               -> monotonic counters (queue numbers)
+ *   {P}rl:{key}                -> rate-limit windows
  * findAll/findOne read the index set then MGET; filtering is done in-process
  * (fine at hackathon/demo scale).
+ *
+ * ALL FOUR namespaces take the prefix. Staging shares production's database, so prefixing only
+ * the documents would still let staging hand out production's next queue number and consume
+ * production's rate-limit budget.
  */
 function createKvStore() {
   const redis = new Redis({ url: env.store.upstashUrl, token: env.store.upstashToken });
-  const docKey = (c, id) => `doc:${c}:${id}`;
-  const idxKey = (c) => `idx:${c}`;
+  const P = env.store.keyPrefix; // '' in production → keys keep their original shape
+  const docKey = (c, id) => `${P}doc:${c}:${id}`;
+  const idxKey = (c) => `${P}idx:${c}`;
 
   async function loadAll(collection) {
     const ids = await redis.smembers(idxKey(collection));
@@ -27,10 +34,10 @@ function createKvStore() {
     driver: 'kv',
     // Atomic monotonic counter via Redis INCR — safe across concurrent serverless invocations.
     async incr(key) {
-      return await redis.incr('ctr:' + key);
+      return await redis.incr(`${P}ctr:${key}`);
     },
     async fixedWindowIncrement(key, windowMs) {
-      const redisKey = 'rl:' + key;
+      const redisKey = `${P}rl:${key}`;
       const count = await redis.incr(redisKey);
       // Set expiry only for a new window. Redis INCR is atomic; a duplicate expiry is harmless.
       if (count === 1) await redis.expire(redisKey, Math.max(1, Math.ceil(windowMs / 1000)));
