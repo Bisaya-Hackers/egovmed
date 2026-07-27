@@ -106,6 +106,10 @@ const env = {
     redirectUrl: process.env.EGOVPAY_REDIRECT_URL || '',
     callbackUrl: process.env.EGOVPAY_CALLBACK_URL || '',
     merchantId: process.env.EGOVPAY_MERCHANT_ID || '',
+    // Mock-mode only: the mock gateway used to always settle every checkout as 'paid', so the
+    // failed-payment UI could never be exercised without real eGovPay credentials. Lets
+    // developers/QA force the mock's outcome (e.g. EGOVPAY_MOCK_OUTCOME=failed) to test that path.
+    mockOutcome: (process.env.EGOVPAY_MOCK_OUTCOME || 'paid').trim().toLowerCase(),
   },
   eReport: {
     mode: modeFor('EREPORT'),

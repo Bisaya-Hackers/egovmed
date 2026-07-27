@@ -17,6 +17,13 @@ const normalizePaymentStatus = (data = {}) => {
   return value == null || String(value).trim() === '' ? 'pending' : String(value).trim().toLowerCase();
 };
 
+// Mock mode used to hardcode every checkout as 'paid', which meant the failed-payment UI could
+// never actually be exercised in local/demo testing (no eGov credentials required, per the
+// backend README). EGOVPAY_MOCK_OUTCOME lets a developer force a specific terminal status while
+// testing; anything unrecognized falls back to the original always-succeeds demo behavior.
+const MOCK_TERMINAL_STATUSES = new Set(['paid', 'failed', 'voided', 'cancelled', 'declined']);
+const mockFinalStatus = () => (MOCK_TERMINAL_STATUSES.has(cfg.mockOutcome) ? cfg.mockOutcome : 'paid');
+
 /**
  * Create a payment transaction and return a hosted payment-gateway link.
  * live: POST {baseUrl}/api/v1/transaction with X-eGovPay-Token + digest.
@@ -62,7 +69,10 @@ async function createCheckout({ amount, currency = 'PHP', description, items = [
   return {
     reference: ref,
     checkoutUrl: `${env.appUrl}/mock-checkout/${ref}?amount=${amount}`,
-    status: amount <= 0 ? 'paid' : 'pending',
+    // A fully-covered bill (amount 0) needs no gateway charge and settles immediately regardless
+    // of the configured mock outcome. Otherwise defer to mockFinalStatus() so a forced failure
+    // (EGOVPAY_MOCK_OUTCOME=failed) is reflected consistently from creation through status checks.
+    status: amount <= 0 ? 'paid' : mockFinalStatus(),
     provider: 'mock',
   };
 }
@@ -81,7 +91,8 @@ async function getStatus(reference) {
       provider: 'egovpay',
     };
   }
-  return { reference, status: 'paid', paidAt: new Date().toISOString(), provider: 'mock' };
+  const status = mockFinalStatus();
+  return { reference, status, paidAt: status === 'paid' ? new Date().toISOString() : null, provider: 'mock' };
 }
 
 module.exports = { createCheckout, getStatus, normalizePaymentStatus };
