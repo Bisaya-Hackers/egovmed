@@ -24,6 +24,10 @@ const env = {
   phiKey: process.env.PHI_ENCRYPTION_KEY || '',
   adminKey: process.env.ADMIN_KEY || '', // gates operational routes (escalation sweep, insights)
   allowMockInProduction: bool(process.env.ALLOW_MOCK_IN_PRODUCTION, false),
+  // PHI-access audit log has no legal minimum here (not a licensed health record system) — 180
+  // days balances "long enough to investigate an incident" against "doesn't grow forever" per
+  // ROADMAP.md's deferred retention-policy item. Swept via POST /integrations/audit/sweep.
+  auditLogRetentionDays: Math.max(1, int(process.env.AUDIT_LOG_RETENTION_DAYS, 180)),
 
   store: {
     driver: (process.env.STORE_DRIVER || 'memory').toLowerCase(),

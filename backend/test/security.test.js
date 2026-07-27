@@ -441,6 +441,35 @@ test('security regression suite', async (t) => {
     assert.equal(raw.includes('user:s3cret_pw'), false, 'rpcUrl userinfo pair leaked');
   });
 
+  await t.test('POST /integrations/audit/sweep is admin-gated and evicts only entries past retention', async () => {
+    const ownerId = await resetWithPatients();
+    assert.equal((await request('/integrations/audit/sweep', { method: 'POST' })).status, 403);
+
+    // One fresh entry (must survive the sweep) ...
+    const freshEntry = await store.create(COLLECTIONS.AUDIT_LOGS, {
+      id: 'aud_fresh_test', actorId: ownerId, patientId: ownerId, action: 'records.read',
+      resourceType: 'record', resourceId: null, ip: null, userAgent: null,
+      createdAt: new Date().toISOString(),
+    });
+    assert.ok(freshEntry);
+    // ... plus one manually backdated well past the retention window (must be evicted).
+    const stale = await store.create(COLLECTIONS.AUDIT_LOGS, {
+      id: 'aud_stale_test', actorId: ownerId, patientId: ownerId, action: 'records.read',
+      resourceType: 'record', resourceId: null, ip: null, userAgent: null,
+      createdAt: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    assert.ok(stale);
+
+    const swept = await json(await request('/integrations/audit/sweep', {
+      method: 'POST', headers: { 'x-admin-key': process.env.ADMIN_KEY },
+    }));
+    assert.equal(swept.response.status, 200);
+    assert.equal(swept.value.removed, 1);
+
+    assert.equal(await store.findById(COLLECTIONS.AUDIT_LOGS, 'aud_stale_test'), null);
+    assert.ok(await store.findById(COLLECTIONS.AUDIT_LOGS, 'aud_fresh_test'));
+  });
+
   await t.test('GET /reports lists only the caller\'s own reports and never the description', async () => {
     const ownerId = await resetWithPatients();
     const owner = sign({ sub: ownerId });
