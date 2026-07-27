@@ -71,7 +71,10 @@ async function getStatus(caseNumber) {
     const data = (res && (res.data || res)) || {};
     return { caseNumber, status: String(data.status || 'PENDING').toLowerCase(), provider: 'ereport' };
   }
-  return { caseNumber, status: 'open', provider: 'mock' };
+  // mock / unconfigured has no real opinion on status — return null rather than a hardcoded
+  // 'open' so reportService never mistakes "we don't know" for an authoritative status and
+  // overwrites a locally-escalated case back to open on the patient's next status check.
+  return { caseNumber, status: null, provider: 'mock' };
 }
 
 module.exports = { fileReport, getStatus, escalateAfterHours: cfg.escalateAfterHours };

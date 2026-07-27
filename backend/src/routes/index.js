@@ -1,18 +1,17 @@
 'use strict';
 const { Router } = require('express');
-const { env } = require('../config/env');
-const { getStore } = require('../store');
 
 const router = Router();
 
-// Health + service info
+// Health + service info. Deliberately unauthenticated but minimal — store driver and integration
+// mode are operational details that belong on the admin-gated /integrations/status dashboard, not
+// on a route anyone can hit without a key (the security review's threat model for that dashboard
+// explicitly requires no body variance that reveals whether an integration is live).
 router.get('/', (_req, res) => {
   res.json({
     service: 'eGovMed backend',
     version: '0.1.0',
     status: 'ok',
-    store: getStore().driver,
-    integrationMode: env.globalMode,
     docs: '/health, /auth, /patients, /triage, /identity, /records, /appointments, /payments, /messages, /reports, /integrations',
   });
 });

@@ -52,13 +52,18 @@ async function upsertAndIssue(profile) {
   const fields = Object.fromEntries(Object.entries(incoming).filter(([, v]) => v !== null && v !== undefined && v !== ''));
 
   if (patient) {
-    patient = await store.update(COLLECTIONS.PATIENTS, patient.id, fields);
+    // A field the patient manually corrected via PATCH /patients/me stays theirs — SSO can still
+    // fill in fields it never touched, but it can't clobber a deliberate fix with a stale value.
+    const overridden = new Set(patient.manuallyOverriddenFields || []);
+    const patch = Object.fromEntries(Object.entries(fields).filter(([key]) => !overridden.has(key)));
+    patient = await store.update(COLLECTIONS.PATIENTS, patient.id, patch);
   } else {
     patient = await store.create(COLLECTIONS.PATIENTS, {
       id: patientIdFor(profile.egovSub),
       egovSub: profile.egovSub,
       ...fields,
       identityVerified: false,  // flips true after eVerify + liveness
+      manuallyOverriddenFields: [],
       benefits: { philhealth: { active: false }, whiteCard: { active: false }, sss: { active: false } },
       createdAt: now,
       updatedAt: now,
