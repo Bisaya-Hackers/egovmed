@@ -58,6 +58,9 @@ export const api = {
   triage: (text, language) => req('/triage', { method: 'POST', body: { text, language: language === 'tl' ? 'tl' : 'en' } }),
   // National ID eVerify + Face Liveness
   startLiveness: () => req('/identity/liveness', { method: 'POST', body: {} }),
+  // Registers a session_id already captured client-side by the eVerify Face Liveness Web SDK
+  // (window.eKYC().start({ pubKey })) — a different provider than startLiveness() above.
+  registerEverifySdkLiveness: (sessionId) => req('/identity/liveness/everify-sdk', { method: 'POST', body: { sessionId } }),
   verifyIdentity: (livenessSessionId) => req('/identity/verify', { method: 'POST', body: { consent: true, livenessSessionId } }),
   // Appointments + eMessage
   book: (specialty, hospital, scheduledFor, triageId) => req('/appointments', {
