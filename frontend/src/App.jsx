@@ -5,6 +5,7 @@ import { DICT, CONST, CHANNELS, HOSPITALS } from './i18n/dict.js';
 import { api, getToken, setToken } from './lib/api.js';
 import { fallbackTriage } from './lib/triageFallback.js';
 import { makeRefNo } from './lib/refNo.js';
+import { parseSlotLabel } from './lib/slotTime.js';
 import { Gear, Bell, Check } from './components/Icons.jsx';
 
 import SignIn from './screens/SignIn.jsx';
@@ -356,7 +357,8 @@ export default function App() {
       if (S.selectedSlot == null || S.booking) return;
       set({ booking: true });
       const specialty = S.triage?.specialty || CONST.dept;
-      const [res] = await Promise.all([tryApi(api.book(specialty, S.hospital, undefined, S.triage?.id)), delay(1500)]);
+      const scheduledFor = parseSlotLabel(slotLabel, S.lang);
+      const [res] = await Promise.all([tryApi(api.book(specialty, S.hospital, scheduledFor, S.triage?.id)), delay(1500)]);
       const appt = res?.appointment;
       const refNo = appt ? makeRefNo(appt.hospital || 'PGH', appt.queueNumber, appt.id || appt.queueNumber, specialty) : null;
       // Optimistic confirmation bubble so Messages feels instant; A.loadMessages() below reconciles
