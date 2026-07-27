@@ -2,8 +2,10 @@
 const { Router } = require('express');
 const { rateLimit, requireAdmin, asyncHandler } = require('../middleware');
 const { env } = require('../config/env');
+const auditService = require('../services/auditService');
 
 const router = Router();
+const adminLimit = rateLimit({ scope: 'admin', max: 10, windowMs: 15 * 60_000, key: (req) => req.ip });
 
 // Emit URL origin only — drops userinfo and path. rpcUrl in particular is a user-supplied
 // connection string that can carry credentials (Infura/Alchemy style or HTTP basic auth to
@@ -75,5 +77,11 @@ router.get('/status',
       },
     });
   }));
+
+// POST /integrations/audit/sweep → evict PHI-access audit entries past env.auditLogRetentionDays.
+// ADMIN/cron only (x-admin-key), same shared 'admin' bucket as /reports/escalate-stale.
+router.post('/audit/sweep', adminLimit, requireAdmin, asyncHandler(async (_req, res) => {
+  res.json(await auditService.sweepExpired());
+}));
 
 module.exports = router;
