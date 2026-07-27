@@ -94,6 +94,35 @@ test('security regression suite', async (t) => {
     assert.equal(normalizePaymentStatus({}), 'pending');
   });
 
+  await t.test('mock eGovPay can be forced to simulate a failed payment', () => {
+    // Regression: getStatus() used to hardcode 'paid' unconditionally in mock mode, so a bill
+    // could never actually fail in local/demo testing (no eGov credentials required). Running in
+    // a fresh process because egovPay.js reads EGOVPAY_MOCK_OUTCOME once at module load.
+    const cwd = path.join(__dirname, '..');
+    const script = `
+      const egovPay = require('./src/integrations/egovPay');
+      (async () => {
+        const checkout = await egovPay.createCheckout({ amount: 300, description: 'test' });
+        const status = await egovPay.getStatus(checkout.reference);
+        if (checkout.status !== 'failed' || status.status !== 'failed' || status.paidAt !== null) {
+          console.error('unexpected mock outcome: ' + JSON.stringify({ checkout, status }));
+          process.exit(1);
+        }
+      })();
+    `;
+    const result = spawnSync(process.execPath, ['-e', script], {
+      cwd, encoding: 'utf8', env: { ...process.env, EGOVPAY_MOCK_OUTCOME: 'failed' },
+    });
+    assert.equal(result.status, 0, result.stderr);
+
+    // An unrecognized/unset override still defaults to the original always-succeeds demo behavior.
+    const defaultResult = spawnSync(process.execPath, ['-e', `
+      const egovPay = require('./src/integrations/egovPay');
+      egovPay.getStatus('pay_test').then((s) => { if (s.status !== 'paid') { process.exit(1); } });
+    `], { cwd, encoding: 'utf8', env: { ...process.env, EGOVPAY_MOCK_OUTCOME: '' } });
+    assert.equal(defaultResult.status, 0, defaultResult.stderr);
+  });
+
   await t.test('security headers are present and framework disclosure is disabled', async () => {
     await resetWithPatients();
     const response = await request('/health');
