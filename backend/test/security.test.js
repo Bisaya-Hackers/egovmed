@@ -441,6 +441,39 @@ test('security regression suite', async (t) => {
     assert.equal(raw.includes('user:s3cret_pw'), false, 'rpcUrl userinfo pair leaked');
   });
 
+  await t.test('GET /reports lists only the caller\'s own reports and never the description', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const attacker = sign({ sub: 'pat_attacker' });
+
+    const filed = await json(await request('/reports', {
+      token: owner, method: 'POST', body: { category: 'Billing', description: 'Charged twice for one visit' },
+    }));
+    assert.equal(filed.response.status, 201);
+
+    const mine = await json(await request('/reports', { token: owner }));
+    assert.equal(mine.response.status, 200);
+    assert.equal(mine.value.reports.length, 1);
+    assert.equal(mine.value.reports[0].caseNumber, filed.value.caseNumber);
+    assert.equal(mine.value.reports[0].category, 'Billing');
+    // Summary rows only — the encrypted narrative must not be decrypted just to render a list,
+    // and the raw ciphertext/patientId must not ride along either.
+    assert.equal(mine.value.reports[0].description, undefined);
+    assert.equal(mine.value.reports[0].encrypted, undefined);
+    assert.equal(mine.value.reports[0].patientId, undefined);
+    assert.equal(JSON.stringify(mine.value).includes('Charged twice'), false, 'report description leaked into the list');
+
+    // Another tenant sees an empty list, not someone else's cases.
+    const theirs = await json(await request('/reports', { token: attacker }));
+    assert.equal(theirs.response.status, 200);
+    assert.deepEqual(theirs.value.reports, []);
+
+    // The list must not become a way around the owner scoping on the detail route.
+    assert.equal((await request(`/reports/${filed.value.caseNumber}`, { token: attacker })).status, 404);
+    assert.equal((await request(`/reports/${filed.value.caseNumber}`, { token: owner })).status, 200);
+    assert.equal((await request('/reports')).status, 401);
+  });
+
   await t.test('authentication attempts are rate limited', async () => {
     await store.reset();
     const statuses = [];

@@ -19,7 +19,7 @@ export default function Payment({ c, lang, S, A }) {
       try {
         const q = await api.quote(BILL);
         if (alive && q && Array.isArray(q.applied)) {
-          if (q.applied.length) setBenefitLines(q.applied.map((a) => ({ label: a.label, amount: '−₱' + a.amount })));
+          if (q.applied.length) setBenefitLines(q.applied.map((a) => ({ label: a.label, amount: a.amount > 0 ? '−₱' + a.amount : c.benefitCovered })));
           setBalance('₱' + q.balance);
         }
       } catch { /* keep designed fallback */ }

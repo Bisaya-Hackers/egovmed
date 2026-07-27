@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
-import { DICT, CONST, CHANNELS, HOSPITALS } from './i18n/dict.js';
+import { DICT, CONST, CHANNELS, HOSPITALS, randomSlots } from './i18n/dict.js';
 import { api, getToken, setToken } from './lib/api.js';
 import { fallbackTriage } from './lib/triageFallback.js';
 import { makeRefNo } from './lib/refNo.js';
@@ -19,6 +19,7 @@ import Payment from './screens/Payment.jsx';
 import Payments from './screens/Payments.jsx';
 import Records from './screens/Records.jsx';
 import Messages from './screens/Messages.jsx';
+import Notifications from './screens/Notifications.jsx';
 import Account from './screens/Account.jsx';
 import Report from './screens/Report.jsx';
 import Tokens from './screens/Tokens.jsx';
@@ -33,21 +34,29 @@ const initial = () => ({
   symptom: '', recording: false, recSec: 0, thinking: false,
   emergency: false, liveness: 'idle', livenessSessionId: null,
   triage: null,
-  slotsLoading: false, selectedSlot: null, booking: false, booked: false, slotLabel: '', refNo: makeRefNo(CONST.hospital),
-  appointments: [], payingApptId: null,
+  booking: false, booked: false, slotLabel: '', refNo: makeRefNo(CONST.hospital),
+  // One entry per department being booked this session. Starts with just the triaged
+  // specialty; addBookingDept() lets the patient queue up additional departments
+  // (e.g. General Medicine + Cardiology) before confirming them together.
+  bookings: [], lastBooked: [],
+  appointments: [], payingApptId: null, remindedApptIds: [],
   hospital: CONST.hospital, showHospitalPicker: false,
   channel: null, paying: false, paid: false, paymentStatus: null,
   messages: [], unreadMessages: 0,
+  notifications: [], unreadNotifications: 0,
   reportStage: 'form', reportCat: null, reportDesc: '', caseNo: CONST.caseNo,
   trackCaseNo: '', trackLoading: false, trackError: null, trackResult: null,
+  myReports: [], myReportsLoading: false,
   showDemo: false, showTimeout: false, toast: null,
 });
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const tryApi = async (p) => { try { return await p; } catch { return null; } };
 
-const SCREENS = { signin: SignIn, home: Home, symptom: Symptom, triage: Triage, consent: Consent, liveness: Liveness, book: Book, confirm: Confirm, payment: Payment, payments: Payments, records: Records, messages: Messages, account: Account, report: Report, tokens: Tokens };
-const NAV_SCREENS = new Set(['home', 'records', 'messages', 'account']);
+const SCREENS = { signin: SignIn, home: Home, symptom: Symptom, triage: Triage, consent: Consent, liveness: Liveness, book: Book, confirm: Confirm, payment: Payment, payments: Payments, records: Records, messages: Messages, notifications: Notifications, account: Account, report: Report, tokens: Tokens };
+// Notifications isn't a BottomNav destination itself (it's reached via the bell), but it's a
+// peer to Messages/Records/Account, so keep the nav visible while it's open too.
+const NAV_SCREENS = new Set(['home', 'records', 'messages', 'account', 'notifications']);
 
 export default function App() {
   const [S, setS] = useState(initial);
@@ -82,6 +91,31 @@ export default function App() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [S.screen]);
+
+  // Reminders normally arrive server-side over SMS on a schedule, which doesn't fire in this
+  // demo. Synthesize an in-app "appointment coming up" notification the first time we see an
+  // active appointment land inside the reminder window. This is a local-only stand-in — kept
+  // out of `messages` (real eMessage/SMS delivery history) and in `notifications` instead, so
+  // it's never confused with an actual server-sent 'reminder' SMS.
+  useEffect(() => {
+    const REMINDER_WINDOW_DAYS = 3;
+    const due = S.appointments.filter((a) => {
+      if (!a.scheduledFor || S.remindedApptIds.includes(a.id)) return false;
+      const daysUntil = Math.floor((new Date(a.scheduledFor).getTime() - Date.now()) / 86400000);
+      return daysUntil >= 0 && daysUntil <= REMINDER_WINDOW_DAYS;
+    });
+    if (!due.length) return;
+    const notes = due.map((a) => ({
+      id: 'local_reminder_' + a.id, kind: 'appointment_upcoming', status: 'delivered', channel: 'in_app', provider: 'local',
+      createdAt: new Date().toISOString(),
+      meta: { specialty: a.specialty, hospital: a.hospital, queueNumber: a.queueNumber, daysUntil: Math.floor((new Date(a.scheduledFor).getTime() - Date.now()) / 86400000) },
+    }));
+    set((p) => ({
+      notifications: [...notes, ...p.notifications],
+      unreadNotifications: p.unreadNotifications + notes.length,
+      remindedApptIds: [...p.remindedApptIds, ...due.map((a) => a.id)],
+    }));
+  }, [S.appointments, S.remindedApptIds, set]);
 
   // Resume eGovPH, hosted-liveness, and eGovPay redirects. Session JWTs live in
   // sessionStorage so they survive same-tab provider redirects but disappear when the tab closes.
@@ -126,6 +160,7 @@ export default function App() {
               specialty: a.specialty,
               hospital: a.hospital || 'PGH',
               slotLabel: formatSlot(a.scheduledFor, p.lang) || p.slotLabel,
+              scheduledFor: a.scheduledFor || null,
               refNo: makeRefNo(a.hospital || 'PGH', a.queueNumber, a.id || a.queueNumber, a.specialty),
               queueNumber: a.queueNumber,
               paid: Array.isArray(pays) && pays.some((pay) => pay.appointmentId === a.id && SETTLED.includes(String(pay.status || '').toLowerCase())),
@@ -191,6 +226,12 @@ export default function App() {
           const status = String(payment?.status || '').toLowerCase();
           const paid = ['paid', 'settled', 'success', 'successful', 'completed'].includes(status);
           set({ paying: false, paid, paymentStatus: status, flowError: paid ? null : `Payment status: ${status || 'pending'}` });
+          if (paid) {
+            set((p) => ({
+              notifications: [{ id: `local_payment_confirmed_${Date.now()}`, kind: 'payment_confirmed', status: 'delivered', channel: 'in_app', provider: 'local', createdAt: new Date().toISOString(), meta: { apptId: pendingApptId || null } }, ...p.notifications],
+              unreadNotifications: p.unreadNotifications + 1,
+            }));
+          }
           await syncPatientState();
           return;
         }
@@ -217,7 +258,11 @@ export default function App() {
   const A = {
     setLang: (l) => set({ lang: l }),
     cycleText: () => set((p) => ({ textScale: (p.textScale + 1) % 3 })),
-    go: (screen) => set((p) => ({ screen, stack: [...p.stack, p.screen], ...(screen === 'messages' ? { unreadMessages: 0 } : {}) })),
+    go: (screen) => set((p) => ({
+      screen, stack: [...p.stack, p.screen],
+      ...(screen === 'messages' ? { unreadMessages: 0 } : {}),
+      ...(screen === 'notifications' ? { unreadNotifications: 0 } : {}),
+    })),
     back: () => set((p) => { const k = [...p.stack]; const prev = k.pop() || 'home'; return { screen: prev, stack: k }; }),
     toast,
 
@@ -344,42 +389,83 @@ export default function App() {
     retryLiveness: () => A.acceptConsent(),
 
     // Booking + eMessage
-    goBook: () => { A.go('book'); set({ slotsLoading: true, selectedSlot: null }); after(1100, () => set({ slotsLoading: false })); },
-    selectSlot: (i) => set({ selectedSlot: i }),
-    toggleHospitalPicker: () => set((p) => ({ showHospitalPicker: !p.showHospitalPicker })),
-    // Switching hospitals re-queries slots for that facility (mocked with the same short delay as goBook).
-    setHospital: (name) => {
-      set({ hospital: name, showHospitalPicker: false, selectedSlot: null, slotsLoading: true });
-      after(900, () => set({ slotsLoading: false }));
+    goBook: () => {
+      A.go('book');
+      const primary = S.triage?.specialty || CONST.dept;
+      set({ bookings: [{ specialty: primary, slots: null, slotsLoading: true, selectedSlot: null }] });
+      after(1100, () => set((p) => ({
+        bookings: p.bookings.map((b) => (b.specialty === primary ? { ...b, slotsLoading: false, slots: randomSlots(p.lang, b.specialty) } : b)),
+      })));
     },
-    doBook: async (slotLabel) => {
-      if (S.selectedSlot == null || S.booking) return;
-      set({ booking: true });
-      const specialty = S.triage?.specialty || CONST.dept;
-      const [res] = await Promise.all([tryApi(api.book(specialty, S.hospital, undefined, S.triage?.id)), delay(1500)]);
-      const appt = res?.appointment;
-      const refNo = appt ? makeRefNo(appt.hospital || 'PGH', appt.queueNumber, appt.id || appt.queueNumber, specialty) : null;
-      // Optimistic confirmation bubble so Messages feels instant; A.loadMessages() below reconciles
-      // it with the real, server-persisted row (with its real msg_… id) a moment later.
-      const optimistic = {
-        id: 'local_' + Date.now(), kind: 'confirmation', status: 'sent', channel: 'sms', provider: 'mock',
-        createdAt: new Date().toISOString(), meta: { specialty, hospital: appt?.hospital || S.hospital, queueNumber: appt?.queueNumber },
-      };
-      // New card on Home in addition to the singular fields (which drive the Confirm screen
-      // right after this booking) — so a 2nd/3rd booking shows up alongside earlier ones
-      // instead of replacing them.
-      const newCard = appt ? {
-        id: appt.id, specialty, hospital: appt.hospital || S.hospital,
-        slotLabel, refNo: refNo || makeRefNo(appt.hospital || S.hospital, appt.queueNumber, appt.id, specialty), queueNumber: appt.queueNumber, paid: false,
-        verified: S.liveness === 'verified',
-      } : null;
+    selectBookingSlot: (specialty, i) => set((p) => ({
+      bookings: p.bookings.map((b) => (b.specialty === specialty ? { ...b, selectedSlot: i } : b)),
+    })),
+    // Lets a patient add a 2nd (or 3rd+) department to this same visit — e.g. General Medicine
+    // for a routine checkup plus Cardiology for a heart concern — so both get booked together.
+    addBookingDept: (specialty) => {
+      if (!specialty || S.bookings.some((b) => b.specialty === specialty)) return;
+      set((p) => ({ bookings: [...p.bookings, { specialty, slots: null, slotsLoading: true, selectedSlot: null }] }));
+      after(900, () => set((p) => ({
+        bookings: p.bookings.map((b) => (b.specialty === specialty ? { ...b, slotsLoading: false, slots: randomSlots(p.lang, specialty) } : b)),
+      })));
+    },
+    removeBookingDept: (specialty) => set((p) => ({
+      bookings: p.bookings.length > 1 ? p.bookings.filter((b) => b.specialty !== specialty) : p.bookings,
+    })),
+    toggleHospitalPicker: () => set((p) => ({ showHospitalPicker: !p.showHospitalPicker })),
+    // Switching hospitals re-queries slots for that facility (mocked with the same short delay as goBook),
+    // and rolls a brand new randomized batch of times for every queued department so the list
+    // doesn't look static/demo-y.
+    setHospital: (name) => {
       set((p) => ({
-        booking: false, booked: true, slotLabel, refNo: refNo || p.refNo,
-        appointments: newCard ? [newCard, ...p.appointments.filter((a) => a.id !== newCard.id)] : p.appointments,
-        messages: [optimistic, ...p.messages], unreadMessages: p.unreadMessages + 1,
+        hospital: name, showHospitalPicker: false,
+        bookings: p.bookings.map((b) => ({ ...b, selectedSlot: null, slotsLoading: true })),
+      }));
+      after(900, () => set((p) => ({
+        bookings: p.bookings.map((b) => ({ ...b, slotsLoading: false, slots: randomSlots(p.lang, b.specialty) })),
+      })));
+    },
+    // Books every queued department that has a slot picked, in one pass, so a patient who needs
+    // e.g. General Medicine + Cardiology gets both appointments (each its own queue number,
+    // reference number, and Home card) instead of only ever booking one at a time.
+    doBook: async () => {
+      const ready = S.bookings.filter((b) => b.selectedSlot != null && b.slots?.[b.selectedSlot]);
+      if (!ready.length || S.booking) return;
+      set({ booking: true });
+      const bookOne = async (b) => {
+        const slot = b.slots[b.selectedSlot];
+        const slotLabel = slot[0];
+        const scheduledFor = slot[3] || undefined;
+        const triageId = S.triage?.specialty === b.specialty ? S.triage?.id : undefined;
+        const [res] = await Promise.all([tryApi(api.book(b.specialty, S.hospital, scheduledFor, triageId)), delay(1200)]);
+        const appt = res?.appointment;
+        const refNo = appt ? makeRefNo(appt.hospital || 'PGH', appt.queueNumber, appt.id || appt.queueNumber, b.specialty) : null;
+        return { specialty: b.specialty, slotLabel, appt, refNo };
+      };
+      const settled = await Promise.all(ready.map(bookOne));
+      const newCards = settled.filter((r) => r.appt).map((r) => ({
+        id: r.appt.id, specialty: r.specialty, hospital: r.appt.hospital || S.hospital,
+        slotLabel: r.slotLabel, scheduledFor: r.appt.scheduledFor || null,
+        refNo: r.refNo || makeRefNo(r.appt.hospital || S.hospital, r.appt.queueNumber, r.appt.id, r.specialty),
+        queueNumber: r.appt.queueNumber, paid: false, verified: S.liveness === 'verified',
+      }));
+      // Optimistic confirmation bubbles so Messages feels instant; A.loadMessages() below
+      // reconciles them with the real, server-persisted rows (with real msg_… ids) a moment later.
+      const optimistic = newCards.map((card) => ({
+        id: 'local_' + card.id, kind: 'confirmation', status: 'sent', channel: 'sms', provider: 'mock',
+        createdAt: new Date().toISOString(), meta: { specialty: card.specialty, hospital: card.hospital, queueNumber: card.queueNumber },
+      }));
+      set((p) => ({
+        booking: false, booked: true,
+        lastBooked: settled,
+        slotLabel: newCards[0]?.slotLabel || p.slotLabel, refNo: newCards[0]?.refNo || p.refNo,
+        appointments: [...newCards, ...p.appointments.filter((a) => !newCards.some((n) => n.id === a.id))],
+        messages: [...optimistic, ...p.messages], unreadMessages: p.unreadMessages + optimistic.length,
         screen: 'confirm', stack: ['home'],
       }));
-      toast(S.lang === 'tl' ? 'Ipinadala ang kumpirmasyon sa SMS' : 'Confirmation texted to you');
+      toast(S.lang === 'tl'
+        ? (newCards.length > 1 ? 'Ipinadala ang mga kumpirmasyon sa SMS' : 'Ipinadala ang kumpirmasyon sa SMS')
+        : (newCards.length > 1 ? 'Confirmations texted to you' : 'Confirmation texted to you'));
       after(1200, A.loadMessages);
     },
 
@@ -412,7 +498,10 @@ export default function App() {
             ? p.appointments.map((a) => (a.id === p.payingApptId ? { ...a, paid: true } : a))
             : p.appointments,
         }));
-        if (paid) toast(S.lang === 'tl' ? 'Ipinadala ang resibo sa SMS' : 'Receipt texted to you');
+        if (paid) {
+          toast(S.lang === 'tl' ? 'Ipinadala ang resibo sa SMS' : 'Receipt texted to you');
+          A.pushNotification('payment_confirmed', { amount, apptId: S.payingApptId });
+        }
       } catch (err) {
         set({ paying: false, flowError: err.message || 'Payment failed' });
       }
@@ -430,6 +519,18 @@ export default function App() {
       if (res?.ack) after(1000, () => set((p) => ({ messages: [res.ack, ...p.messages] })));
       return res;
     },
+    // Record uploads, benefit activation, payment receipts, and report filing don't hit
+    // eMessage/SMS — they're in-app-only pings, so they live in `notifications`, a separate
+    // feed from `messages` (which stays a pure mirror of real eMessage/SMS delivery history).
+    pushNotification: (kind, meta) => {
+      const note = {
+        id: `local_${kind}_${Date.now()}`, kind, status: 'delivered', channel: 'in_app', provider: 'local',
+        createdAt: new Date().toISOString(), meta,
+      };
+      set((p) => ({ notifications: [note, ...p.notifications], unreadNotifications: p.unreadNotifications + 1 }));
+    },
+    notifyRecordUploaded: (saved) => A.pushNotification('record_uploaded', { title: saved?.title || saved?.name }),
+    notifyBenefitAdded: (label) => A.pushNotification('benefit_added', { title: label }),
 
     // Records + Report
     goRecords: () => A.go('records'),
@@ -441,13 +542,27 @@ export default function App() {
       set({ reportStage: 'filed' });
       const res = await tryApi(api.fileReport(catLabel, S.reportDesc));
       if (res?.caseNumber) set({ caseNo: res.caseNumber });
+      A.pushNotification('report_filed', { caseNo: res?.caseNumber || S.caseNo, category: catLabel });
     },
 
     // Check the status of a previously filed report (GET /reports/:caseNumber)
-    openTrackReport: () => set({ reportStage: 'track', trackCaseNo: '', trackError: null, trackResult: null }),
+    openTrackReport: () => { set({ reportStage: 'track', trackCaseNo: '', trackError: null, trackResult: null }); A.loadMyReports(); },
+    // The patient's own filed reports (GET /reports), so tracking a case doesn't require having
+    // written the case number down somewhere. Failure is non-fatal: the manual entry field
+    // stays usable, the list just doesn't render.
+    loadMyReports: async () => {
+      set({ myReportsLoading: true });
+      const res = await tryApi(api.myReports());
+      set({ myReportsLoading: false, myReports: res?.reports || [] });
+    },
+    // Tapping a row fills the field and runs the same lookup as manual entry, so the result
+    // always reflects fresh upstream status rather than the summary row's cached one.
+    trackMyReport: (caseNumber) => { set({ trackCaseNo: caseNumber, trackError: null }); A.submitTrackCase(caseNumber); },
     setTrackCaseNo: (v) => set({ trackCaseNo: v.toUpperCase(), trackError: null }),
-    submitTrackCase: async () => {
-      const caseNo = S.trackCaseNo.trim();
+    // caseNumber is passed explicitly when this comes from a tapped list row, since the set()
+    // that fills the field hasn't necessarily landed in S yet.
+    submitTrackCase: async (caseNumber) => {
+      const caseNo = (typeof caseNumber === 'string' ? caseNumber : S.trackCaseNo).trim();
       // EGM-YYYY-###### = self-generated (mock); PFM-MMDDYY-#### = live eReport format.
       // Backend accepts both, keep this in sync so live case numbers don't fail client-side.
       if (!/^(EGM-\d{4}-\d{6}|PFM-\d{6}-\d{4})$/.test(caseNo)) { set({ trackError: 'invalid' }); return; }
@@ -461,7 +576,7 @@ export default function App() {
     },
 
     // Overlays / demo controls
-    resetToHome: () => set({ screen: 'home', stack: [], selectedSlot: null, channel: null, paid: false, paying: false, reportStage: 'form', reportCat: null, reportDesc: '', trackCaseNo: '', trackResult: null, trackError: null }),
+    resetToHome: () => set({ screen: 'home', stack: [], bookings: [], channel: null, paid: false, paying: false, reportStage: 'form', reportCat: null, reportDesc: '', trackCaseNo: '', trackResult: null, trackError: null }),
     toggleDemo: () => set((p) => ({ showDemo: !p.showDemo })),
     toggleEmergency: () => set((p) => ({ emergency: !p.emergency })),
     triggerTimeout: () => set({ showDemo: false, showTimeout: true }),
@@ -487,9 +602,11 @@ export default function App() {
           <button className={'iconbtn' + (S.textScale ? ' active' : '')} onClick={A.cycleText} aria-label={c.textSize} title={c.textSize}>AA</button>
           <button className="iconbtn" onClick={A.toggleDemo} aria-label="Demo controls"><Gear size={17} /></button>
           {S.screen === 'home' && (
-            <button className="iconbtn" onClick={() => A.toast(c.notifications)} aria-label={c.notifications} style={{ position: 'relative' }}>
+            <button className="iconbtn" onClick={() => A.go('notifications')} aria-label={c.notifications} style={{ position: 'relative' }}>
               <Bell size={17} />
-              <span style={{ position: 'absolute', top: 6, right: 7, width: 7, height: 7, borderRadius: 999, background: 'var(--red)' }} />
+              {S.unreadNotifications > 0 && (
+                <span style={{ position: 'absolute', top: 6, right: 7, width: 7, height: 7, borderRadius: 999, background: 'var(--red)' }} />
+              )}
             </button>
           )}
         </div>

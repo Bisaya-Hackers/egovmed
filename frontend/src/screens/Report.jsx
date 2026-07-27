@@ -8,6 +8,40 @@ import { CATS, TRACK, TRACKNOTE } from '../i18n/dict.js';
 // Map whatever status the case is in (mock always returns "open"; live eReport can also
 // return in_review/assigned/resolved/escalated) onto the 4-step tracker used for a fresh filing.
 const STATUS_STEP = { open: 0, in_review: 1, assigned: 2, resolved: 3, escalated: 1 };
+const STATUS_KEY = { open: 'statusOpen', in_review: 'statusInReview', assigned: 'statusAssigned', resolved: 'statusResolved', escalated: 'statusEscalated' };
+
+// Rows come from GET /reports, which returns summaries only (no description) — enough to pick a
+// case without having written its number down, which is the whole point of the list.
+function MyReportRow({ c, lang, report, active, onPick }) {
+  const status = String(report.status || '').toLowerCase();
+  const statusLabel = c[STATUS_KEY[status]] || report.status;
+  // Categories are stored in English (that's what gets filed upstream), so map back through
+  // CATS for display. Falls through to the raw value for anything live eReport returns that
+  // isn't one of ours.
+  const catIndex = CATS.en.indexOf(report.category);
+  const catLabel = catIndex === -1 ? report.category : CATS[lang][catIndex];
+  const filed = new Date(report.createdAt);
+  const when = Number.isNaN(filed.getTime()) ? '' : filed.toLocaleDateString(lang === 'tl' ? 'fil-PH' : 'en-PH', { day: 'numeric', month: 'short', year: 'numeric' });
+  return (
+    <button
+      onClick={() => onPick(report.caseNumber)}
+      aria-label={`${report.caseNumber}, ${catLabel}, ${statusLabel}`}
+      style={{
+        width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12,
+        padding: '12px 14px', borderRadius: 14, background: 'var(--surface)', cursor: 'pointer',
+        border: active ? '2px solid var(--primary)' : '1.5px solid var(--line)',
+      }}
+    >
+      <span style={{ minWidth: 0, flex: 1 }}>
+        <span className="mono" style={{ display: 'block', fontWeight: 700, letterSpacing: '0.04em', overflowWrap: 'anywhere' }}>{report.caseNumber}</span>
+        <span className="sub" style={{ display: 'block', margin: '2px 0 0' }}>
+          {catLabel}{when ? ` · ${when}` : ''}
+        </span>
+      </span>
+      <span className={`pill ${status === 'escalated' ? 'amber' : status === 'resolved' ? 'green' : 'blue'}`} style={{ flex: 'none' }}>{statusLabel}</span>
+    </button>
+  );
+}
 
 // Vertical step tracker, shared by the just-filed confirmation and the status-check result.
 function Tracker({ lang, stepIndex }) {
@@ -68,12 +102,35 @@ export default function Report({ c, lang, S, set, A }) {
     const stepIndex = result ? (STATUS_STEP[String(result.status || '').toLowerCase()] ?? 0) : 0;
     const escalated = String(result?.status || '').toLowerCase() === 'escalated';
     return (
-      <div className="screen">
+      <div className="screen" key={S.reportStage}>
         <ScreenHeader onBack={() => set({ reportStage: 'form' })} label={c.trackTitle} />
         <h1 className="h1" data-stagger>{c.trackTitle}</h1>
         <p className="sub" data-stagger>{c.trackSub}</p>
 
-        <div className="overline" data-stagger style={{ marginTop: 20, marginBottom: 10 }}>{c.caseNumberLabel}</div>
+        <div className="overline" data-stagger style={{ marginTop: 20, marginBottom: 10 }}>{c.myReportsLabel}</div>
+        {/* One data-stagger wrapper that is always present, so the list arriving asynchronously
+            never changes the set of elements the screen-entry stagger is animating. */}
+        <div data-stagger>
+          {S.myReportsLoading ? (
+            <div className="sub" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="spinner" /> {c.myReportsLoadingText}
+            </div>
+          ) : S.myReports.length === 0 ? (
+            <div className="sub">{c.myReportsEmpty}</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {S.myReports.map((r) => (
+                <MyReportRow
+                  key={r.id} c={c} lang={lang} report={r}
+                  active={r.caseNumber === S.trackCaseNo}
+                  onPick={A.trackMyReport}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="overline" data-stagger style={{ marginTop: 20, marginBottom: 10 }}>{c.trackManualLabel}</div>
         <input
           data-stagger className="field mono" value={S.trackCaseNo}
           onChange={(e) => A.setTrackCaseNo(e.target.value)}
@@ -115,7 +172,7 @@ export default function Report({ c, lang, S, set, A }) {
 
   if (S.reportStage === 'filed') {
     return (
-      <div className="screen">
+      <div className="screen" key={S.reportStage}>
         <div style={{ textAlign: 'center', marginTop: 12 }} role="status">
           <Pop className="checkdisc"><Check size={40} /></Pop>
           <h1 className="h1" style={{ marginTop: 18 }}>{c.caseTitle}</h1>
@@ -143,7 +200,7 @@ export default function Report({ c, lang, S, set, A }) {
   if (S.reportStage === 'otp') {
     const ready = otp.every((d) => d);
     return (
-      <div className="screen">
+      <div className="screen" key={S.reportStage}>
         <ScreenHeader onBack={() => set({ reportStage: 'form' })} label={c.otpTitle} />
         <h1 className="h1" data-stagger>{c.otpTitle}</h1>
         <p className="sub" data-stagger>{c.otpSub}</p>
@@ -163,7 +220,7 @@ export default function Report({ c, lang, S, set, A }) {
   // form stage
   const canSubmit = S.reportCat != null && S.reportDesc.trim();
   return (
-    <div className="screen">
+    <div className="screen" key={S.reportStage}>
       <ScreenHeader onBack={A.back} label={c.reportTitle} />
       <h1 className="h1" data-stagger>{c.reportTitle}</h1>
       <p className="sub" data-stagger>{c.reportSub}</p>
