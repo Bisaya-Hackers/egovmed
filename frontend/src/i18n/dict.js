@@ -7,15 +7,15 @@ export const DICT = {
     signInTitle: 'Sign in to eGovMed', signInSub: 'Use your eGovPH account to continue.',
     signInBtn: 'Sign in with eGovPH', signInSecure: 'Secure single sign-on', signingIn: 'Signing you in…',
     signInError: "We couldn't reach eGovPH. Please try again.",
-    welcomeBack: 'Welcome back!', mpinPrompt: 'Sign in with your eGovPH account', mpinLabel: 'Enter your 6-digit MPIN', clearLabel: 'Clear', forgotMpin: 'Forgot MPIN?', notYou: 'Not you?', switchAccount: 'Switch account', navPay: 'Payments', navMessages: 'Messages', navReport: 'Report', fingerprint: 'Scan your fingerprint', quickAdd: 'Common symptoms — tap to add', featured: 'Featured', featuredTitle: 'Verified labs across hospitals', featuredSub: 'No repeat tests. Your results follow you.',
+    welcomeBack: 'Welcome back!', mpinPrompt: 'Sign in with your eGovPH account', mpinLabel: 'Enter your 6-digit MPIN', clearLabel: 'Clear', forgotMpin: 'Forgot MPIN?', notYou: 'Not you?', switchAccount: 'Switch account', navPay: 'Payments', navMessages: 'Messages', navReport: 'Report', fingerprint: 'Scan your fingerprint', quickAdd: 'Common symptoms, tap to add', featured: 'Featured', featuredTitle: 'Verified labs across hospitals', featuredSub: 'No repeat tests. Your results follow you.',
     featuredTitle2: 'Benefits applied automatically', featuredSub2: 'PhilHealth, White Card, and SSS coverage are deducted before you pay.',
-    featuredTitle3: 'SMS updates you can reply to', featuredSub3: 'Booking confirmations text you instantly — reply right here in the app.',
+    featuredTitle3: 'SMS updates you can reply to', featuredSub3: 'Booking confirmations text you instantly. Reply right here in the app.',
     greeting: 'Hi, Rosa', homeSignedInAs: 'Signed in with eGovPH', notifications: 'Notifications',
     startVisit: 'Start a visit', startVisitSub: "Tell us how you feel. We'll guide you.",
     upcoming: 'Upcoming appointment', noAppts: 'No upcoming appointments', noApptsSub: "Start a visit and we'll book one for you.",
     navHome: 'Home', navRecords: 'Records', navHelp: 'Help', navAccount: 'Account',
     stepIntake: 'Step 1 · Symptoms', stepTriage: 'Step 2 · Routing', stepVerify: 'Step 3 · Verify you', stepBook: 'Step 4 · Book', stepPay: 'Payment',
-    symptomTitle: 'Describe how you feel', symptomHint: 'You can type or speak — in Tagalog or English.',
+    symptomTitle: 'Describe how you feel', symptomHint: 'You can type or speak, in Tagalog or English.',
     symptomPlaceholder: 'e.g. chest pain and shortness of breath since this morning…',
     micTap: 'Tap to speak', micStop: 'Listening… tap to stop', analyze: 'Analyze symptoms', thinking: 'Finding the right department…',
     symptomSafety: 'In an emergency, call 911 or go to the nearest ER right away.',
@@ -24,7 +24,7 @@ export const DICT = {
     triageDisclaimer: 'A nurse will confirm this. This is not a diagnosis.',
     uRoutine: 'Routine', uUrgent: 'Urgent', uEmergency: 'Emergency', continue: 'Continue',
     emergencyTitle: 'Seek help now', emergencyBanner: 'This may be urgent. Please go to the nearest emergency room or call for help now.',
-    callER: 'Call 911', findER: 'Find nearest ER', emgDemoContinue: 'This is a demo — continue the flow',
+    callER: 'Call 911', findER: 'Find nearest ER', emgDemoContinue: 'This is a demo, continue the flow',
     consentTitle: "Verify it's you", consentSub: (hospital) => `To book with ${hospital}, we'll verify your identity with your National ID (PhilSys).`,
     consentDecline: 'Not now', consentAccept: 'I agree, verify me',
     livenessLook: 'Look at the camera', livenessHold: 'Hold still…', livenessVerifying: 'Verifying your identity…',
@@ -34,7 +34,11 @@ export const DICT = {
     loadingSlots: 'Finding available slots…', confirmBook: 'Confirm booking', booking: 'Booking your slot…',
     confirmTitle: "You're booked", refLabel: 'Reference number', prep: 'Before your visit',
     texted: "We've texted this to you", goPay: 'Continue to payment', backHome: 'Back to home',
-    payTitle: 'Payment', billFor: 'Consultation — Cardiology', benefits: 'Benefits applied', mockTag: 'demo · pending integration',
+    addAnotherDept: '+ Add another department', pickDeptTitle: 'Which other department?',
+    removeDept: 'Remove', confirmBookN: (n) => (n > 1 ? `Confirm ${n} bookings` : 'Confirm booking'),
+    bookingN: (n) => (n > 1 ? `Booking your ${n} slots…` : 'Booking your slot…'),
+    multiApptNote: "You're booking more than one appointment — each gets its own queue number and reference.",
+    payTitle: 'Payment', billFor: 'Consultation, Cardiology', benefits: 'Benefits applied', mockTag: 'demo · pending integration',
     balance: 'Amount to pay', payChannelTitle: 'Pay with', payNow: 'Pay now', processing: 'Processing payment…',
     payHostedNote: "You'll finish paying on eGovPay's secure page next. Tap your payment method there (e.g. Cash Payments), then Pay Now.",
     payRedirecting: 'Taking you to eGovPay…',
@@ -42,7 +46,7 @@ export const DICT = {
     paymentsTitle: 'Payments', paymentsUnpaidSection: 'Needs payment', paymentsHistorySection: 'Payment history',
     paymentsNoUnpaid: 'Nothing due right now', paymentsNoHistory: 'No payments yet',
     paymentsHistorySub: "Past payments made through eGovPay.", paymentsRef: 'Ref',
-    recordsTitle: 'Records & lab results', recordsSub: 'Results shared and verified across hospitals — no repeat labs.',
+    recordsTitle: 'Records & lab results', recordsSub: 'Results shared and verified across hospitals, no repeat labs.',
     verifiedBadge: 'Verified', notVerifiedBadge: 'Not verified', verifiedFrom: 'Verified from', paidBadge: 'Paid',
     uploadRecord: 'Upload record', uploadRecordFile: 'File', uploadRecordChoose: 'Choose file', uploadRecordChosen: 'file selected',
     uploadRecordTitle: 'Record name', uploadRecordTitlePh: 'e.g. Chest X-ray', uploadRecordType: 'Type',
@@ -53,23 +57,26 @@ export const DICT = {
     uploadRecordError: 'Could not save this record', uploadRecordDone: 'Record added',
     recordTypeLab: 'Lab result', recordTypeImaging: 'Imaging', recordTypePrescription: 'Prescription', recordTypeOther: 'Other',
     messagesTitle: 'Messages', messagesSub: 'Confirmations, reminders, and results from eGovMed.',
-    messagesIntro: 'Your health updates in one place', messagesIntroSub: 'We keep only delivery history here — never the private text sent to you.',
+    messagesIntro: 'Your health updates in one place', messagesIntroSub: 'We keep only delivery history here, never the private text sent to you.',
     messagesLoading: 'Loading messages…', messagesError: 'We could not load your messages.', messagesEmpty: 'No messages yet', messagesEmptySub: 'Booking confirmations and reminders will appear here.',
     messageConfirmation: 'Appointment confirmed', messageReminder: 'Appointment reminder', messageResultsReady: 'Results ready', messageGeneric: 'eGovMed update',
     messageReplySent: 'Message sent', messageStaffAck: 'PGH replied',
-    replyPlaceholder: 'Type a message…', replySend: 'Send', replySending: 'PGH Patient Services is replying…', replySyncing: 'Still syncing this message — try again in a moment.',
-    replyDemoBanner: 'Demo · replies do not reach hospital staff yet — do not use for urgent medical concerns. Call 911 for emergencies.',
+    notificationsTitle: 'Notifications', notificationsSub: 'In-app updates from eGovMed: uploads, benefits, payments, and reports.',
+    notificationsLoading: 'Loading notifications…', notificationsEmpty: 'No notifications yet', notificationsEmptySub: 'Uploads, benefit changes, payments, and reports will appear here.',
+    notifRecordUploaded: 'Record uploaded', notifBenefitAdded: 'Benefit added', notifPaymentConfirmed: 'Payment confirmed', notifReportFiled: 'Report filed', notifAppointmentUpcoming: 'Appointment coming up',
+    replyPlaceholder: 'Type a message…', replySend: 'Send', replySending: 'PGH Patient Services is replying…', replySyncing: 'Still syncing this message, try again in a moment.',
+    replyDemoBanner: 'Demo · replies do not reach hospital staff yet. Do not use for urgent medical concerns. Call 911 for emergencies.',
     channelSms: 'SMS', channelEmail: 'Email', channelInApp: 'In-app',
     accountTitle: 'Account', accountSub: 'Your verified profile, benefits, and preferences.', accountProfile: 'Profile', accountBenefits: 'Benefits', accountPreferences: 'Preferences',
     accountLoading: 'Loading your account…', accountError: 'We could not load your account.', accountSignInAgain: 'Sign in again',
-    benefitOn: 'Active', benefitOff: 'Not active', benefitAdd: 'Add', benefitAdding: 'Adding…', benefitComingSoon: 'Coming soon', benefitAddCta: 'Add a benefit', benefitsNone: 'No benefits added yet.', benefitCatalogEmpty: 'You’ve added every available benefit.', languageLabel: 'Language', textSizeLabel: 'Text size', notAvailable: 'Not provided',
+    benefitOn: 'Active', benefitOff: 'Not active', benefitAdd: 'Add', benefitAdding: 'Adding…', benefitComingSoon: 'Coming soon', benefitAddCta: 'Add a benefit', benefitsNone: 'No benefits added yet.', benefitCatalogEmpty: 'You’ve added every available benefit.', benefitCovered: 'Already covered', benefitRemove: 'Remove', languageLabel: 'Language', textSizeLabel: 'Text size', notAvailable: 'Not provided',
     contactEdit: 'Edit', contactSave: 'Save', contactSaving: 'Saving…', contactCancel: 'Cancel',
     phoneLabel: 'Phone', phonePlaceholder: '+63 917 000 0000',
     phoneInvalid: 'Enter a Philippine mobile like 09171234567 or +639171234567.',
     phoneMissingHint: 'Add your mobile number so we can text you booking confirmations and reminders.',
     emailLabel: 'Email', emailPlaceholder: 'you@example.com',
     emailInvalid: 'Enter a valid email address.',
-    contactSaved: 'Contact updated', contactSaveError: "We couldn't save that — please try again.",
+    contactSaved: 'Contact updated', contactSaveError: "We couldn't save that, please try again.",
     accountAbout: 'eGovMed is a government health rail built on eGovPH. Pilot: Philippine General Hospital.',
     reportTitle: 'Report an issue', reportSub: "Tell us what went wrong. You'll get a case number to track it.",
     reportCatLabel: 'What is this about?', descLabel: 'What happened?', descPlaceholder: 'Describe the issue in your own words…',
@@ -93,15 +100,15 @@ export const DICT = {
     signInTitle: 'Mag-sign in sa eGovMed', signInSub: 'Gamitin ang iyong eGovPH account para magpatuloy.',
     signInBtn: 'Mag-sign in gamit ang eGovPH', signInSecure: 'Ligtas na single sign-on', signingIn: 'Sini-sign in ka…',
     signInError: 'Hindi ma-abot ang eGovPH. Pakisubukang muli.',
-    welcomeBack: 'Maligayang pagbabalik!', mpinPrompt: 'Mag-sign in gamit ang iyong eGovPH account', mpinLabel: 'Ilagay ang 6-digit MPIN', clearLabel: 'I-clear', forgotMpin: 'Nakalimutan ang MPIN?', notYou: 'Hindi ikaw?', switchAccount: 'Palitan ang account', navPay: 'Bayad', navMessages: 'Mensahe', navReport: 'Ulat', fingerprint: 'I-scan ang fingerprint', quickAdd: 'Karaniwang sintomas — pindutin para idagdag', featured: 'Featured', featuredTitle: 'Verified labs sa mga ospital', featuredSub: 'Walang paulit-ulit na test. Kasama mo ang resulta.',
+    welcomeBack: 'Maligayang pagbabalik!', mpinPrompt: 'Mag-sign in gamit ang iyong eGovPH account', mpinLabel: 'Ilagay ang 6-digit MPIN', clearLabel: 'I-clear', forgotMpin: 'Nakalimutan ang MPIN?', notYou: 'Hindi ikaw?', switchAccount: 'Palitan ang account', navPay: 'Bayad', navMessages: 'Mensahe', navReport: 'Ulat', fingerprint: 'I-scan ang fingerprint', quickAdd: 'Karaniwang sintomas, pindutin para idagdag', featured: 'Featured', featuredTitle: 'Verified labs sa mga ospital', featuredSub: 'Walang paulit-ulit na test. Kasama mo ang resulta.',
     featuredTitle2: 'Awtomatikong nailalapat ang benepisyo', featuredSub2: 'Ibinabawas na ang saklaw ng PhilHealth, White Card, at SSS bago ka magbayad.',
-    featuredTitle3: 'SMS updates na masasagot mo', featuredSub3: 'Agad kang ma-tetext pag kumpirmado ang booking — sumagot dito mismo sa app.',
+    featuredTitle3: 'SMS updates na masasagot mo', featuredSub3: 'Agad kang ma-tetext pag kumpirmado ang booking. Sumagot dito mismo sa app.',
     greeting: 'Kumusta, Rosa', homeSignedInAs: 'Naka-sign in gamit ang eGovPH', notifications: 'Mga abiso',
     startVisit: 'Magsimula ng konsulta', startVisitSub: 'Sabihin ang nararamdaman. Gagabayan ka namin.',
     upcoming: 'Nakatakdang appointment', noAppts: 'Walang nakatakdang appointment', noApptsSub: 'Magsimula ng konsulta at ibo-book namin ito.',
     navHome: 'Home', navRecords: 'Rekord', navHelp: 'Tulong', navAccount: 'Account',
     stepIntake: 'Hakbang 1 · Sintomas', stepTriage: 'Hakbang 2 · Routing', stepVerify: 'Hakbang 3 · I-verify', stepBook: 'Hakbang 4 · Book', stepPay: 'Bayad',
-    symptomTitle: 'Ilarawan ang nararamdaman', symptomHint: 'Maaari kang mag-type o magsalita — sa Tagalog o Ingles.',
+    symptomTitle: 'Ilarawan ang nararamdaman', symptomHint: 'Maaari kang mag-type o magsalita, sa Tagalog o Ingles.',
     symptomPlaceholder: 'hal. sumasakit ang dibdib at hirap huminga mula kaninang umaga…',
     micTap: 'Pindutin para magsalita', micStop: 'Nakikinig… pindutin para itigil', analyze: 'Suriin ang sintomas', thinking: 'Hinahanap ang tamang departamento…',
     symptomSafety: 'Sa emergency, tumawag sa 911 o pumunta agad sa pinakamalapit na ER.',
@@ -110,7 +117,7 @@ export const DICT = {
     triageDisclaimer: 'Ico-confirm ito ng isang nurse. Hindi ito diagnosis.',
     uRoutine: 'Rutinaryo', uUrgent: 'Kagyat', uEmergency: 'Emergency', continue: 'Magpatuloy',
     emergencyTitle: 'Humingi ng tulong ngayon', emergencyBanner: 'Maaaring kagyat ito. Pumunta agad sa pinakamalapit na emergency room o tumawag ng tulong ngayon.',
-    callER: 'Tumawag sa 911', findER: 'Hanapin ang pinakamalapit na ER', emgDemoContinue: 'Demo ito — ituloy ang flow',
+    callER: 'Tumawag sa 911', findER: 'Hanapin ang pinakamalapit na ER', emgDemoContinue: 'Demo ito, ituloy ang flow',
     consentTitle: 'Patunayan na ikaw nga', consentSub: (hospital) => `Para mag-book sa ${hospital}, ipapatunay namin ang iyong pagkakakilanlan gamit ang National ID (PhilSys).`,
     consentDecline: 'Hindi muna', consentAccept: 'Sang-ayon ako, i-verify ako',
     livenessLook: 'Tumingin sa camera', livenessHold: 'Wag gagalaw…', livenessVerifying: 'Vine-verify ang pagkakakilanlan…',
@@ -120,7 +127,11 @@ export const DICT = {
     loadingSlots: 'Naghahanap ng bakanteng oras…', confirmBook: 'Kumpirmahin ang booking', booking: 'Bino-book ang iyong oras…',
     confirmTitle: 'Naka-book ka na', refLabel: 'Reference number', prep: 'Bago ang iyong konsulta',
     texted: 'Ipinadala namin ito sa iyong SMS', goPay: 'Magpatuloy sa bayad', backHome: 'Bumalik sa home',
-    payTitle: 'Bayad', billFor: 'Konsulta — Cardiology', benefits: 'Mga benepisyong inilapat', mockTag: 'demo · nakabinbing integration',
+    addAnotherDept: '+ Magdagdag ng ibang departamento', pickDeptTitle: 'Aling ibang departamento?',
+    removeDept: 'Alisin', confirmBookN: (n) => (n > 1 ? `Kumpirmahin ang ${n} bookings` : 'Kumpirmahin ang booking'),
+    bookingN: (n) => (n > 1 ? `Bino-book ang iyong ${n} na oras…` : 'Bino-book ang iyong oras…'),
+    multiApptNote: 'Mag-book ka ng higit sa isang appointment — may sariling queue number at reference number ang bawat isa.',
+    payTitle: 'Bayad', billFor: 'Konsulta, Cardiology', benefits: 'Mga benepisyong inilapat', mockTag: 'demo · nakabinbing integration',
     balance: 'Halagang babayaran', payChannelTitle: 'Magbayad gamit ang', payNow: 'Magbayad', processing: 'Pinoproseso ang bayad…',
     payHostedNote: 'Tatapusin mo ang bayad sa secure na page ng eGovPay. Pindutin doon ang paraan ng bayad (hal. Cash Payments), tapos Pay Now.',
     payRedirecting: 'Dinadala ka sa eGovPay…',
@@ -128,7 +139,7 @@ export const DICT = {
     paymentsTitle: 'Mga Bayad', paymentsUnpaidSection: 'Kailangang bayaran', paymentsHistorySection: 'Kasaysayan ng bayad',
     paymentsNoUnpaid: 'Wala pang dapat bayaran', paymentsNoHistory: 'Wala pang bayad',
     paymentsHistorySub: 'Mga nakaraang bayad gamit ang eGovPay.', paymentsRef: 'Ref',
-    recordsTitle: 'Rekord at resulta ng lab', recordsSub: 'Ibinabahagi at ni-verify sa iba’t ibang ospital — walang paulit-ulit na lab.',
+    recordsTitle: 'Rekord at resulta ng lab', recordsSub: 'Ibinabahagi at ni-verify sa iba’t ibang ospital, walang paulit-ulit na lab.',
     verifiedBadge: 'Verified', notVerifiedBadge: 'Hindi pa verified', verifiedFrom: 'Verified mula sa', paidBadge: 'Bayad na',
     uploadRecord: 'Mag-upload ng rekord', uploadRecordFile: 'File', uploadRecordChoose: 'Pumili ng file', uploadRecordChosen: 'file ang napili',
     uploadRecordTitle: 'Pangalan ng rekord', uploadRecordTitlePh: 'hal. Chest X-ray', uploadRecordType: 'Uri',
@@ -139,23 +150,26 @@ export const DICT = {
     uploadRecordError: 'Hindi ma-save ang rekord na ito', uploadRecordDone: 'Naidagdag ang rekord',
     recordTypeLab: 'Resulta ng lab', recordTypeImaging: 'Imaging', recordTypePrescription: 'Reseta', recordTypeOther: 'Iba pa',
     messagesTitle: 'Mga mensahe', messagesSub: 'Mga kumpirmasyon, paalala, at resulta mula sa eGovMed.',
-    messagesIntro: 'Lahat ng health update, nasa iisang lugar', messagesIntroSub: 'History ng pagpapadala lang ang naka-save dito — hindi ang pribadong mensaheng ipinadala sa iyo.',
+    messagesIntro: 'Lahat ng health update, nasa iisang lugar', messagesIntroSub: 'History ng pagpapadala lang ang naka-save dito, hindi ang pribadong mensaheng ipinadala sa iyo.',
     messagesLoading: 'Kinukuha ang mga mensahe…', messagesError: 'Hindi ma-load ang iyong mga mensahe.', messagesEmpty: 'Wala pang mensahe', messagesEmptySub: 'Dito lalabas ang kumpirmasyon ng booking at mga paalala.',
     messageConfirmation: 'Kumpirmado ang appointment', messageReminder: 'Paalala sa appointment', messageResultsReady: 'Handa na ang resulta', messageGeneric: 'Update mula sa eGovMed',
     messageReplySent: 'Naipadala ang mensahe', messageStaffAck: 'Sumagot ang PGH',
-    replyPlaceholder: 'Mag-type ng mensahe…', replySend: 'Ipadala', replySending: 'Sumasagot ang PGH Patient Services…', replySyncing: 'Sini-sync pa ang mensaheng ito — subukang muli sandali.',
-    replyDemoBanner: 'Demo · hindi pa umaabot sa staff ng ospital ang mga sagot — huwag gamitin para sa mga urgent na medikal na alalahanin. Tumawag ng 911 kung emergency.',
+    notificationsTitle: 'Mga Abiso', notificationsSub: 'Mga in-app update mula sa eGovMed: pag-upload, benepisyo, bayad, at report.',
+    notificationsLoading: 'Kinukuha ang mga abiso…', notificationsEmpty: 'Wala pang abiso', notificationsEmptySub: 'Dito lalabas ang pag-upload, pagbabago sa benepisyo, bayad, at report.',
+    notifRecordUploaded: 'Na-upload ang rekord', notifBenefitAdded: 'Idinagdag ang benepisyo', notifPaymentConfirmed: 'Nakumpirma ang bayad', notifReportFiled: 'Naisumite ang report', notifAppointmentUpcoming: 'Paparating na ang appointment',
+    replyPlaceholder: 'Mag-type ng mensahe…', replySend: 'Ipadala', replySending: 'Sumasagot ang PGH Patient Services…', replySyncing: 'Sini-sync pa ang mensaheng ito, subukang muli sandali.',
+    replyDemoBanner: 'Demo · hindi pa umaabot sa staff ng ospital ang mga sagot. Huwag gamitin para sa mga urgent na medikal na alalahanin. Tumawag ng 911 kung emergency.',
     channelSms: 'SMS', channelEmail: 'Email', channelInApp: 'Sa app',
     accountTitle: 'Account', accountSub: 'Iyong verified profile, mga benepisyo, at preferences.', accountProfile: 'Profile', accountBenefits: 'Mga benepisyo', accountPreferences: 'Preferences',
     accountLoading: 'Kinukuha ang iyong account…', accountError: 'Hindi ma-load ang iyong account.', accountSignInAgain: 'Mag-sign in muli',
-    benefitOn: 'Aktibo', benefitOff: 'Hindi aktibo', benefitAdd: 'Idagdag', benefitAdding: 'Idinaragdag…', benefitComingSoon: 'Malapit na', benefitAddCta: 'Magdagdag ng benepisyo', benefitsNone: 'Wala pang naidagdag na benepisyo.', benefitCatalogEmpty: 'Naidagdag mo na ang lahat ng available na benepisyo.', languageLabel: 'Wika', textSizeLabel: 'Laki ng teksto', notAvailable: 'Walang inilagay',
+    benefitOn: 'Aktibo', benefitOff: 'Hindi aktibo', benefitAdd: 'Idagdag', benefitAdding: 'Idinaragdag…', benefitComingSoon: 'Malapit na', benefitAddCta: 'Magdagdag ng benepisyo', benefitsNone: 'Wala pang naidagdag na benepisyo.', benefitCatalogEmpty: 'Naidagdag mo na ang lahat ng available na benepisyo.', benefitCovered: 'Nasakop na', benefitRemove: 'Alisin', languageLabel: 'Wika', textSizeLabel: 'Laki ng teksto', notAvailable: 'Walang inilagay',
     contactEdit: 'I-edit', contactSave: 'I-save', contactSaving: 'Sine-save…', contactCancel: 'Kanselahin',
     phoneLabel: 'Numero ng telepono', phonePlaceholder: '+63 917 000 0000',
     phoneInvalid: 'Maglagay ng PH mobile katulad ng 09171234567 o +639171234567.',
     phoneMissingHint: 'Ilagay ang iyong mobile number para makatanggap ng SMS confirmations at paalala.',
     emailLabel: 'Email', emailPlaceholder: 'ikaw@halimbawa.com',
     emailInvalid: 'Maglagay ng wastong email address.',
-    contactSaved: 'Nai-update ang contact', contactSaveError: 'Hindi na-save — pakisubukang muli.',
+    contactSaved: 'Nai-update ang contact', contactSaveError: 'Hindi na-save, pakisubukang muli.',
     accountAbout: 'Ang eGovMed ay serbisyong pangkalusugan ng gobyerno na binuo sa eGovPH. Pilot: Philippine General Hospital.',
     reportTitle: 'Mag-ulat ng problema', reportSub: 'Sabihin kung ano ang nangyari. Bibigyan ka ng case number para masubaybayan.',
     reportCatLabel: 'Tungkol saan ito?', descLabel: 'Ano ang nangyari?', descPlaceholder: 'Ilarawan ang problema sa iyong sariling salita…',
@@ -192,6 +206,46 @@ export const SLOTS = {
   en: [['Today · 2:30 PM', 'Cardiology', false], ['Tomorrow · 9:00 AM', 'Cardiology', false], ['Tomorrow · 11:15 AM', 'Cardiology', true], ['Fri · 3:45 PM', 'Cardiology', false]],
   tl: [['Ngayon · 2:30 PM', 'Cardiology', false], ['Bukas · 9:00 AM', 'Cardiology', false], ['Bukas · 11:15 AM', 'Cardiology', true], ['Biyernes · 3:45 PM', 'Cardiology', false]],
 };
+// Day labels used when generating a fresh, randomized batch of slots (index 0/1 stay
+// "Today"/"Tomorrow", further-out days cycle through short weekday names).
+const SLOT_DAYS = {
+  en: ['Today', 'Tomorrow', 'Wed', 'Thu', 'Fri', 'Sat'],
+  tl: ['Ngayon', 'Bukas', 'Miy', 'Huw', 'Biy', 'Sab'],
+};
+function randomTime() {
+  const hour = 8 + Math.floor(Math.random() * 9); // 8am – 4pm start hours
+  const minute = [0, 15, 30, 45][Math.floor(Math.random() * 4)];
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  const period = hour < 12 ? 'AM' : 'PM';
+  return { minutesFromMidnight: hour * 60 + minute, label: `${h12}:${String(minute).padStart(2, '0')} ${period}` };
+}
+// Generates a fresh set of plausible-looking appointment slots (used so the
+// "Choose a time" list doesn't show the exact same demo data on every visit).
+// Each slot is [label, dept, disabled, scheduledForISO] — the 4th element is a real
+// date/time (today + dayIdx, at the picked hour/minute) so a booking can actually tell
+// the backend when it's for, which is what makes the "appointment upcoming" reminder
+// notification (see App.jsx's reminder effect) fire correctly instead of never firing.
+export function randomSlots(lang, dept) {
+  const days = SLOT_DAYS[lang] || SLOT_DAYS.en;
+  const seen = new Set();
+  const picks = [];
+  while (picks.length < 4) {
+    const dayIdx = Math.floor(Math.random() * 4); // keep within "Today" .. 4 days out
+    const t = randomTime();
+    const key = `${dayIdx}-${t.minutesFromMidnight}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    picks.push({ dayIdx, ...t });
+  }
+  picks.sort((a, b) => (a.dayIdx - b.dayIdx) || (a.minutesFromMidnight - b.minutesFromMidnight));
+  const disabledAt = Math.floor(Math.random() * picks.length);
+  return picks.map((p, i) => {
+    const when = new Date();
+    when.setDate(when.getDate() + p.dayIdx);
+    when.setHours(Math.floor(p.minutesFromMidnight / 60), p.minutesFromMidnight % 60, 0, 0);
+    return [`${days[p.dayIdx]} · ${p.label}`, dept, i === disabledAt, when.toISOString()];
+  });
+}
 export const RECORDS = {
   en: [['Complete Blood Count', '12 Jun 2026', 'St. Luke’s Medical Center'], ['Lipid Panel', '03 May 2026', 'Makati Medical Center'], ['ECG Report', '21 Apr 2026', 'Philippine Heart Center']],
   tl: [['Complete Blood Count', '12 Hun 2026', 'St. Luke’s Medical Center'], ['Lipid Panel', '03 Mayo 2026', 'Makati Medical Center'], ['ECG Report', '21 Abr 2026', 'Philippine Heart Center']],
@@ -212,20 +266,27 @@ export const TRACK = {
   tl: ['Natanggap', 'Sinusuri', 'Na-assign', 'Naresolba'],
 };
 export const TRACKNOTE = {
-  en: ['Just now', 'Est. within 24 hours', '—', '—'],
-  tl: ['Ngayon lang', 'Tantiyang 24 oras', '—', '—'],
+  en: ['Just now', 'Est. within 24 hours', '-', '-'],
+  tl: ['Ngayon lang', 'Tantiyang 24 oras', '-', '-'],
 };
+// Kept in sync with SPECIALTIES in backend/src/integrations/egovAi.js. Used when a patient
+// wants to book more than one department in the same visit (e.g. General Medicine + Cardiology).
+export const SPECIALTIES = [
+  'General Medicine', 'Cardiology', 'Pulmonology', 'Neurology', 'Gastroenterology',
+  'Orthopedics', 'Pediatrics', 'OB-GYN', 'Dermatology', 'ENT', 'Ophthalmology',
+  'Psychiatry', 'Emergency Medicine', 'Surgery',
+];
 export const CHIPS = {
-  en: ['Fever', 'Cough', 'Chest pain', 'Headache', 'Dizziness'],
-  tl: ['Lagnat', 'Ubo', 'Sakit ng dibdib', 'Sakit ng ulo', 'Hilo'],
+  en: ['Fever', 'Cough', 'Chest pain', 'Headache', 'Dizziness', 'Stomach pain', 'Skin rash'],
+  tl: ['Lagnat', 'Ubo', 'Sakit ng dibdib', 'Sakit ng ulo', 'Hilo', 'Sakit ng tiyan', 'Pantal sa balat'],
 };
 export const CONSENT_POINTS = {
   en: ['We check your National ID with PhilSys eVerify.', 'Only your name and ID status are shared with PGH.', 'Your symptoms stay private to your care team.'],
   tl: ['Sinusuri ang National ID mo sa PhilSys eVerify.', 'Pangalan at status lang ang ibabahagi sa PGH.', 'Pribado sa iyong care team ang iyong sintomas.'],
 };
 export const PAY_ITEMS = {
-  en: [{ label: 'Consultation — Cardiology', amount: '₱600' }, { label: 'Facility fee', amount: '₱150' }],
-  tl: [{ label: 'Konsulta — Cardiology', amount: '₱600' }, { label: 'Facility fee', amount: '₱150' }],
+  en: [{ label: 'Consultation, Cardiology', amount: '₱600' }, { label: 'Facility fee', amount: '₱150' }],
+  tl: [{ label: 'Konsulta, Cardiology', amount: '₱600' }, { label: 'Facility fee', amount: '₱150' }],
 };
 export const BENEFIT_LINES = {
   en: [{ label: 'PhilHealth', amount: '−₱300' }, { label: 'PWD / Senior 20%', amount: '−₱150' }],

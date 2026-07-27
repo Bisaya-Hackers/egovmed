@@ -29,12 +29,16 @@ function messageBody(m, lang, c) {
         ? `Kumpirmado ang appointment mo sa ${specialty} sa ${hospital}. Pila${queue}.`
         : `Your ${specialty} appointment at ${hospital} is confirmed. Queue${queue}.`;
     case 'reminder':
-    case 'appointment_reminder':
+    case 'appointment_reminder': {
+      const days = meta.daysUntil;
+      const whenEn = days === 0 ? 'today' : days === 1 ? 'tomorrow' : Number.isFinite(days) ? `in ${days} days` : 'coming up';
+      const whenTl = days === 0 ? 'ngayon' : days === 1 ? 'bukas' : Number.isFinite(days) ? `sa loob ng ${days} araw` : 'paparating na';
       return isTl
-        ? `Paalala: paparating na ang appointment mo sa ${specialty} sa ${hospital}. Pila${queue}.`
-        : `Reminder: your ${specialty} appointment at ${hospital} is coming up. Queue${queue}.`;
+        ? `Paalala: ang appointment mo sa ${specialty} sa ${hospital} ay ${whenTl}. Pila${queue}.`
+        : `Reminder: your ${specialty} appointment at ${hospital} is ${whenEn}. Queue${queue}.`;
+    }
     case 'results_ready':
-      return isTl ? 'Handa na ang iyong resulta ng lab — tingnan sa Records.' : 'Your lab results are ready — check Records for details.';
+      return isTl ? 'Handa na ang iyong resulta ng lab, tingnan sa Records.' : 'Your lab results are ready, check Records for details.';
     case 'reply_sent':
       return isTl ? 'Naipadala ang iyong mensahe sa PGH Patient Services.' : 'You sent a message to PGH Patient Services.';
     case 'staff_ack':

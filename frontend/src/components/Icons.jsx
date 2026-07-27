@@ -32,6 +32,7 @@ export {
   Call as Phone,
   Location as Pin,
   Hospital,
+  Trash,
 } from 'reicon-react';
 
 // reicon has no plain filled "stop" glyph — render one (mic recording state).
