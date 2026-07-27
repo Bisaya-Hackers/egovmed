@@ -96,14 +96,23 @@ function sanitize(parsed, text) {
     usedFallback = true;
   }
 
+  // Merge in the floor's red flags unconditionally — not just on the emergency escalation below.
+  // A structurally VALID model response with an empty red_flags array (e.g. it answered the
+  // urgency/specialty fields correctly but omitted flags) would otherwise silently erase signals
+  // the deterministic rules already found, even when urgency doesn't need to be escalated.
+  redFlags = Array.from(new Set([...redFlags, ...floor.redFlags]));
+
   // SAFETY FLOOR: never let the live model under-triage below the deterministic rule check.
   // If the offline rules see an emergency, the result is forced to emergency regardless of
   // what the model returned (malformed JSON, injection, or a genuine miss).
   if (floor.urgency === 'emergency' && urgency !== 'emergency') {
     urgency = 'emergency';
     specialty = 'Emergency Medicine';
-    redFlags = Array.from(new Set([...redFlags, ...floor.redFlags]));
     recommendedAction = 'Proceed to ER immediately: seek immediate human medical assessment';
+  } else if (floor.urgency === 'urgent' && urgency === 'routine') {
+    // Same floor, one tier down: the rules found a non-emergency red flag (e.g. persistent fever,
+    // a moderate injury) that the model's 'routine' classification missed or dismissed.
+    urgency = 'urgent';
   }
 
   const confidence = Number.isFinite(p.confidence) ? Math.min(1, Math.max(0, p.confidence)) : 0.6;
@@ -161,6 +170,14 @@ function ruleBasedTriage(text = '') {
   if (has('overdose', 'poison', 'lason', 'nalason')) redFlags.push('Poisoning / overdose');
   if (has('labor', 'manganganak', 'nanganganak', 'putok ng panubigan')) redFlags.push('Obstetric emergency (labor)');
   if (has('suicidal')) redFlags.push('Suicidal ideation');
+
+  // Urgent (not emergency) red flags — worth same-day attention but not an ER trip. Distinct
+  // wording from the `emergency` keyword set above so these never also trip the emergency branch.
+  if (has('high fever', 'persistent fever', 'mataas na lagnat', 'lagnat na hindi bumababa')) redFlags.push('Persistent or high fever');
+  if (has('persistent vomiting', 'walang tigil na pagsusuka', 'persistent diarrhea', 'matagal na pagtatae')) redFlags.push('Persistent vomiting or diarrhea (dehydration risk)');
+  if (has('deep cut', 'malalim na sugat', 'sprain', 'pilay')) redFlags.push('Wound or injury needing same-day evaluation');
+  if (has('swollen and warm', 'namamaga at mainit', 'infected wound', 'nagnanaknak')) redFlags.push('Possible infection (swelling, warmth)');
+  if (has('blurred vision', 'malabong paningin')) redFlags.push('Vision change needing prompt evaluation');
 
   const urgency = emergency ? 'emergency' : redFlags.length ? 'urgent' : 'routine';
   const routedSpecialty = emergency ? 'Emergency Medicine' : specialty;

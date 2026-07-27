@@ -15,6 +15,9 @@ export default function Liveness({ c, S, A }) {
   // opens its own camera — this preview short-circuits before that redirect anyway.
   useEffect(() => {
     if (S.liveness !== 'capturing' && S.liveness !== 'verifying') return undefined;
+    // The eVerify Web SDK opens its own camera capture UI — running this preview at the same
+    // time would fight it for the camera device.
+    if (import.meta.env.VITE_EVERIFY_SDK_ENABLED === 'true') return undefined;
     if (!navigator.mediaDevices?.getUserMedia) { setCamera('unavailable'); return undefined; }
     let stream, cancelled = false;
     (async () => {

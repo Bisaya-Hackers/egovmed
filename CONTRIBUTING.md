@@ -35,15 +35,17 @@ Avoid:
 
 ```
 randomizer-pr                                     no type, says nothing
-notifications-and-randomizer                      two unrelated changes in one branch
 bugfix/feature/message-reply/replace-coming-soon  four segments, two types
 NEW EDIT Fix: ...                                 not a branch name, and not a PR title either
 ```
 
-Keep it to **two segments**. If you need a third to explain it, the branch is doing too much.
+Keep it to **two segments**. If you need a third to explain it, pick the type that best fits the
+bulk of the session's work.
 
-One branch, one change. Two unrelated fixes are two branches, which means two PRs that can be
-reviewed, merged, and reverted independently.
+One branch, one session. Everything done in a single working session — even several logically
+separate fixes or features — goes into one branch and one PR, rather than being split across
+several. Name the branch and write the PR title/body for the session's main thrust; call out the
+individual pieces in the PR body.
 
 ## Workflow
 
@@ -111,7 +113,7 @@ Never delete a branch with an open PR. GitHub auto-closes the PR when the branch
 
 ## Before you open a PR
 
-- `cd backend && npm test` passes. All 19 must stay green; regressions block merge.
+- `cd backend && npm test` passes. All 30 must stay green; regressions block merge.
 - No secrets in the diff. `.env` is gitignored, keep it that way.
 - If you touched an integration adapter, check it still behaves in **both** `mock` and `live`
   modes. Mock has to keep working, since it is what makes the demo survive a sandbox outage.
@@ -142,7 +144,7 @@ a side effect of another change. Reasoning is recorded in
   `egovSub`. Changing it forks existing patients into new records.
 - **The security middleware stack** (`backend/src/middleware/index.js`). `secureHeaders`,
   `jsonComplexity`, `rateLimit`, the timing-safe admin compare, and JWT verification.
-- **All 19 backend tests stay green at every commit.** Regressions block merge in CI.
+- **All 30 backend tests stay green at every commit.** Regressions block merge in CI.
 
 ## Working with coding agents
 
