@@ -111,7 +111,7 @@ Never delete a branch with an open PR. GitHub auto-closes the PR when the branch
 
 ## Before you open a PR
 
-- `cd backend && npm test` passes. All 19 must stay green; regressions block merge.
+- `cd backend && npm test` passes. All 30 must stay green; regressions block merge.
 - No secrets in the diff. `.env` is gitignored, keep it that way.
 - If you touched an integration adapter, check it still behaves in **both** `mock` and `live`
   modes. Mock has to keep working, since it is what makes the demo survive a sandbox outage.
@@ -142,7 +142,7 @@ a side effect of another change. Reasoning is recorded in
   `egovSub`. Changing it forks existing patients into new records.
 - **The security middleware stack** (`backend/src/middleware/index.js`). `secureHeaders`,
   `jsonComplexity`, `rateLimit`, the timing-safe admin compare, and JWT verification.
-- **All 19 backend tests stay green at every commit.** Regressions block merge in CI.
+- **All 30 backend tests stay green at every commit.** Regressions block merge in CI.
 
 ## Working with coding agents
 

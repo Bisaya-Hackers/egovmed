@@ -105,9 +105,23 @@ async function seedDemoData() {
   };
 
   const existing = await s.findById(COLLECTIONS.PATIENTS, DEMO_PATIENT_ID);
+  // Cold starts re-run this seed on every serverless invocation (api/index.js). `phone`, `email`,
+  // and `benefits` are patient-editable via PATCH /patients/me and PATCH /patients/me/benefits/:key
+  // — always re-applying demoFields would silently discard a demo visitor's own edits on the very
+  // next cold start. Only fill those three when the existing row doesn't already have them; every
+  // other demoFields key (name/DOB/sex/identityVerified/address) has no patient-facing edit path,
+  // so re-asserting them is harmless and keeps the seed self-healing.
+  const patch = existing
+    ? {
+      ...demoFields,
+      phone: existing.phone || demoFields.phone,
+      email: existing.email || demoFields.email,
+      benefits: existing.benefits && Object.keys(existing.benefits).length ? existing.benefits : demoFields.benefits,
+    }
+    : demoFields;
   const patient = existing
-    ? await s.update(COLLECTIONS.PATIENTS, DEMO_PATIENT_ID, demoFields)
-    : await s.create(COLLECTIONS.PATIENTS, { id: DEMO_PATIENT_ID, ...demoFields, createdAt: now, updatedAt: now });
+    ? await s.update(COLLECTIONS.PATIENTS, DEMO_PATIENT_ID, patch)
+    : await s.create(COLLECTIONS.PATIENTS, { id: DEMO_PATIENT_ID, ...patch, createdAt: now, updatedAt: now });
 
   // Seed each demo lab if it isn't already present — encrypted off-chain with a real content hash.
   const seededRecords = [];

@@ -22,6 +22,14 @@ async function book({ patientId, specialty, hospital = 'PGH', scheduledFor, tria
   const patient = await store.findById(COLLECTIONS.PATIENTS, patientId);
   if (!patient) throw notFound('Patient not found');
 
+  // Same ownership check paymentService.createBill applies to appointmentId — otherwise a caller
+  // could attach their booking to any known triage id, corrupting attribution. 404 (not 403) on
+  // mismatch so the triage result's existence isn't disclosed.
+  if (triageId) {
+    const triage = await store.findById(COLLECTIONS.TRIAGE, triageId);
+    if (!triage || triage.patientId !== patientId) throw notFound('Triage result not found');
+  }
+
   // Atomic per-(hospital,specialty) queue number — no read-then-count race.
   const queueNumber = await store.incr(`queue:${hospital}:${specialty}`);
 

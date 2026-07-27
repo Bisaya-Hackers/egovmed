@@ -32,7 +32,9 @@ router.get('/', requireAuth,
 
 // POST /triage/:id/confirm  { confirmedSpecialty?, note? }  → CLINICIAN-ONLY nurse confirmation.
 // Decision-support integrity: a nurse confirms every result; patients must NOT self-confirm.
-router.post('/:id/confirm', adminLimit, requireAdmin,
+// requireAdmin runs FIRST so an unauthenticated caller cannot drain the shared 'admin' rate-limit
+// bucket and block the nurse-confirmation route for a real clinician.
+router.post('/:id/confirm', requireAdmin, adminLimit,
   validate(idParams, 'params'),
   validate(z.object({ confirmedSpecialty: z.enum(SPECIALTIES).optional(), note: z.string().max(1000).optional() }).strict()),
   asyncHandler(async (req, res) => {

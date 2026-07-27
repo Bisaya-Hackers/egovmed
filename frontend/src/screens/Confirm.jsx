@@ -1,7 +1,7 @@
 import { Btn } from '../components/ui.jsx';
 import { Check } from '../components/Icons.jsx';
 import { Pop } from '../components/anim.jsx';
-import { PREP, CONST } from '../i18n/dict.js';
+import { PREP, CONST, SLOTS } from '../i18n/dict.js';
 
 export default function Confirm({ c, lang, S, A }) {
   const dept = S.triage?.specialty || CONST.dept;
@@ -12,7 +12,7 @@ export default function Confirm({ c, lang, S, A }) {
       <div style={{ textAlign: 'center', marginTop: 12 }} role="status">
         <Pop className="checkdisc"><Check size={40} /></Pop>
         <h1 className="h1" style={{ marginTop: 18 }}>{c.confirmTitle}</h1>
-        <p className="sub">{multi ? batch.map((r) => r.specialty).join(' + ') : `${dept} · ${S.slotLabel || 'Today · 2:30 PM'}`}</p>
+        <p className="sub">{multi ? batch.map((r) => r.specialty).join(' + ') : `${dept} · ${S.slotLabel || SLOTS[lang][0][0]}`}</p>
       </div>
 
       {multi ? (
