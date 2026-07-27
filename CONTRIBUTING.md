@@ -35,15 +35,17 @@ Avoid:
 
 ```
 randomizer-pr                                     no type, says nothing
-notifications-and-randomizer                      two unrelated changes in one branch
 bugfix/feature/message-reply/replace-coming-soon  four segments, two types
 NEW EDIT Fix: ...                                 not a branch name, and not a PR title either
 ```
 
-Keep it to **two segments**. If you need a third to explain it, the branch is doing too much.
+Keep it to **two segments**. If you need a third to explain it, pick the type that best fits the
+bulk of the session's work.
 
-One branch, one change. Two unrelated fixes are two branches, which means two PRs that can be
-reviewed, merged, and reverted independently.
+One branch, one session. Everything done in a single working session — even several logically
+separate fixes or features — goes into one branch and one PR, rather than being split across
+several. Name the branch and write the PR title/body for the session's main thrust; call out the
+individual pieces in the PR body.
 
 ## Workflow
 
