@@ -87,7 +87,7 @@ async function createLivenessSession() {
 async function getLivenessResult(sessionId) {
   if (isLivenessLive()) {
     if (!faceLiveness.apiKey) throw new Error('Face Liveness live mode requires FACE_LIVENESS_API_KEY');
-    const res = await http.get(`${faceLiveness.baseUrl}/v1/liveness/result/${sessionId}`, {
+    const res = await http.get(`${faceLiveness.baseUrl}/v1/liveness/result/${encodeURIComponent(sessionId)}`, {
       headers: { 'x-api-key': faceLiveness.apiKey },
     });
     const confidence = typeof res.confidence_score === 'number' ? res.confidence_score : 0;

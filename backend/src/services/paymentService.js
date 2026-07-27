@@ -4,6 +4,14 @@ const { getStore, COLLECTIONS } = require('../store');
 const { randomId } = require('../lib/crypto');
 const { notFound } = require('../lib/errors');
 
+// eGovPay's live API rejects zero-amount transactions. A fully-covered bill (e.g. White Card at
+// 100%) has nothing left to charge, so settle it locally in BOTH modes rather than calling the
+// gateway — otherwise the one patient with full coverage is the one patient who can't create a
+// bill at all in live mode, and gets a dead ₱0 mock-checkout link in mock mode.
+function localCoveredCheckout() {
+  return { reference: randomId('cov_'), checkoutUrl: null, status: 'paid', provider: 'covered' };
+}
+
 // Simplified, transparent benefit rules for the demo. Real coverage comes from the payer APIs.
 // Rates for PWD/Senior mirror the statutory 20% medical discount (RA 10754 / RA 9994); Solo
 // Parent mirrors the 10% medicine discount (RA 11861 as amended). The rest are illustrative
@@ -66,9 +74,9 @@ async function createBill({ patientId, billAmount, description = 'Hospital servi
   }
 
   const { applied, coveredTotal, balance } = computeBenefits(billAmount, patient.benefits);
-  const checkout = await egovPay.createCheckout({
-    amount: balance, description, channel,
-  });
+  const checkout = balance > 0
+    ? await egovPay.createCheckout({ amount: balance, description, channel })
+    : localCoveredCheckout();
 
   const payment = {
     id: randomId('bill_'),
