@@ -69,13 +69,16 @@ async function upsertAndIssue(profile) {
   if (!isDemoPatient) return { token, patient: publicPatient(patient) };
 
   // Mock/demo mode has no real citizen behind it — it's the same "Juan Dela Cruz" profile for
-  // every visitor of the deployed demo. Left alone, appointments/payments/messages booked by
-  // one demo session pile up forever in the shared KV store and bleed into the next person's
-  // session. Wipe just those three transactional collections (never PATIENTS or the seeded
+  // every visitor of the deployed demo. Left alone, appointments/payments/messages/reports filed
+  // by one demo session pile up forever in the shared KV store and bleed into the next person's
+  // session. Wipe just those four transactional collections (never PATIENTS or the seeded
   // RECORDS/benefits) on every fresh mock login, so each demo run starts clean — the same
   // "resets every time" experience the in-memory local store gives for free.
+  // REPORTS belongs here specifically because "Your reports" on the track screen lists them by
+  // patient: without this, the first thing a new demo visitor sees is a list of case numbers
+  // filed by whoever used the demo before them.
   await Promise.all(
-    [COLLECTIONS.APPOINTMENTS, COLLECTIONS.PAYMENTS, COLLECTIONS.MESSAGES].map(async (collection) => {
+    [COLLECTIONS.APPOINTMENTS, COLLECTIONS.PAYMENTS, COLLECTIONS.MESSAGES, COLLECTIONS.REPORTS].map(async (collection) => {
       const rows = await store.findAll(collection, (r) => r.patientId === patient.id);
       await Promise.all(rows.map((r) => store.remove(collection, r.id)));
     }),

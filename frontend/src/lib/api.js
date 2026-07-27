@@ -79,6 +79,7 @@ export const api = {
   doctorSummary: () => req('/records/doctor-summary'),
   // eReport
   fileReport: (category, description) => req('/reports', { method: 'POST', body: { category, description } }),
+  myReports: () => req('/reports'),
   trackCase: (caseNumber) => req(`/reports/${encodeURIComponent(caseNumber)}`),
 };
 

@@ -46,6 +46,7 @@ const initial = () => ({
   notifications: [], unreadNotifications: 0,
   reportStage: 'form', reportCat: null, reportDesc: '', caseNo: CONST.caseNo,
   trackCaseNo: '', trackLoading: false, trackError: null, trackResult: null,
+  myReports: [], myReportsLoading: false,
   showDemo: false, showTimeout: false, toast: null,
 });
 
@@ -545,10 +546,23 @@ export default function App() {
     },
 
     // Check the status of a previously filed report (GET /reports/:caseNumber)
-    openTrackReport: () => set({ reportStage: 'track', trackCaseNo: '', trackError: null, trackResult: null }),
+    openTrackReport: () => { set({ reportStage: 'track', trackCaseNo: '', trackError: null, trackResult: null }); A.loadMyReports(); },
+    // The patient's own filed reports (GET /reports), so tracking a case doesn't require having
+    // written the case number down somewhere. Failure is non-fatal: the manual entry field
+    // stays usable, the list just doesn't render.
+    loadMyReports: async () => {
+      set({ myReportsLoading: true });
+      const res = await tryApi(api.myReports());
+      set({ myReportsLoading: false, myReports: res?.reports || [] });
+    },
+    // Tapping a row fills the field and runs the same lookup as manual entry, so the result
+    // always reflects fresh upstream status rather than the summary row's cached one.
+    trackMyReport: (caseNumber) => { set({ trackCaseNo: caseNumber, trackError: null }); A.submitTrackCase(caseNumber); },
     setTrackCaseNo: (v) => set({ trackCaseNo: v.toUpperCase(), trackError: null }),
-    submitTrackCase: async () => {
-      const caseNo = S.trackCaseNo.trim();
+    // caseNumber is passed explicitly when this comes from a tapped list row, since the set()
+    // that fills the field hasn't necessarily landed in S yet.
+    submitTrackCase: async (caseNumber) => {
+      const caseNo = (typeof caseNumber === 'string' ? caseNumber : S.trackCaseNo).trim();
       // EGM-YYYY-###### = self-generated (mock); PFM-MMDDYY-#### = live eReport format.
       // Backend accepts both, keep this in sync so live case numbers don't fail client-side.
       if (!/^(EGM-\d{4}-\d{6}|PFM-\d{6}-\d{4})$/.test(caseNo)) { set({ trackError: 'invalid' }); return; }
