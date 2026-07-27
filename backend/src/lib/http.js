@@ -28,7 +28,11 @@ async function request(url, { method = 'GET', headers = {}, body, timeoutMs = 15
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const opts = { method, headers: { Accept: 'application/json', ...headers }, signal: controller.signal };
+  // redirect: 'manual' — the https-only check above only validates the URL we pass in. A followed
+  // 3xx could silently retarget the request past it (e.g. to a compromised/DNS-hijacked upstream
+  // redirecting to a plaintext internal address). None of the eGov endpoints we call redirect, so
+  // treating any 3xx as an error keeps the SSRF guard meaningful at every hop, not just the first.
+  const opts = { method, redirect: 'manual', headers: { Accept: 'application/json', ...headers }, signal: controller.signal };
   if (body !== undefined) {
     if (typeof body === 'string' || Buffer.isBuffer(body)) {
       opts.body = body;
@@ -47,6 +51,11 @@ async function request(url, { method = 'GET', headers = {}, body, timeoutMs = 15
     throw upstream(`Request to ${url} failed: ${err.message}`);
   }
   clearTimeout(timer);
+
+  if (res.status >= 300 && res.status < 400) {
+    logger.warn('http upstream redirect refused', { url, method, status: res.status });
+    throw upstream(`Refusing to follow a redirect from ${parsed.origin} (status ${res.status})`);
+  }
 
   const text = await res.text();
   let data = text;

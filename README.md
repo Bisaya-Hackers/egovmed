@@ -118,7 +118,7 @@ went here rather than into features.
   payment data to a real patient.
 
 **Verification**
-- 18 backend security regression tests, required to pass before merge.
+- 30 backend security regression tests, required to pass before merge.
 - CI runs backend tests, dependency audits on both packages, CodeQL `security-extended`, and a
   TruffleHog secret scan.
 - Branch protection on `main` with those checks required and force-push blocked.

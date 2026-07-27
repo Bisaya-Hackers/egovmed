@@ -26,7 +26,7 @@ export default function Tokens({ A }) {
         ))}
       </div>
 
-      <div className="overline" style={{ marginTop: 22, marginBottom: 10 }}>Type — Geist</div>
+      <div className="overline" style={{ marginTop: 22, marginBottom: 10 }}>Type, Geist</div>
       <div data-stagger className="card">
         <div style={{ fontSize: '1.75em', fontWeight: 800 }}>Heading 800</div>
         <div style={{ fontSize: '1em', marginTop: 6 }}>Body text 17px</div>

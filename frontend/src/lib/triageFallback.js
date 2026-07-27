@@ -1,7 +1,7 @@
 const ROUTES = [
   { specialty: 'Cardiology', keywords: ['palpitation', 'kabog'], reason: { en: 'Heartbeat symptoms are commonly assessed by heart and circulation care.', tl: 'Karaniwang sinusuri ng heart and circulation care ang sintomas sa tibok ng puso.' } },
   { specialty: 'Pulmonology', keywords: ['ubo', 'cough', 'hika', 'asthma', 'breathing'], reason: { en: 'Breathing and lung symptoms are commonly assessed by Pulmonology.', tl: 'Karaniwang sinusuri ng Pulmonology ang sintomas sa paghinga at baga.' } },
-  { specialty: 'Neurology', keywords: ['sakit ng ulo', 'headache', 'dizzy', 'hilo', 'numbness', 'manhid'], reason: { en: 'Headache, dizziness, or nerve symptoms are commonly assessed by Neurology.', tl: 'Karaniwang sinusuri ng Neurology ang sakit ng ulo, hilo, o sintomas sa nerves.' } },
+  { specialty: 'Neurology', keywords: ['sakit ng ulo', 'headache', 'dizz', 'hilo', 'numbness', 'manhid'], reason: { en: 'Headache, dizziness, or nerve symptoms are commonly assessed by Neurology.', tl: 'Karaniwang sinusuri ng Neurology ang sakit ng ulo, hilo, o sintomas sa nerves.' } },
   { specialty: 'Gastroenterology', keywords: ['tiyan', 'abdomen', 'stomach', 'suka', 'vomit', 'diarrhea', 'lbm'], reason: { en: 'Digestive and abdominal symptoms are commonly assessed by Gastroenterology.', tl: 'Karaniwang sinusuri ng Gastroenterology ang sintomas sa tiyan at digestion.' } },
   { specialty: 'Orthopedics', keywords: ['buto', 'bone', 'fracture', 'bali', 'joint', 'kasukasuan'], reason: { en: 'Bone and joint symptoms are commonly assessed by Orthopedics.', tl: 'Karaniwang sinusuri ng Orthopedics ang sintomas sa buto at kasukasuan.' } },
   { specialty: 'Pediatrics', keywords: ['bata', 'child', 'anak', 'infant', 'sanggol'], reason: { en: 'Symptoms involving a child are commonly assessed by Pediatrics.', tl: 'Karaniwang sinusuri ng Pediatrics ang mga sintomas ng bata.' } },
@@ -11,13 +11,21 @@ const ROUTES = [
   { specialty: 'Psychiatry', keywords: ['malungkot', 'depress', 'anxiety', 'balisa'], reason: { en: 'Mood and anxiety concerns are commonly assessed by mental-health care.', tl: 'Karaniwang sinusuri ng mental-health care ang matinding lungkot at pagkabalisa.' } },
 ];
 
+// Kept in sync with the `emergency` keyword set in backend/src/integrations/egovAi.js's
+// ruleBasedTriage() — this is the offline safety floor when the backend is unreachable, so a term
+// missing here (but present there) means an emergency silently downgrades to 'routine' in exactly
+// the degraded case the floor exists to protect. If you change the backend list, mirror it here.
 const EMERGENCY_TERMS = [
   'chest pain', 'sakit ng dibdib', 'heart attack', 'atake sa puso',
-  'hindi makahinga', 'difficulty breathing', 'shortness of breath', 'not breathing',
-  'unconscious', 'nawalan ng malay', 'unresponsive', 'seizure', 'kombulsyon',
-  'stroke', 'paralysis', 'paralisado', 'bleeding', 'hemorrhage', 'dumudugo',
-  'anaphylaxis', 'namamaga ang lalamunan', 'overdose', 'poison', 'lason',
-  'suicidal', 'manganganak', 'nanganganak', 'putok ng panubigan',
+  'hindi makahinga', 'difficulty breathing', 'shortness of breath', 'not breathing', 'hindi humihinga',
+  'choking', 'nasasamid', 'hindi makalunok',
+  'unconscious', 'nawalan ng malay', 'unresponsive', 'blue lips', 'nangingitim',
+  'seizure', 'convulsion', 'kombulsyon', 'stroke', 'paralysis', 'paralisado',
+  'bleeding', 'dugo', 'hemorrhage', 'dumudugo',
+  'anaphylaxis', 'allergic reaction', 'namamaga ang lalamunan',
+  'overdose', 'poison', 'lason', 'nalason',
+  'labor', 'manganganak', 'nanganganak', 'putok ng panubigan',
+  'suicidal', 'severe', 'grabe', 'matindi',
 ];
 
 export function fallbackTriage(input, lang = 'en') {

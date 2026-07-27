@@ -15,6 +15,9 @@ export default function Liveness({ c, S, A }) {
   // opens its own camera — this preview short-circuits before that redirect anyway.
   useEffect(() => {
     if (S.liveness !== 'capturing' && S.liveness !== 'verifying') return undefined;
+    // The eVerify Web SDK opens its own camera capture UI — running this preview at the same
+    // time would fight it for the camera device.
+    if (import.meta.env.VITE_EVERIFY_SDK_ENABLED === 'true') return undefined;
     if (!navigator.mediaDevices?.getUserMedia) { setCamera('unavailable'); return undefined; }
     let stream, cancelled = false;
     (async () => {
@@ -73,7 +76,7 @@ export default function Liveness({ c, S, A }) {
       )}
       {camera === 'denied' && !verified && !failed && (
         <p className="sub" style={{ textAlign: 'center', marginTop: 8, fontSize: '0.85em', color: 'var(--amber)' }}>
-          Camera permission was blocked — the flow will continue in demo mode.
+          Camera permission was blocked. The flow will continue in demo mode.
         </p>
       )}
 

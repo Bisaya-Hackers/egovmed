@@ -4,6 +4,14 @@ const { getStore, COLLECTIONS } = require('../store');
 const { randomId } = require('../lib/crypto');
 const { notFound } = require('../lib/errors');
 
+// eGovPay's live API rejects zero-amount transactions. A fully-covered bill (e.g. White Card at
+// 100%) has nothing left to charge, so settle it locally in BOTH modes rather than calling the
+// gateway — otherwise the one patient with full coverage is the one patient who can't create a
+// bill at all in live mode, and gets a dead ₱0 mock-checkout link in mock mode.
+function localCoveredCheckout() {
+  return { reference: randomId('cov_'), checkoutUrl: null, status: 'paid', provider: 'covered' };
+}
+
 // Simplified, transparent benefit rules for the demo. Real coverage comes from the payer APIs.
 // Rates for PWD/Senior mirror the statutory 20% medical discount (RA 10754 / RA 9994); Solo
 // Parent mirrors the 10% medicine discount (RA 11861 as amended). The rest are illustrative
@@ -36,15 +44,17 @@ function computeBenefits(billAmount, benefits = {}) {
   const applied = [];
   // Highest-impact programs first (e.g. White Card can fully cover) so more generous benefits
   // aren't crowded out by smaller ones when a patient has several active at once.
+  //
+  // Every *active* benefit is listed here, even ones that end up covering ₱0 because an
+  // earlier, higher-priority benefit already zeroed out the remaining balance. We used to
+  // `break` out of the loop as soon as `remaining` hit 0, which silently dropped any
+  // lower-priority benefit a patient had switched on from the "Benefits Applied" list — making
+  // it look like the app forgot they ticked it, when really it just had nothing left to cover.
   for (const key of BENEFIT_ORDER) {
-    if (remaining <= 0) break;
-    if (benefits[key]?.active) {
-      const covered = round2(Math.min(remaining, billAmount * BENEFIT_RULES[key].rate));
-      if (covered > 0) {
-        applied.push({ program: key, label: BENEFIT_RULES[key].label, amount: covered, mock: true });
-        remaining = round2(remaining - covered);
-      }
-    }
+    if (!benefits[key]?.active) continue;
+    const covered = round2(Math.min(remaining, billAmount * BENEFIT_RULES[key].rate));
+    applied.push({ program: key, label: BENEFIT_RULES[key].label, amount: covered, mock: true });
+    remaining = round2(remaining - covered);
   }
   return { applied, coveredTotal: round2(billAmount - remaining), balance: Math.max(0, round2(remaining)), ...mockMeta };
 }
@@ -64,9 +74,9 @@ async function createBill({ patientId, billAmount, description = 'Hospital servi
   }
 
   const { applied, coveredTotal, balance } = computeBenefits(billAmount, patient.benefits);
-  const checkout = await egovPay.createCheckout({
-    amount: balance, description, channel,
-  });
+  const checkout = balance > 0
+    ? await egovPay.createCheckout({ amount: balance, description, channel })
+    : localCoveredCheckout();
 
   const payment = {
     id: randomId('bill_'),

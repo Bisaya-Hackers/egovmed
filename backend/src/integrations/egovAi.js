@@ -96,14 +96,23 @@ function sanitize(parsed, text) {
     usedFallback = true;
   }
 
+  // Merge in the floor's red flags unconditionally — not just on the emergency escalation below.
+  // A structurally VALID model response with an empty red_flags array (e.g. it answered the
+  // urgency/specialty fields correctly but omitted flags) would otherwise silently erase signals
+  // the deterministic rules already found, even when urgency doesn't need to be escalated.
+  redFlags = Array.from(new Set([...redFlags, ...floor.redFlags]));
+
   // SAFETY FLOOR: never let the live model under-triage below the deterministic rule check.
   // If the offline rules see an emergency, the result is forced to emergency regardless of
   // what the model returned (malformed JSON, injection, or a genuine miss).
   if (floor.urgency === 'emergency' && urgency !== 'emergency') {
     urgency = 'emergency';
     specialty = 'Emergency Medicine';
-    redFlags = Array.from(new Set([...redFlags, ...floor.redFlags]));
-    recommendedAction = 'Proceed to ER immediately — seek immediate human medical assessment';
+    recommendedAction = 'Proceed to ER immediately: seek immediate human medical assessment';
+  } else if (floor.urgency === 'urgent' && urgency === 'routine') {
+    // Same floor, one tier down: the rules found a non-emergency red flag (e.g. persistent fever,
+    // a moderate injury) that the model's 'routine' classification missed or dismissed.
+    urgency = 'urgent';
   }
 
   const confidence = Number.isFinite(p.confidence) ? Math.min(1, Math.max(0, p.confidence)) : 0.6;
@@ -141,7 +150,7 @@ function ruleBasedTriage(text = '') {
 
   if (has('chest pain', 'sakit ng dibdib', 'palpitation', 'kabog')) specialty = 'Cardiology';
   else if (has('hindi makahinga', 'ubo', 'cough', 'hika', 'asthma', 'breathing')) specialty = 'Pulmonology';
-  else if (has('sakit ng ulo', 'headache', 'dizzy', 'hilo', 'seizure', 'numbness', 'manhid')) specialty = 'Neurology';
+  else if (has('sakit ng ulo', 'headache', 'dizz', 'hilo', 'seizure', 'numbness', 'manhid')) specialty = 'Neurology';
   else if (has('tiyan', 'abdomen', 'stomach', 'suka', 'vomit', 'diarrhea', 'lbm')) specialty = 'Gastroenterology';
   else if (has('buto', 'bone', 'fracture', 'bali', 'joint', 'kasukasuan')) specialty = 'Orthopedics';
   else if (has('bata', 'child', 'anak', 'infant', 'sanggol')) specialty = 'Pediatrics';
@@ -161,6 +170,14 @@ function ruleBasedTriage(text = '') {
   if (has('overdose', 'poison', 'lason', 'nalason')) redFlags.push('Poisoning / overdose');
   if (has('labor', 'manganganak', 'nanganganak', 'putok ng panubigan')) redFlags.push('Obstetric emergency (labor)');
   if (has('suicidal')) redFlags.push('Suicidal ideation');
+
+  // Urgent (not emergency) red flags — worth same-day attention but not an ER trip. Distinct
+  // wording from the `emergency` keyword set above so these never also trip the emergency branch.
+  if (has('high fever', 'persistent fever', 'mataas na lagnat', 'lagnat na hindi bumababa')) redFlags.push('Persistent or high fever');
+  if (has('persistent vomiting', 'walang tigil na pagsusuka', 'persistent diarrhea', 'matagal na pagtatae')) redFlags.push('Persistent vomiting or diarrhea (dehydration risk)');
+  if (has('deep cut', 'malalim na sugat', 'sprain', 'pilay')) redFlags.push('Wound or injury needing same-day evaluation');
+  if (has('swollen and warm', 'namamaga at mainit', 'infected wound', 'nagnanaknak')) redFlags.push('Possible infection (swelling, warmth)');
+  if (has('blurred vision', 'malabong paningin')) redFlags.push('Vision change needing prompt evaluation');
 
   const urgency = emergency ? 'emergency' : redFlags.length ? 'urgent' : 'routine';
   const routedSpecialty = emergency ? 'Emergency Medicine' : specialty;
@@ -200,7 +217,7 @@ async function summarizeHistory({ records = [], triage = [] }) {
       const labLines = records.filter((r) => r.type === 'lab').slice(-8).map((r) => {
         const date = r.createdAt ? String(r.createdAt).slice(0, 10) : 'unknown date';
         const src = r.sourceFacility || 'unknown facility';
-        const note = r.summary ? ` — ${String(r.summary).slice(0, 160)}` : '';
+        const note = r.summary ? `: ${String(r.summary).slice(0, 160)}` : '';
         return `- ${r.title} at ${src} on ${date}${note}`;
       });
       const triageLines = triage.slice(-5).map((t) => {
@@ -247,7 +264,7 @@ function fallbackSummary(records, triage) {
   const sortedLabs = labs.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   sortedLabs.slice(0, 5).forEach((r) => {
     const when = r.createdAt ? String(r.createdAt).slice(0, 10) : '';
-    const note = r.summary ? ` — ${r.summary}` : '';
+    const note = r.summary ? `: ${r.summary}` : '';
     bullets.push(`${r.title} (${r.sourceFacility}${when ? ', ' + when : ''})${note}`);
   });
   if (labs.length > 5) bullets.push(`…and ${labs.length - 5} older lab${labs.length - 5 === 1 ? '' : 's'} on file.`);
@@ -259,7 +276,7 @@ function fallbackSummary(records, triage) {
     const mostCommon = specialties.reduce((acc, s) => (acc[s] = (acc[s] || 0) + 1, acc), {});
     const [topSpec, topCount] = Object.entries(mostCommon).sort((a, b) => b[1] - a[1])[0] || [];
     bullets.push(`Latest triage on ${String(last.createdAt || '').slice(0, 10)}: ${last.specialty || 'General Medicine'} / ${last.urgency || 'routine'}.`);
-    if (topCount >= 3 && topSpec) bullets.push(`Recurring routing to ${topSpec} (${topCount} of ${triage.length} triage visits) — worth a focused follow-up.`);
+    if (topCount >= 3 && topSpec) bullets.push(`Recurring routing to ${topSpec} (${topCount} of ${triage.length} triage visits), worth a focused follow-up.`);
   } else {
     bullets.push('No prior triage.');
   }

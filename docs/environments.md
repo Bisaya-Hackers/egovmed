@@ -7,8 +7,8 @@ local dev  →  staging  →  production
 | | Branch | Deploys | Integrations | Data |
 |---|---|---|---|---|
 | **local** | any | `npm run dev` | mock | in-memory or your own Upstash |
-| **staging** | `staging` | automatic on push | **all mock** | its own Upstash database |
-| **production** | `main` | **manual only** | live where available | production Upstash (real PHI) |
+| **staging** | `staging` | automatic on push | **all mock** | shared database, `staging:` prefix |
+| **production** | `main` | automatic on merge | live where available | shared database, no prefix (real PHI) |
 
 ## Why staging is all-mock
 
@@ -20,26 +20,30 @@ Mock mode exercises every code path except the provider handshake itself, which 
 is for. Live integrations get verified in production, one at a time, per
 [deploy-staging.md](deploy-staging.md).
 
-## Why production stays manual
+## Production deploys on merge
 
-`main` never auto-deploys. `vercel.json` sets `git.deploymentEnabled.main = false` on both
-projects, so a merge builds nothing. Shipping to production is always:
+`git.deploymentEnabled.main = true` on both projects, so merging to `main` ships to production.
 
-```bash
-cd backend  && vercel deploy --prod --yes
-cd frontend && vercel deploy --prod --yes
-```
+This was briefly configured the other way. Manual deploys are safer while integrations are being
+flipped one at a time, but they had already caused the opposite failure: production ran four-day-old
+code while six merged PRs sat undeployed, and `/integrations/status` 404'd because the route
+existed only on `main`. Silent staleness turned out to be the more likely mistake, so the gate
+moved to staging, where a change is exercised before it can reach `main` at all.
 
-This is deliberate while the eGov rollout is mid-flight. A merge should never be the thing that
-puts a half-flipped integration in front of a real patient.
-
-**The tradeoff:** merging does not update production, so production can silently fall behind
-`main`. This has already bitten once, with production running four-day-old code while six merged
-PRs sat undeployed. After merging anything you intend to ship, deploy it, and confirm with:
+**What this means in practice:** a merge is a production release. CI green is necessary but not
+sufficient, because CI never talks to Upstash or to a real eGov endpoint. Push to `staging` and
+look at it there first. After a merge, confirm production actually came up:
 
 ```bash
 curl -sS https://egovmed-backend.vercel.app/health
 curl -sS -H "x-admin-key: $ADMIN_KEY" https://egovmed-backend.vercel.app/integrations/status
+```
+
+Manual deploys still work and still override, which is the escape hatch if a Git deploy fails:
+
+```bash
+cd backend  && vercel deploy --prod --yes
+cd frontend && vercel deploy --prod --yes
 ```
 
 ## Data isolation
@@ -116,14 +120,25 @@ Nothing should ever merge **from** `staging` into `main`. PRs always target `mai
 
 Requires the Vercel dashboard; the CLI cannot authorize the GitHub App.
 
-1. **Connect Git.** Vercel → `egovmed-backend` → Settings → Git → Connect Git Repository →
-   `Bisaya-Hackers/egovmed`. Authorize the Vercel GitHub App on the `Bisaya-Hackers` org and grant
-   it access to the repo. Repeat for `egovmed-frontend`.
-   - Root Directory must be `backend` and `frontend` respectively.
-   - Production Branch: `main`. `deploymentEnabled` already blocks it from building.
-2. **Set the Preview env vars** (see below). `STORE_KEY_PREFIX=staging` is mandatory; the
+1. ~~**Connect Git.**~~ Done. Both projects are connected to `Bisaya-Hackers/egovmed`.
+2. **Set Root Directory.** Vercel → `egovmed-backend` → Settings → General → Root Directory →
+   `backend`. Then `egovmed-frontend` → `frontend`.
+
+   **This is currently wrong on both projects (`.`) and it breaks two things.** Vercel clones the
+   whole repo and builds from the Root Directory, so at `.` it finds no `package.json` and every
+   Git-triggered build fails:
+
+   ```
+   npm error path /vercel/path0/package.json
+   npm error enoent Could not read package.json
+   ```
+
+   `vercel.json` is also read from the Root Directory, so at `.` neither project's config is being
+   applied at all — including `git.deploymentEnabled`, the CSP headers, the `sin1` region pin, and
+   the function `maxDuration`.
+3. **Set the Preview env vars** (see below). `STORE_KEY_PREFIX=staging` is mandatory; the
    deployment refuses to boot without it.
-3. **Push `staging`** and confirm both deployments come up.
+4. **Push `staging`** and confirm both deployments come up.
 
 ## Preview scope environment variables
 

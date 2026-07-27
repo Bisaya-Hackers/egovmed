@@ -144,10 +144,20 @@ input, textarea { font-family: inherit; }
 .chip.paid { color: var(--green); border-color: var(--green-50); background: var(--green-50); }
 
 /* verified / success pills + semantic tints */
-.pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 0.8em; }
+/* white-space: nowrap — pill labels are translated (Tagalog strings run longer than their
+   English source, e.g. "Not verified" → "Hindi pa verified"), and without this the text wraps
+   inside the fully-rounded shape instead of the pill staying one line and its flex container
+   shrinking around it. Callers should keep the pill's own flex item at `flex: none` so it never
+   gets squeezed by a sibling instead. */
+.pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 0.8em; white-space: nowrap; flex: none; }
 .pill.green { background: var(--green-50); color: var(--green); }
 .pill.amber { background: var(--amber-50); color: var(--amber); }
 .pill.red { background: var(--red-50); color: var(--red); }
+/* In-progress states (received / under review / assigned) — a bare .pill has no fill of its own. */
+.pill.blue { background: var(--blue-50); color: var(--primary); }
+
+.benefit-remove-btn:hover:not(:disabled) { background: var(--red); color: #fff; }
+.benefit-remove-btn:active:not(:disabled) { transform: scale(0.92); }
 
 /* icon circle */
 .icirc { width: 44px; height: 44px; border-radius: 50%; background: var(--blue-50); display: flex; align-items: center; justify-content: center; flex: none; color: var(--primary); }

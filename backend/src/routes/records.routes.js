@@ -44,8 +44,9 @@ router.post('/', requireAuth,
     res.status(201).json(record);
   }));
 
-// GET /records/:id/verify → "Lab result verified from another hospital ✓" (ownership-scoped)
+// GET /records/:id/verify → "Lab result verified from another hospital ✓" (ownership-scoped, identity-gated like every other record route)
 router.get('/:id/verify', requireAuth, readLimit, validate(idParams, 'params'), asyncHandler(async (req, res) => {
+  await identityService.assertVerified(req.user.sub);
   const result = await recordService.verifyRecord(req.params.id, req.user.sub);
   await auditService.log({ actorId: req.user.sub, patientId: req.user.sub, action: 'records.verify', resourceType: 'health_record', resourceId: req.params.id, requestMeta: requestMeta(req) });
   res.json(result);

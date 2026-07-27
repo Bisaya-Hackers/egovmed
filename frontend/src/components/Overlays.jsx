@@ -91,7 +91,7 @@ export function DemoSheet({ S, A }) {
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Demo controls" tabIndex={-1} ref={ref} onClick={(e) => e.stopPropagation()}>
         <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--line)', margin: '0 auto 14px' }} />
         <div className="overline" style={{ marginBottom: 4 }}>Demo controls</div>
-        <p className="sub" style={{ marginTop: 0, marginBottom: 8 }}>Reviewer shortcuts — not part of the product UI.</p>
+        <p className="sub" style={{ marginTop: 0, marginBottom: 8 }}>Reviewer shortcuts, not part of the product UI.</p>
         <div style={{ ...rowStyle, borderTop: 'none' }}>
           <span>Emergency triage</span>
           <button onClick={A.toggleEmergency} aria-pressed={S.emergency} aria-label="Toggle emergency triage" style={emgToggle(S.emergency)}>

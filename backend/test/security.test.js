@@ -46,6 +46,8 @@ const app = require('../src/app');
 const { sign } = require('../src/lib/jwt');
 const { getStore, COLLECTIONS, seedDemoData } = require('../src/store');
 const { normalizePaymentStatus } = require('../src/integrations/egovPay');
+const http = require('../src/lib/http');
+const reportService = require('../src/services/reportService');
 
 let server;
 let baseUrl;
@@ -92,6 +94,35 @@ test('security regression suite', async (t) => {
     assert.equal(normalizePaymentStatus({ status: 'SUCCESSFUL' }), 'successful');
     assert.equal(normalizePaymentStatus({ state: 'completed' }), 'completed');
     assert.equal(normalizePaymentStatus({}), 'pending');
+  });
+
+  await t.test('mock eGovPay can be forced to simulate a failed payment', () => {
+    // Regression: getStatus() used to hardcode 'paid' unconditionally in mock mode, so a bill
+    // could never actually fail in local/demo testing (no eGov credentials required). Running in
+    // a fresh process because egovPay.js reads EGOVPAY_MOCK_OUTCOME once at module load.
+    const cwd = path.join(__dirname, '..');
+    const script = `
+      const egovPay = require('./src/integrations/egovPay');
+      (async () => {
+        const checkout = await egovPay.createCheckout({ amount: 300, description: 'test' });
+        const status = await egovPay.getStatus(checkout.reference);
+        if (checkout.status !== 'failed' || status.status !== 'failed' || status.paidAt !== null) {
+          console.error('unexpected mock outcome: ' + JSON.stringify({ checkout, status }));
+          process.exit(1);
+        }
+      })();
+    `;
+    const result = spawnSync(process.execPath, ['-e', script], {
+      cwd, encoding: 'utf8', env: { ...process.env, EGOVPAY_MOCK_OUTCOME: 'failed' },
+    });
+    assert.equal(result.status, 0, result.stderr);
+
+    // An unrecognized/unset override still defaults to the original always-succeeds demo behavior.
+    const defaultResult = spawnSync(process.execPath, ['-e', `
+      const egovPay = require('./src/integrations/egovPay');
+      egovPay.getStatus('pay_test').then((s) => { if (s.status !== 'paid') { process.exit(1); } });
+    `], { cwd, encoding: 'utf8', env: { ...process.env, EGOVPAY_MOCK_OUTCOME: '' } });
+    assert.equal(defaultResult.status, 0, defaultResult.stderr);
   });
 
   await t.test('security headers are present and framework disclosure is disabled', async () => {
@@ -259,6 +290,25 @@ test('security regression suite', async (t) => {
     assert.equal(ownerAfter.value.phone, '+639175551234');
   });
 
+  await t.test('a manually-corrected contact field survives a later SSO re-login (per-field provenance)', async () => {
+    await resetWithPatients();
+    // Mock SSO always returns the same static profile, including email 'juan.delacruz@example.ph'.
+    const first = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo' } }));
+    assert.equal(first.value.patient.email, 'juan.delacruz@example.ph');
+    const owner = first.value.token;
+
+    const patched = await json(await request('/patients/me', {
+      token: owner, method: 'PATCH', body: { email: 'rosa.corrected@example.ph' },
+    }));
+    assert.equal(patched.response.status, 200);
+    assert.equal(patched.value.email, 'rosa.corrected@example.ph');
+
+    // Re-login (SSO returns the same static, now-stale email) must NOT clobber the manual fix.
+    const second = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo' } }));
+    assert.equal(second.response.status, 200);
+    assert.equal(second.value.patient.email, 'rosa.corrected@example.ph');
+  });
+
   await t.test('PATCH benefits: unknown key does not reflect raw input into the response message', async () => {
     const ownerId = await resetWithPatients();
     const owner = sign({ sub: ownerId });
@@ -380,6 +430,45 @@ test('security regression suite', async (t) => {
     assert.deepEqual(responses.map((r) => r.status).sort(), [200, 400]);
   });
 
+  await t.test('an eVerify Web SDK session_id can be registered and consumed once, but not re-registered to reopen it', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const sessionId = '11111111-2222-4333-8444-555555555555';
+
+    const registered = await json(await request('/identity/liveness/everify-sdk', {
+      token: owner, method: 'POST', body: { sessionId },
+    }));
+    assert.equal(registered.response.status, 200);
+    assert.deepEqual(registered.value, { sessionId, provider: 'everify-sdk' });
+
+    // re-registering the same session_id must not reset an already-claimed/consumed session
+    const reRegistered = await request('/identity/liveness/everify-sdk', {
+      token: owner, method: 'POST', body: { sessionId },
+    });
+    assert.equal(reRegistered.status, 400);
+
+    const verified = await json(await request('/identity/verify', {
+      token: owner, method: 'POST', body: { consent: true, livenessSessionId: sessionId },
+    }));
+    assert.equal(verified.response.status, 200);
+    assert.equal(verified.value.verification.liveness.provider, 'everify-sdk');
+
+    // the consumed session cannot be replayed
+    const replay = await request('/identity/verify', {
+      token: owner, method: 'POST', body: { consent: true, livenessSessionId: sessionId },
+    });
+    assert.equal(replay.status, 400);
+  });
+
+  await t.test('a raw (unregistered) client-supplied session_id is rejected, not silently trusted', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const forged = await request('/identity/verify', {
+      token: owner, method: 'POST', body: { consent: true, livenessSessionId: '99999999-2222-4333-8444-555555555555' },
+    });
+    assert.equal(forged.status, 400);
+  });
+
   await t.test('malformed and oversized JSON are rejected with safe statuses', async () => {
     await resetWithPatients();
     assert.equal((await request('/auth/egov/exchange', { method: 'POST', rawBody: '{' })).status, 400);
@@ -496,6 +585,261 @@ test('security regression suite', async (t) => {
     assert.equal(raw.includes('s3cret_pw'), false, 'rpcUrl userinfo password leaked');
     assert.equal(raw.includes('api_key_ABC'), false, 'rpcUrl path api key leaked');
     assert.equal(raw.includes('user:s3cret_pw'), false, 'rpcUrl userinfo pair leaked');
+  });
+
+  await t.test('POST /integrations/audit/sweep is admin-gated and evicts only entries past retention', async () => {
+    const ownerId = await resetWithPatients();
+    assert.equal((await request('/integrations/audit/sweep', { method: 'POST' })).status, 403);
+
+    // One fresh entry (must survive the sweep) ...
+    const freshEntry = await store.create(COLLECTIONS.AUDIT_LOGS, {
+      id: 'aud_fresh_test', actorId: ownerId, patientId: ownerId, action: 'records.read',
+      resourceType: 'record', resourceId: null, ip: null, userAgent: null,
+      createdAt: new Date().toISOString(),
+    });
+    assert.ok(freshEntry);
+    // ... plus one manually backdated well past the retention window (must be evicted).
+    const stale = await store.create(COLLECTIONS.AUDIT_LOGS, {
+      id: 'aud_stale_test', actorId: ownerId, patientId: ownerId, action: 'records.read',
+      resourceType: 'record', resourceId: null, ip: null, userAgent: null,
+      createdAt: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    assert.ok(stale);
+
+    const swept = await json(await request('/integrations/audit/sweep', {
+      method: 'POST', headers: { 'x-admin-key': process.env.ADMIN_KEY },
+    }));
+    assert.equal(swept.response.status, 200);
+    assert.equal(swept.value.removed, 1);
+
+    assert.equal(await store.findById(COLLECTIONS.AUDIT_LOGS, 'aud_stale_test'), null);
+    assert.ok(await store.findById(COLLECTIONS.AUDIT_LOGS, 'aud_fresh_test'));
+  });
+
+  await t.test('GET /reports lists only the caller\'s own reports and never the description', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const attacker = sign({ sub: 'pat_attacker' });
+
+    const filed = await json(await request('/reports', {
+      token: owner, method: 'POST', body: { category: 'Billing', description: 'Charged twice for one visit' },
+    }));
+    assert.equal(filed.response.status, 201);
+
+    const mine = await json(await request('/reports', { token: owner }));
+    assert.equal(mine.response.status, 200);
+    assert.equal(mine.value.reports.length, 1);
+    assert.equal(mine.value.reports[0].caseNumber, filed.value.caseNumber);
+    assert.equal(mine.value.reports[0].category, 'Billing');
+    // Summary rows only — the encrypted narrative must not be decrypted just to render a list,
+    // and the raw ciphertext/patientId must not ride along either.
+    assert.equal(mine.value.reports[0].description, undefined);
+    assert.equal(mine.value.reports[0].encrypted, undefined);
+    assert.equal(mine.value.reports[0].patientId, undefined);
+    assert.equal(JSON.stringify(mine.value).includes('Charged twice'), false, 'report description leaked into the list');
+
+    // Another tenant sees an empty list, not someone else's cases.
+    const theirs = await json(await request('/reports', { token: attacker }));
+    assert.equal(theirs.response.status, 200);
+    assert.deepEqual(theirs.value.reports, []);
+
+    // The list must not become a way around the owner scoping on the detail route.
+    assert.equal((await request(`/reports/${filed.value.caseNumber}`, { token: attacker })).status, 404);
+    assert.equal((await request(`/reports/${filed.value.caseNumber}`, { token: owner })).status, 200);
+    assert.equal((await request('/reports')).status, 401);
+  });
+
+  await t.test('GET /records/:id/verify is identity-gated like every other record route', async () => {
+    const ownerId = await resetWithPatients();
+    await store.update(COLLECTIONS.PATIENTS, ownerId, { identityVerified: false });
+    const owner = sign({ sub: ownerId });
+    assert.equal((await request('/records', { token: owner })).status, 400);
+    const verify = await request('/records/rec_demo_cbc/verify', { token: owner });
+    assert.equal(verify.status, 400, 'unverified identity must not be able to read a record\'s verify badge/title/facility');
+  });
+
+  await t.test('dual-version PHI decryption: legacy (v1, no encryptedVersion) demo records stay readable', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const raw = await store.findById(COLLECTIONS.RECORDS, 'rec_demo_cbc');
+    assert.equal(raw.encryptedVersion, undefined, 'the seeded demo record must exercise the legacy (v1) format, not v2');
+    const record = await json(await request('/records/rec_demo_cbc', { token: owner }));
+    assert.equal(record.response.status, 200);
+    assert.equal(record.value.title, 'Complete Blood Count (CBC)');
+    assert.ok(record.value.data && record.value.data.hemoglobin, 'legacy record data must decrypt');
+    const verify = await json(await request('/records/rec_demo_cbc/verify', { token: owner }));
+    assert.equal(verify.response.status, 200);
+    assert.equal(verify.value.integrityOk, true, 'recomputed content hash must match the anchor for a legacy record');
+    assert.equal(verify.value.verified, true);
+  });
+
+  await t.test('admin routes authenticate before rate-limiting: unauth spam cannot lock out a real operator', async () => {
+    await resetWithPatients();
+    // requireAdmin runs BEFORE the shared 'admin' rate-limit bucket on escalate-stale, recurring
+    // insights, and nurse-confirm — so an unauthenticated caller is rejected every time and never
+    // consumes budget from the bucket a real admin needs.
+    const unauthStatuses = [];
+    for (let i = 0; i < 15; i += 1) {
+      unauthStatuses.push((await request('/reports/escalate-stale', { method: 'POST' })).status);
+    }
+    assert.ok(unauthStatuses.every((s) => s === 403), `expected every unauth call to be 403, got ${unauthStatuses.join(',')}`);
+    const asAdmin = await request('/reports/escalate-stale', { method: 'POST', headers: { 'x-admin-key': process.env.ADMIN_KEY } });
+    assert.equal(asAdmin.status, 200, 'a real admin must not be rate-limited by unauthenticated spam against the same route');
+  });
+
+  await t.test('an escalated report is never silently un-escalated by a later patient status check', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const filed = await json(await request('/reports', {
+      token: owner, method: 'POST', body: { category: 'Access', description: 'Could not reach the clinic' },
+    }));
+    const row = await store.findOne(COLLECTIONS.REPORTS, (r) => r.caseNumber === filed.value.caseNumber);
+    await store.update(COLLECTIONS.REPORTS, row.id, { createdAt: new Date(Date.now() - 100 * 3600e3).toISOString() });
+
+    const escalated = await reportService.escalateStale();
+    assert.equal(escalated.length, 1);
+    assert.equal(escalated[0].status, 'escalated');
+
+    // The mock eReport adapter has no real opinion on status — it must not overwrite the local
+    // escalation back to 'open' when the patient looks up their own case afterward.
+    const tracked = await json(await request(`/reports/${filed.value.caseNumber}`, { token: owner }));
+    assert.equal(tracked.response.status, 200);
+    assert.equal(tracked.value.status, 'escalated');
+    assert.equal(tracked.value.escalated, true);
+
+    // And it stays escalated on a second sweep — not re-escalatable, not silently reset.
+    assert.equal((await reportService.escalateStale()).length, 0);
+  });
+
+  await t.test('a cold-start demo reseed never clobbers a demo patient\'s own edits (phone/email/benefits)', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    await request('/patients/me', { token: owner, method: 'PATCH', body: { phone: '+639175551234', email: 'corrected@example.ph' } });
+    await request('/patients/me/benefits/whiteCard', { token: owner, method: 'PATCH' });
+
+    // Simulate a serverless cold start re-running the idempotent seed on the same store.
+    await seedDemoData();
+
+    const after = await json(await request('/patients/me', { token: owner }));
+    assert.equal(after.value.phone, '+639175551234');
+    assert.equal(after.value.email, 'corrected@example.ph');
+    assert.equal(after.value.benefits.whiteCard, true);
+  });
+
+  await t.test('a fully-covered bill settles locally without calling the payment gateway for ₱0', async () => {
+    const ownerId = await resetWithPatients();
+    await store.update(COLLECTIONS.PATIENTS, ownerId, { benefits: { whiteCard: { active: true } } });
+    const owner = sign({ sub: ownerId });
+    const bill = await json(await request('/payments', { token: owner, method: 'POST', body: { billAmount: 500 } }));
+    assert.equal(bill.response.status, 201);
+    assert.equal(bill.value.balance, 0);
+    assert.equal(bill.value.status, 'paid');
+    assert.equal(bill.value.provider, 'covered');
+    assert.equal(bill.value.checkoutUrl, null, 'a ₱0 bill must not carry a dead mock-checkout link');
+  });
+
+  await t.test('POST /appointments rejects a cross-tenant triageId (no misattribution)', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const attacker = sign({ sub: 'pat_attacker' });
+
+    const triage = await json(await request('/triage', { token: owner, method: 'POST', body: { text: 'mild headache' } }));
+    assert.equal(triage.response.status, 201);
+
+    const attempt = await request('/appointments', {
+      token: attacker, method: 'POST', body: { specialty: 'Cardiology', triageId: triage.value.id },
+    });
+    assert.equal(attempt.status, 404);
+    const attackerAppts = await store.findAll(COLLECTIONS.APPOINTMENTS, (a) => a.patientId === 'pat_attacker');
+    assert.equal(attackerAppts.length, 0);
+
+    const ok = await json(await request('/appointments', {
+      token: owner, method: 'POST', body: { specialty: 'Cardiology', triageId: triage.value.id },
+    }));
+    assert.equal(ok.response.status, 201);
+    assert.equal(ok.value.appointment.triageId, triage.value.id);
+  });
+
+  await t.test('patientIdFor is a frozen golden value: changing the derivation would fork every existing patient', async () => {
+    await resetWithPatients();
+    const login = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo' } }));
+    assert.equal(login.response.status, 200);
+    assert.equal(login.value.patient.id, 'pat_86cdde238746b98be824');
+  });
+
+  await t.test('jsonComplexity rejects a literal "__proto__" JSON key before it reaches application code', async () => {
+    await resetWithPatients();
+    const res = await request('/auth/egov/exchange', {
+      method: 'POST', rawBody: '{"exchangeCode":"demo","evil":{"__proto__":{"polluted":true}}}',
+    });
+    assert.equal(res.status, 400);
+  });
+
+  await t.test('the outbound HTTP guard refuses non-https hosts and refuses to follow a redirect', async () => {
+    await assert.rejects(() => http.get('http://example.invalid/'), /non-https/);
+
+    const redirector = await new Promise((resolve) => {
+      const srv = require('node:http').createServer((_req, res) => {
+        res.writeHead(302, { Location: 'http://169.254.169.254/latest/meta-data/' });
+        res.end();
+      });
+      srv.listen(0, '127.0.0.1', () => resolve(srv));
+    });
+    try {
+      const port = redirector.address().port;
+      await assert.rejects(() => http.get(`http://127.0.0.1:${port}/`), /redirect/);
+    } finally {
+      await new Promise((resolve) => redirector.close(resolve));
+    }
+  });
+
+  await t.test('the offline triage classifier can reach a real "urgent" tier distinct from "emergency"', async () => {
+    const egovAi = require('../src/integrations/egovAi');
+    const urgent = await egovAi.classifySymptoms({ text: 'high fever for three days' });
+    assert.equal(urgent.urgency, 'urgent');
+    assert.notEqual(urgent.specialty, 'Emergency Medicine');
+    const routine = await egovAi.classifySymptoms({ text: 'sipon lang' });
+    assert.equal(routine.urgency, 'routine');
+    const emergency = await egovAi.classifySymptoms({ text: 'chest pain' });
+    assert.equal(emergency.urgency, 'emergency');
+  });
+
+  await t.test('sanitize() merges the rule-based floor\'s red flags even when the model returns none, and enforces the emergency floor', async () => {
+    const cwd = path.join(__dirname, '..');
+    const script = `
+      const http = require('node:http');
+      const srv = http.createServer((req, res) => {
+        let body = '';
+        req.on('data', (c) => { body += c; });
+        req.on('end', () => {
+          res.setHeader('Content-Type', 'application/json');
+          if (req.url.includes('/token')) { res.end(JSON.stringify({ access_token: 'tok', expires_in_seconds: 3600 })); return; }
+          // Structurally valid but under-triaged, flag-less model output for an emergency input —
+          // simulates a degraded/prompt-injected live model missing what the offline rules catch.
+          res.end(JSON.stringify({ data: JSON.stringify({
+            specialty: 'Dermatology', urgency: 'routine', red_flags: [],
+            summary_en: 'ok', recommended_action: 'Book Dermatology', confidence: 0.9,
+          }) }));
+        });
+      });
+      srv.listen(0, '127.0.0.1', async () => {
+        const port = srv.address().port;
+        process.env.EGOV_AI_MODE = 'live';
+        process.env.EGOV_AI_BASE_URL = 'http://127.0.0.1:' + port;
+        process.env.EGOV_AI_ACCESS_CODE = 'test-code';
+        const egovAi = require('./src/integrations/egovAi');
+        const result = await egovAi.classifySymptoms({ text: 'chest pain and difficulty breathing' });
+        srv.close();
+        const ok = result.urgency === 'emergency'
+          && result.specialty === 'Emergency Medicine'
+          && result.redFlags.includes('Chest pain / possible cardiac event')
+          && result.redFlags.includes('Breathing difficulty');
+        if (!ok) { console.error('floor did not override: ' + JSON.stringify(result)); process.exit(1); }
+        process.exit(0);
+      });
+    `;
+    const result = spawnSync(process.execPath, ['-e', script], { cwd, encoding: 'utf8', env: { ...process.env } });
+    assert.equal(result.status, 0, result.stderr);
   });
 
   await t.test('authentication attempts are rate limited', async () => {

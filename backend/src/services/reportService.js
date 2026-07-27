@@ -24,12 +24,28 @@ async function fileReport({ patientId, category, description, contact }) {
   return present(report);
 }
 
+/**
+ * A patient's own reports, newest first. Deliberately does NOT decrypt `description` — the list
+ * only needs to get you to a case number, and the detail view (getByCase) is where the narrative
+ * belongs. Keeps N encrypted PHI blobs from being decrypted just to render a list.
+ */
+async function listForPatient(patientId) {
+  const store = getStore();
+  const mine = await store.findAll(COLLECTIONS.REPORTS, (r) => r.patientId === patientId);
+  return mine
+    .map(({ id, caseNumber, category, status, escalated, createdAt }) => ({ id, caseNumber, category, status, escalated, createdAt }))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
 async function getByCase(caseNumber, requesterId) {
   const store = getStore();
   const report = await store.findOne(COLLECTIONS.REPORTS, (r) => r.caseNumber === caseNumber);
   // Case numbers are guessable (EGM-YYYY-######); scope to the owner. 404 (not 403) hides existence.
   if (!report || (requesterId && report.patientId !== requesterId)) throw notFound('Case not found');
-  const upstream = await eReport.getStatus(caseNumber).catch(() => null);
+  // Never let an upstream status downgrade a case we've already escalated locally — the mock
+  // adapter (and live mode without a view token) has no real opinion and would otherwise flip an
+  // escalated case back to 'open' on the patient's very next look, silently erasing the escalation.
+  const upstream = report.escalated ? null : await eReport.getStatus(caseNumber).catch(() => null);
   if (upstream && upstream.status && upstream.status !== report.status) {
     return present(await store.update(COLLECTIONS.REPORTS, report.id, { status: upstream.status }));
   }
@@ -55,7 +71,11 @@ async function escalateStale() {
 async function recurringErrors() {
   const store = getStore();
   const all = await store.findAll(COLLECTIONS.REPORTS);
-  const counts = {};
+  // Object.create(null) — `category` is patient-supplied free text (jsonComplexity only blocks
+  // unsafe object KEYS, not values). A category of "__proto__" against a plain {} object literal
+  // would resolve to Object.prototype instead of creating an own property, silently dropping that
+  // category's count from the analytics.
+  const counts = Object.create(null);
   for (const r of all) counts[r.category] = (counts[r.category] || 0) + 1;
   return Object.entries(counts)
     .map(([category, count]) => ({ category, count }))
@@ -70,4 +90,4 @@ function present(report) {
   return report;
 }
 
-module.exports = { fileReport, getByCase, escalateStale, recurringErrors };
+module.exports = { fileReport, listForPatient, getByCase, escalateStale, recurringErrors };

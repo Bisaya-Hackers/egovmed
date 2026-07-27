@@ -8,9 +8,30 @@ async function startLiveness(patientId) {
   const store = getStore();
   const session = await identity.createLivenessSession();
   await store.create(COLLECTIONS.LIVENESS, {
-    id: session.sessionId, patientId, status: 'created', createdAt: new Date().toISOString(),
+    id: session.sessionId, patientId, status: 'created', provider: session.provider, createdAt: new Date().toISOString(),
   });
   return session;
+}
+
+/**
+ * Register a liveness session captured client-side by the eVerify Face Liveness Web SDK
+ * (window.eKYC().start({ pubKey }) → result.session_id). This is a DIFFERENT provider than our
+ * own Face Liveness hosted API — the SDK already ran and completed the capture in-browser before
+ * this call, so there is no separate result to fetch later. verifyIdentity() must not call
+ * identity.getLivenessResult() for these sessions (that endpoint belongs to the other provider
+ * and does not recognize eVerify SDK session IDs).
+ */
+async function registerEverifySdkLiveness(patientId, sessionId) {
+  const store = getStore();
+  // store.create() overwrites unconditionally — without this guard, re-registering an
+  // already-claimed/consumed session_id would silently reset it to 'created' and reopen a
+  // single-use liveness proof for replay.
+  const existing = await store.findById(COLLECTIONS.LIVENESS, sessionId);
+  if (existing) throw badRequest('This liveness session was already registered');
+  await store.create(COLLECTIONS.LIVENESS, {
+    id: sessionId, patientId, status: 'created', provider: 'everify-sdk', createdAt: new Date().toISOString(),
+  });
+  return { sessionId, provider: 'everify-sdk' };
 }
 
 const LIVENESS_MAX_AGE_MS = 10 * 60 * 1000; // a captured liveness session is valid for 10 minutes
@@ -38,10 +59,15 @@ async function verifyIdentity({ patientId, consent, livenessSessionId, requestMe
   });
   if (!claimed) throw badRequest('Liveness session already used — please re-capture');
 
-  const liveness = await identity.getLivenessResult(livenessSessionId).catch(async (err) => {
-    await store.update(COLLECTIONS.LIVENESS, livenessSessionId, { status: 'failed' });
-    throw err;
-  });
+  // eVerify SDK sessions already completed their liveness capture client-side (the frontend only
+  // calls us after the SDK resolves with status "COMPLETED") — there is no separate result to
+  // fetch, and identity.getLivenessResult() would 404/mismatch against the wrong provider's API.
+  const liveness = livenessSession.provider === 'everify-sdk'
+    ? { sessionId: livenessSessionId, live: true, confidence: null, provider: 'everify-sdk' }
+    : await identity.getLivenessResult(livenessSessionId).catch(async (err) => {
+      await store.update(COLLECTIONS.LIVENESS, livenessSessionId, { status: 'failed' });
+      throw err;
+    });
   // getLivenessResult already enforces "SUCCEEDED" + confidence >= threshold in live mode.
   if (!liveness.live) {
     await store.update(COLLECTIONS.LIVENESS, livenessSessionId, { status: 'failed' });
@@ -104,4 +130,4 @@ async function assertVerified(patientId) {
   return true;
 }
 
-module.exports = { startLiveness, verifyIdentity, assertVerified };
+module.exports = { startLiveness, registerEverifySdkLiveness, verifyIdentity, assertVerified };

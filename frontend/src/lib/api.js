@@ -53,10 +53,14 @@ export const api = {
   // rejects anything else via zod .strict() — names and DOB stay locked to the SSO source.
   updateContact: (patch) => req('/patients/me', { method: 'PATCH', body: patch }),
   activateBenefit: (key) => req(`/patients/me/benefits/${encodeURIComponent(key)}`, { method: 'PATCH' }),
+  removeBenefit: (key) => req(`/patients/me/benefits/${encodeURIComponent(key)}`, { method: 'DELETE' }),
   // eGovAI triage
   triage: (text, language) => req('/triage', { method: 'POST', body: { text, language: language === 'tl' ? 'tl' : 'en' } }),
   // National ID eVerify + Face Liveness
   startLiveness: () => req('/identity/liveness', { method: 'POST', body: {} }),
+  // Registers a session_id already captured client-side by the eVerify Face Liveness Web SDK
+  // (window.eKYC().start({ pubKey })) — a different provider than startLiveness() above.
+  registerEverifySdkLiveness: (sessionId) => req('/identity/liveness/everify-sdk', { method: 'POST', body: { sessionId } }),
   verifyIdentity: (livenessSessionId) => req('/identity/verify', { method: 'POST', body: { consent: true, livenessSessionId } }),
   // Appointments + eMessage
   book: (specialty, hospital, scheduledFor, triageId) => req('/appointments', {
@@ -78,6 +82,7 @@ export const api = {
   doctorSummary: () => req('/records/doctor-summary'),
   // eReport
   fileReport: (category, description) => req('/reports', { method: 'POST', body: { category, description } }),
+  myReports: () => req('/reports'),
   trackCase: (caseNumber) => req(`/reports/${encodeURIComponent(caseNumber)}`),
 };
 
