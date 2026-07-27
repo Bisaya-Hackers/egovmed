@@ -80,7 +80,7 @@ async function createCheckout({ amount, currency = 'PHP', description, items = [
 async function getStatus(reference) {
   if (isLive()) {
     if (!cfg.token) throw new Error('eGovPay live mode requires EGOVPAY_TOKEN');
-    const res = await http.get(`${cfg.baseUrl}/api/v1/transaction/${reference}`, {
+    const res = await http.get(`${cfg.baseUrl}/api/v1/transaction/${encodeURIComponent(reference)}`, {
       headers: { 'X-eGovPay-Token': cfg.token, 'Content-Type': 'application/json; charset=utf-8' },
     });
     const data = (res && (res.data || res)) || {};

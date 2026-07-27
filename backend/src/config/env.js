@@ -109,7 +109,6 @@ const env = {
     settlementTemplateUuid: process.env.EGOVPAY_SETTLEMENT_TEMPLATE_UUID || '',
     redirectUrl: process.env.EGOVPAY_REDIRECT_URL || '',
     callbackUrl: process.env.EGOVPAY_CALLBACK_URL || '',
-    merchantId: process.env.EGOVPAY_MERCHANT_ID || '',
     // Mock-mode only: the mock gateway used to always settle every checkout as 'paid', so the
     // failed-payment UI could never be exercised without real eGovPay credentials. Lets
     // developers/QA force the mock's outcome (e.g. EGOVPAY_MOCK_OUTCOME=failed) to test that path.
@@ -161,6 +160,13 @@ function warnIfMisconfigured(log) {
   // any catch/log path would then persist. Live-mode gated so mock deploys don't need a key.
   if (env.egovChain.mode === 'live' && !/^0x[0-9a-fA-F]{64}$/.test(env.egovChain.privateKey)) {
     throw new Error('EGOVCHAIN_PRIVATE_KEY must be "0x" + 64 hex chars (check for trailing whitespace, quotes, or CRLF from a paste).');
+  }
+  // Same rationale as the private-key check above, gated the same way: without this, EGOVCHAIN_MODE=live
+  // with an empty/malformed contract address boots successfully, then every POST /records 500s (anchoring
+  // is fail-closed) and every existing record's verify badge silently goes grey (verifyAnchor fail-safes
+  // to unverified) — the failure only surfaces on the first real write, not at boot.
+  if (env.egovChain.mode === 'live' && !/^0x[0-9a-fA-F]{40}$/.test(env.egovChain.contractAddress)) {
+    throw new Error('EGOVCHAIN_CONTRACT_ADDRESS must be "0x" + 40 hex chars when EGOVCHAIN_MODE=live.');
   }
   if (env.isProd && !env.allowMockInProduction) {
     // All eight eGov integrations must be live + credentialed once the mock escape hatch is off.

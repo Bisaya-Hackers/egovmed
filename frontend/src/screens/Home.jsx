@@ -1,5 +1,5 @@
 import { HeartPulse, FileText, Card, Flag, Chat, ChevronRight, ShieldTick } from '../components/Icons.jsx';
-import { CONST } from '../i18n/dict.js';
+import { CONST, SLOTS } from '../i18n/dict.js';
 import rosaAvatar from '../assets/home-avatar-rosa.png';
 import digitalIdArt from '../assets/home-digital-id.png';
 import verifiedLabsArt from '../assets/home-verified-labs.png';
@@ -63,12 +63,12 @@ export default function Home({ c, lang, S, A }) {
           {S.appointments.map((appt) => (
             <div key={appt.id} data-stagger className="card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 800, fontSize: '1.05em' }}>{appt.specialty || dept}</div>
-                  <div className="sub" style={{ margin: '4px 0 0' }}>{appt.slotLabel || 'Today · 2:30 PM'}</div>
+                  <div className="sub" style={{ margin: '4px 0 0' }}>{appt.slotLabel || SLOTS[lang][0][0]}</div>
                   <div className="sub" style={{ margin: '2px 0 0' }}>{appt.hospital || CONST.hospital}</div>
                 </div>
-                <span style={{ display: 'flex', gap: 6 }}>
+                <span style={{ display: 'flex', gap: 6, flex: 'none' }}>
                   {appt.verified ? (
                     <span className="pill green">{c.verifiedBadge}</span>
                   ) : (

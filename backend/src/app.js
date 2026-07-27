@@ -11,6 +11,12 @@ warnIfMisconfigured(logger);
 
 const app = express();
 app.disable('x-powered-by');
+// Vercel terminates TLS at its edge and forwards the real client in X-Forwarded-For. Trust
+// exactly one hop so req.ip resolves to the citizen's address (not the proxy's) — every per-user
+// and per-IP rate limit, and the PHI-access/consent audit trail, otherwise records the same
+// internal address for every request. A larger value would let a client spoof its own IP by
+// prepending entries to the header.
+app.set('trust proxy', 1);
 app.use(secureHeaders);
 
 // Never pair a reflected/wildcard origin with credentials (that lets any site make credentialed calls).

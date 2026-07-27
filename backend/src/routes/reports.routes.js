@@ -40,12 +40,14 @@ router.get('/:caseNumber', requireAuth,
 }));
 
 // POST /reports/escalate-stale → escalation sweep. ADMIN/cron only (x-admin-key), NOT a patient action.
-router.post('/escalate-stale', adminLimit, requireAdmin, asyncHandler(async (_req, res) => {
+// requireAdmin runs FIRST so an unauthenticated caller cannot drain the shared 'admin' rate-limit
+// bucket and lock a real operator out of this route (see /integrations/status for the same pattern).
+router.post('/escalate-stale', requireAdmin, adminLimit, asyncHandler(async (_req, res) => {
   res.json({ escalated: await reportService.escalateStale() });
 }));
 
 // GET /reports/insights/recurring → cross-tenant analytics. ADMIN only (x-admin-key).
-router.get('/insights/recurring', adminLimit, requireAdmin, asyncHandler(async (_req, res) => {
+router.get('/insights/recurring', requireAdmin, adminLimit, asyncHandler(async (_req, res) => {
   res.json(await reportService.recurringErrors());
 }));
 
