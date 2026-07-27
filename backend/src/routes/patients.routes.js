@@ -30,12 +30,10 @@ router.get('/me', requireAuth,
 // PhilSys via SSO and are load-bearing for identity matching — those must not be user-editable.
 // Benefits have their own PATCH route below.
 //
-// SSO overwrite caveat: authService.upsertAndIssue currently prefers any non-empty phone/email
-// returned by SSO on subsequent logins (see the "Don't overwrite previously-good fields with
-// blanks/nulls from a thinner SSO payload" comment there). So a user-set phone STICKS if SSO
-// returns blank on later logins, but gets overwritten if SSO returns any value. That's fine for
-// the "SSO omitted phone" use case this endpoint exists to solve; a full "manual override
-// beats SSO" would need per-field provenance tracking — deferred.
+// Per-field provenance: a field the patient edits here goes into manuallyOverriddenFields, and
+// authService.upsertAndIssue skips overwriting anything in that set on later SSO logins — a
+// manual fix beats a stale/wrong SSO value from then on, not just the one-time "SSO omitted it"
+// case this endpoint originally handled.
 const updateLimit = rateLimit({ scope: 'patients-update', max: 20, windowMs: 10 * 60_000 });
 // E.164 Philippine mobile: +63 + 10 digits. Stored canonical so integration adapters don't
 // each guess a format; eReport's fileReport already strips the leading + at send time.
@@ -53,8 +51,10 @@ router.patch('/me', requireAuth, updateLimit,
     const patient = await store.findById(COLLECTIONS.PATIENTS, req.user.sub);
     if (!patient) throw notFound('Patient not found');
     const patch = { updatedAt: new Date().toISOString() };
-    if (req.body.phone !== undefined) patch.phone = req.body.phone;
-    if (req.body.email !== undefined) patch.email = req.body.email;
+    const overridden = new Set(patient.manuallyOverriddenFields || []);
+    if (req.body.phone !== undefined) { patch.phone = req.body.phone; overridden.add('phone'); }
+    if (req.body.email !== undefined) { patch.email = req.body.email; overridden.add('email'); }
+    patch.manuallyOverriddenFields = [...overridden];
     const updated = await store.update(COLLECTIONS.PATIENTS, req.user.sub, patch);
     res.json(publicPatient(updated));
   }));
