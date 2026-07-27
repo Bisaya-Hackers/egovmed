@@ -12,6 +12,17 @@ router.post('/liveness', requireAuth,
   res.json(await identityService.startLiveness(req.user.sub));
 }));
 
+// POST /identity/liveness/everify-sdk  { sessionId }
+// Registers a session_id already captured client-side by the eVerify Face Liveness Web SDK
+// (window.eKYC().start({ pubKey })) — a different provider than our own /identity/liveness above.
+// The resulting session is consumed the same single-use way via POST /identity/verify.
+router.post('/liveness/everify-sdk', requireAuth,
+  rateLimit({ scope: 'identity-liveness', max: 5, windowMs: 10 * 60_000 }),
+  validate(z.object({ sessionId: z.string().uuid() }).strict()),
+  asyncHandler(async (req, res) => {
+    res.json(await identityService.registerEverifySdkLiveness(req.user.sub, req.body.sessionId));
+  }));
+
 // POST /identity/verify  { philsysId?, consent, livenessSessionId }
 // livenessSessionId is REQUIRED — obtain it from POST /identity/liveness first.
 router.post('/verify', requireAuth,

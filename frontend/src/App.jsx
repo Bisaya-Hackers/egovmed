@@ -4,6 +4,7 @@ import gsap from 'gsap';
 import { DICT, CONST, CHANNELS, HOSPITALS, randomSlots } from './i18n/dict.js';
 import { api, getToken, setToken } from './lib/api.js';
 import { fallbackTriage } from './lib/triageFallback.js';
+import { runEverifyLivenessCapture } from './lib/everifySdk.js';
 import { makeRefNo } from './lib/refNo.js';
 import { Gear, Bell, Check } from './components/Icons.jsx';
 
@@ -366,6 +367,18 @@ export default function App() {
     acceptConsent: async () => {
       set((p) => ({ screen: 'liveness', stack: [...p.stack, 'consent'], liveness: 'capturing', flowError: null }));
       try {
+        // Opt-in path: the eVerify Web SDK runs its own in-browser liveness capture and returns a
+        // session_id that (unlike our own Face Liveness hosted flow) is actually accepted by
+        // eVerify's /api/query. Off by default — see docs on VITE_EVERIFY_SDK_ENABLED.
+        if (import.meta.env.VITE_EVERIFY_SDK_ENABLED === 'true') {
+          const sid = await runEverifyLivenessCapture(import.meta.env.VITE_EVERIFY_PUBKEY);
+          set({ livenessSessionId: sid, liveness: 'verifying' });
+          await api.registerEverifySdkLiveness(sid);
+          const result = await api.verifyIdentity(sid);
+          if (!result?.verified) throw new Error('Identity verification did not pass');
+          set({ liveness: 'verified' });
+          return;
+        }
         const sess = await api.startLiveness();
         const sid = sess?.sessionId || sess?.session_id || null;
         if (!sid) throw new Error('Face Liveness returned no session ID');

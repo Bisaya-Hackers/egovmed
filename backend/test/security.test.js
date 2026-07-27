@@ -409,6 +409,45 @@ test('security regression suite', async (t) => {
     assert.deepEqual(responses.map((r) => r.status).sort(), [200, 400]);
   });
 
+  await t.test('an eVerify Web SDK session_id can be registered and consumed once, but not re-registered to reopen it', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const sessionId = '11111111-2222-4333-8444-555555555555';
+
+    const registered = await json(await request('/identity/liveness/everify-sdk', {
+      token: owner, method: 'POST', body: { sessionId },
+    }));
+    assert.equal(registered.response.status, 200);
+    assert.deepEqual(registered.value, { sessionId, provider: 'everify-sdk' });
+
+    // re-registering the same session_id must not reset an already-claimed/consumed session
+    const reRegistered = await request('/identity/liveness/everify-sdk', {
+      token: owner, method: 'POST', body: { sessionId },
+    });
+    assert.equal(reRegistered.status, 400);
+
+    const verified = await json(await request('/identity/verify', {
+      token: owner, method: 'POST', body: { consent: true, livenessSessionId: sessionId },
+    }));
+    assert.equal(verified.response.status, 200);
+    assert.equal(verified.value.verification.liveness.provider, 'everify-sdk');
+
+    // the consumed session cannot be replayed
+    const replay = await request('/identity/verify', {
+      token: owner, method: 'POST', body: { consent: true, livenessSessionId: sessionId },
+    });
+    assert.equal(replay.status, 400);
+  });
+
+  await t.test('a raw (unregistered) client-supplied session_id is rejected, not silently trusted', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const forged = await request('/identity/verify', {
+      token: owner, method: 'POST', body: { consent: true, livenessSessionId: '99999999-2222-4333-8444-555555555555' },
+    });
+    assert.equal(forged.status, 400);
+  });
+
   await t.test('malformed and oversized JSON are rejected with safe statuses', async () => {
     await resetWithPatients();
     assert.equal((await request('/auth/egov/exchange', { method: 'POST', rawBody: '{' })).status, 400);
