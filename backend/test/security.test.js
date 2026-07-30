@@ -156,8 +156,17 @@ test('security regression suite', async (t) => {
       mode: 'mock',
       callbackUrl: 'http://localhost:3000/egovph/sso',
       launchUrl: null,
+      // The eVerify "Public API Key" is the ONE value here that is meant to reach the browser —
+      // window.eKYC().start({ pubKey }) puts it in an iframe URL, so it is public either way.
+      // Asserting the sentinel (rather than null) pins it to env.everify.pubKey, so a future
+      // rename cannot silently leave the frontend with an undefined pubKey.
+      everifyPubKey: CREDENTIAL_SENTINELS.EVERIFY_PUBKEY,
     });
-    assert.equal(JSON.stringify(config.value).includes('secret'), false);
+    const configRaw = JSON.stringify(config.value);
+    assert.equal(configRaw.includes('secret'), false);
+    // Its server-side partner must never ride along on this unauthenticated endpoint.
+    assert.equal(configRaw.includes(CREDENTIAL_SENTINELS.EVERIFY_CLIENT_SECRET), false);
+    assert.equal(configRaw.includes(CREDENTIAL_SENTINELS.EVERIFY_CLIENT_ID), false);
 
     const callback = await json(await request('/payments/callback', {
       method: 'POST', body: { status: 'paid', bill_id: 'bill_forged' },

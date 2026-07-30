@@ -5,6 +5,27 @@
 // backend's POST /identity/liveness/everify-sdk registers, then POST /identity/verify consumes.
 const SDK_SRC = 'https://hackathon-everify-face-liveness.e.gov.ph/js/everify-liveness-sdk.min.js';
 
+// The SDK injects a full-screen <div> wrapping an <iframe allow="camera"> pointed here, and only
+// resolves for postMessage events whose origin matches. Different host than SDK_SRC — both need
+// to be allowed by the CSP (script-src for SDK_SRC, frame-src for this one).
+const CAPTURE_ORIGIN = 'https://liveness.everify.gov.ph';
+
+// Ceiling on a single capture. The SDK's message listener calls removeEventListener for ANY
+// message it receives but only resolves for ones from CAPTURE_ORIGIN — so one stray postMessage
+// (a browser extension, an embedded widget) tears the listener down and its promise then never
+// settles. Without this the liveness screen would spin forever with no way out.
+const CAPTURE_TIMEOUT_MS = 3 * 60_000;
+
+/** err.code values callers branch on. A cancel is a user choice, NOT a failed identity check. */
+export const EVERIFY_CANCELLED = 'EVERIFY_CANCELLED';
+export const EVERIFY_TIMEOUT = 'EVERIFY_TIMEOUT';
+
+function livenessError(code, message) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+
 let loadPromise = null;
 
 function loadScript() {
@@ -21,11 +42,44 @@ function loadScript() {
   return loadPromise;
 }
 
+// The SDK tears its own overlay down on completion and on its X button, and hands us no handle to
+// it — so the only case we clean up after is our own timeout bail-out, where the SDK is still
+// waiting and its z-index:9999 full-screen div would otherwise cover the error we just raised.
+function dismissOverlay() {
+  const frame = document.querySelector(`iframe[src^="${CAPTURE_ORIGIN}"]`);
+  if (frame && frame.parentElement) frame.parentElement.remove();
+}
+
+/** Rejects with EVERIFY_TIMEOUT if the SDK's promise hasn't settled within CAPTURE_TIMEOUT_MS. */
+function withTimeout(promise) {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      dismissOverlay();
+      reject(livenessError(EVERIFY_TIMEOUT, 'The face check timed out before it finished'));
+    }, CAPTURE_TIMEOUT_MS);
+    const settle = (fn) => (value) => { window.clearTimeout(timer); fn(value); };
+    promise.then(settle(resolve), settle(reject));
+  });
+}
+
 /** Runs the eVerify Web SDK's in-browser liveness capture. Returns the session_id on success. */
 export async function runEverifyLivenessCapture(pubKey) {
   if (!pubKey) throw new Error('eVerify pubKey is not configured');
   await loadScript();
-  const response = await window.eKYC().start({ pubKey });
+
+  let response;
+  try {
+    response = await withTimeout(window.eKYC().start({ pubKey }));
+  } catch (err) {
+    // The X button rejects with a PLAIN OBJECT — { status: 'CANCELLED', result: undefined } — not
+    // an Error. Left as-is its `message` is undefined, so every `err.message || 'fallback'` above
+    // us reports a deliberate cancel as a generic verification failure. Normalize it, and any
+    // other non-Error rejection with it, so callers always get a real Error with a real message.
+    if (err && err.status === 'CANCELLED') throw livenessError(EVERIFY_CANCELLED, 'Face check cancelled');
+    if (err instanceof Error) throw err;
+    throw new Error('The eVerify face check failed');
+  }
+
   const sessionId = response?.result?.session_id;
   if (!sessionId) throw new Error('eVerify SDK did not return a session_id');
   return sessionId;

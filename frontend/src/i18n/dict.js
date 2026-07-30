@@ -29,6 +29,9 @@ export const DICT = {
     consentDecline: 'Not now', consentAccept: 'I agree, verify me',
     livenessLook: 'Look at the camera', livenessHold: 'Hold still…', livenessVerifying: 'Verifying your identity…',
     livenessSubLook: 'Keep your face inside the circle.',
+    // Shown when the patient closes the eVerify face-check window themselves — a choice, not a failure.
+    livenessCancelled: 'Face check closed', livenessCancelledSub: 'You closed the face check before it finished. Nothing was verified yet.',
+    livenessTryAgain: 'Try again',
     verified: 'Identity verified', verifiedSub: "You're all set. Let's book your appointment.",
     bookTitle: 'Book your appointment', deptPre: 'Department', pickSlot: 'Choose a time',
     loadingSlots: 'Finding available slots…', confirmBook: 'Confirm booking', booking: 'Booking your slot…',
@@ -125,6 +128,8 @@ export const DICT = {
     consentDecline: 'Hindi muna', consentAccept: 'Sang-ayon ako, i-verify ako',
     livenessLook: 'Tumingin sa camera', livenessHold: 'Wag gagalaw…', livenessVerifying: 'Vine-verify ang pagkakakilanlan…',
     livenessSubLook: 'Panatilihin ang mukha sa loob ng bilog.',
+    livenessCancelled: 'Isinara ang face check', livenessCancelledSub: 'Isinara mo ang face check bago ito matapos. Wala pang na-verify.',
+    livenessTryAgain: 'Subukan ulit',
     verified: 'Napatunayan ang pagkakakilanlan', verifiedSub: 'Handa ka na. I-book na natin ang appointment mo.',
     bookTitle: 'I-book ang appointment', deptPre: 'Departamento', pickSlot: 'Pumili ng oras',
     loadingSlots: 'Naghahanap ng bakanteng oras…', confirmBook: 'Kumpirmahin ang booking', booking: 'Bino-book ang iyong oras…',

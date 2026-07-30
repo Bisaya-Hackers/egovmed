@@ -7,6 +7,10 @@ export default function Liveness({ c, S, A }) {
   const verified = S.liveness === 'verified';
   const verifying = S.liveness === 'verifying';
   const failed = S.liveness === 'failed';
+  // The patient closed the eVerify SDK's capture window themselves. Deliberately NOT `failed`:
+  // nothing was checked and rejected, so this gets a calm status card, not the red alert.
+  const cancelled = S.liveness === 'cancelled';
+  const capturing = !verified && !failed && !cancelled; // camera circle + "hold still" copy
   const videoRef = useRef(null);
   const [camera, setCamera] = useState('idle'); // 'idle' | 'live' | 'denied' | 'unavailable'
 
@@ -39,7 +43,7 @@ export default function Liveness({ c, S, A }) {
         <ScreenHeader onBack={A.back} step={3} label={c.stepVerify} />
       </div>
 
-      {!verified && !failed && (
+      {capturing && (
         <>
           <h1 className="h1" style={{ textAlign: 'center', marginTop: 8 }}>{c.livenessLook}</h1>
           <p className="sub" style={{ textAlign: 'center' }}>{c.livenessSubLook}</p>
@@ -54,11 +58,18 @@ export default function Liveness({ c, S, A }) {
           <h2 className="h2" style={{ marginTop: 18 }}>{c.verified}</h2>
           <p className="sub">{c.verifiedSub}</p>
         </div>
+      ) : cancelled ? (
+        <div role="status" aria-live="polite" className="card" style={{ width: '100%', textAlign: 'center' }}>
+          <h2 className="h2">{c.livenessCancelled}</h2>
+          <p className="sub" style={{ marginTop: 8 }}>{c.livenessCancelledSub}</p>
+          <div style={{ marginTop: 18 }}><Btn onClick={A.retryLiveness}>{c.livenessTryAgain}</Btn></div>
+          <div style={{ marginTop: 10 }}><Btn variant="secondary" onClick={A.declineConsent}>{c.consentDecline}</Btn></div>
+        </div>
       ) : failed ? (
         <div role="alert" className="card" style={{ width: '100%', textAlign: 'center' }}>
           <h2 className="h2">Verification was not completed</h2>
           <p className="sub" style={{ color: 'var(--red)', marginTop: 8 }}>{S.flowError || 'Please try the liveness check again.'}</p>
-          <div style={{ marginTop: 18 }}><Btn onClick={A.retryLiveness}>Try again</Btn></div>
+          <div style={{ marginTop: 18 }}><Btn onClick={A.retryLiveness}>{c.livenessTryAgain}</Btn></div>
         </div>
       ) : (
         <div role="status" aria-live="polite" style={{ position: 'relative', width: 230, height: 230, borderRadius: '50%', background: '#D3E0F5', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: `0 0 0 4px ${verifying ? 'var(--blue-50)' : 'var(--teal-50)'}` }}>
@@ -74,13 +85,13 @@ export default function Liveness({ c, S, A }) {
           )}
         </div>
       )}
-      {camera === 'denied' && !verified && !failed && (
+      {camera === 'denied' && capturing && (
         <p className="sub" style={{ textAlign: 'center', marginTop: 8, fontSize: '0.85em', color: 'var(--amber)' }}>
           Camera permission was blocked. The flow will continue in demo mode.
         </p>
       )}
 
-      {!verified && !failed && (
+      {capturing && (
         <p className="sub" style={{ textAlign: 'center', marginTop: 18, fontWeight: 600 }}>{verifying ? c.livenessVerifying : c.livenessHold}</p>
       )}
 

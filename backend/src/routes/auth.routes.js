@@ -8,11 +8,16 @@ const { env, publicUrl } = require('../config/env');
 const router = Router();
 
 // Safe public flow metadata; never exposes partner credentials.
+// everifyPubKey is the eVerify portal's "Public API Key" — it is designed to ship to the browser
+// (window.eKYC().start({ pubKey }) puts it straight in an iframe URL), unlike EVERIFY_CLIENT_SECRET
+// which stays server-side. Serving it here rather than baking it into the frontend bundle keeps one
+// source of truth (backend EVERIFY_PUBKEY) and lets the key rotate without a frontend rebuild.
 router.get('/config', (_req, res) => {
   res.json({
     mode: env.egovph.mode === 'live' ? 'live' : 'mock',
     callbackUrl: publicUrl(env.appUrl, '/egovph/sso'),
     launchUrl: env.egovph.launchUrl || null,
+    everifyPubKey: env.everify.pubKey || null,
   });
 });
 
