@@ -70,6 +70,9 @@ async function verifyPhilSys({ firstName, middleName, lastName, suffix, birthDat
         topLevelKeys: res && typeof res === 'object' ? Object.keys(res) : typeof res,
         dataKeys: data && typeof data === 'object' ? Object.keys(data) : typeof data,
         dataVerified: data ? data.verified : undefined, // boolean status, not PII
+        // meta is an envelope (status/message), not the PII-bearing data object. Logged so a
+        // 'no PhilSys record' can be told apart from a demographic or biometric mismatch.
+        meta: res && res.meta ? res.meta : null,
       });
     }
     return { verified, reference: data && data.reference, code: data && data.code, provider: 'everify' };
