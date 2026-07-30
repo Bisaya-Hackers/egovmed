@@ -149,7 +149,15 @@ export default function App() {
     // Payments are matched back to their appointment via `appointmentId` so each card shows its
     // own paid/unpaid state independently.
     const syncPatientState = async () => {
-      const [appts, pays, msgs] = await Promise.all([tryApi(api.appointments()), tryApi(api.payments()), tryApi(api.messages())]);
+      // `me` is fetched here rather than read from state: on a fresh page load (including the
+      // return from the hosted Face Liveness redirect) S.liveness is still 'idle', so stamping
+      // appointments from it marked a verified patient's card "Not verified". identityVerified is
+      // the server's persisted truth and is correct at every call site.
+      const [appts, pays, msgs, me] = await Promise.all([
+        tryApi(api.appointments()), tryApi(api.payments()), tryApi(api.messages()), tryApi(api.me()),
+      ]);
+      const identityVerified = !!me?.identityVerified;
+      if (identityVerified) set({ liveness: 'verified' });
       if (Array.isArray(msgs)) set({ messages: msgs });
       if (Array.isArray(appts) && appts.length) {
         const activeAppts = [...appts]
@@ -166,7 +174,7 @@ export default function App() {
               refNo: makeRefNo(a.hospital || 'PGH', a.queueNumber, a.id || a.queueNumber, a.specialty),
               queueNumber: a.queueNumber,
               paid: Array.isArray(pays) && pays.some((pay) => pay.appointmentId === a.id && SETTLED.includes(String(pay.status || '').toLowerCase())),
-              verified: p.liveness === 'verified',
+              verified: identityVerified,
             }));
             const active = activeAppts[0];
             // Legacy/unlinked payments (made before appointmentId existed) still settle the
