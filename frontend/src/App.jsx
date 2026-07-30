@@ -4,7 +4,7 @@ import gsap from 'gsap';
 import { DICT, CONST, CHANNELS, HOSPITALS, randomSlots } from './i18n/dict.js';
 import { api, getToken, setToken } from './lib/api.js';
 import { fallbackTriage } from './lib/triageFallback.js';
-import { runEverifyLivenessCapture } from './lib/everifySdk.js';
+import { runEverifyLivenessCapture, EVERIFY_CANCELLED } from './lib/everifySdk.js';
 import { makeRefNo } from './lib/refNo.js';
 import { Gear, Bell, Check } from './components/Icons.jsx';
 
@@ -32,7 +32,7 @@ const FONT = { 0: 17, 1: 19, 2: 21 };
 const initial = () => ({
   lang: 'en', screen: 'signin', stack: [], textScale: 0,
   signingIn: false, signinErr: false,
-  authMode: 'loading', authLaunchUrl: null, authCallbackUrl: null, flowError: null,
+  authMode: 'loading', authLaunchUrl: null, authCallbackUrl: null, everifyPubKey: null, flowError: null,
   symptom: '', recording: false, recSec: 0, thinking: false,
   emergency: false, liveness: 'idle', livenessSessionId: null,
   triage: null,
@@ -197,7 +197,14 @@ export default function App() {
     (async () => {
       try {
         const auth = await api.authConfig();
-        set({ authMode: auth?.mode || 'mock', authLaunchUrl: auth?.launchUrl || null, authCallbackUrl: auth?.callbackUrl || null });
+        set({
+          authMode: auth?.mode || 'mock',
+          authLaunchUrl: auth?.launchUrl || null,
+          authCallbackUrl: auth?.callbackUrl || null,
+          // eVerify's browser-safe "Public API Key", served by the backend so the one already set
+          // as EVERIFY_PUBKEY there is the single source of truth (see acceptConsent below).
+          everifyPubKey: auth?.everifyPubKey || null,
+        });
 
         const current = new URL(window.location.href);
         const exchangeCode = current.searchParams.get('exchange_code') || current.searchParams.get('exchangeCode');
@@ -374,13 +381,23 @@ export default function App() {
       toast(S.lang === 'tl' ? 'Kailangan ang pag-verify para makapag-book ng appointment' : "You'll need to verify your identity to book an appointment");
     },
     acceptConsent: async () => {
-      set((p) => ({ screen: 'liveness', stack: [...p.stack, 'consent'], liveness: 'capturing', flowError: null }));
+      // retryLiveness() re-enters here from the Liveness screen itself — only push 'consent' onto
+      // the back stack when we're actually arriving from it, or repeated retries pile up duplicate
+      // entries and Back takes as many presses as the patient made attempts.
+      set((p) => ({
+        screen: 'liveness',
+        stack: p.screen === 'liveness' ? p.stack : [...p.stack, 'consent'],
+        liveness: 'capturing',
+        flowError: null,
+      }));
       try {
         // Opt-in path: the eVerify Web SDK runs its own in-browser liveness capture and returns a
         // session_id that (unlike our own Face Liveness hosted flow) is actually accepted by
         // eVerify's /api/query. Off by default — see docs on VITE_EVERIFY_SDK_ENABLED.
         if (import.meta.env.VITE_EVERIFY_SDK_ENABLED === 'true') {
-          const sid = await runEverifyLivenessCapture(import.meta.env.VITE_EVERIFY_PUBKEY);
+          // Backend /auth/config first (one place to set and rotate the key, no frontend rebuild);
+          // VITE_EVERIFY_PUBKEY stays as a local/offline override when the backend has none.
+          const sid = await runEverifyLivenessCapture(S.everifyPubKey || import.meta.env.VITE_EVERIFY_PUBKEY);
           set({ livenessSessionId: sid, liveness: 'verifying' });
           await api.registerEverifySdkLiveness(sid);
           const result = await api.verifyIdentity(sid);
@@ -405,6 +422,12 @@ export default function App() {
         if (!result?.verified) throw new Error('Identity verification did not pass');
         set({ liveness: 'verified' });
       } catch (err) {
+        // Closing the SDK's X button is a deliberate "not right now", not a rejected identity.
+        // Its own state keeps the red "Verification was not completed" alert off the screen.
+        if (err?.code === EVERIFY_CANCELLED) {
+          set({ liveness: 'cancelled', flowError: null });
+          return;
+        }
         set({ liveness: 'failed', flowError: err.message || 'Identity verification failed' });
       }
     },
