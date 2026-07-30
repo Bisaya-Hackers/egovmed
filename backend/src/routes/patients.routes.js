@@ -38,12 +38,23 @@ const updateLimit = rateLimit({ scope: 'patients-update', max: 20, windowMs: 10 
 // E.164 Philippine mobile: +63 + 10 digits. Stored canonical so integration adapters don't
 // each guess a format; eReport's fileReport already strips the leading + at send time.
 const PH_MOBILE = /^\+63\d{10}$/;
+// Demographics are editable ONLY while the patient is unverified. Rationale: eVerify matches
+// name + birthDate + face against PhilSys, so a self-asserted name cannot produce a false pass —
+// it just makes the query fail. Once identityVerified is true those values have been confirmed
+// against PhilSys and must not be rewritten, or the verified badge would outlive its evidence.
+// The lock is enforced in the handler, not the schema, because it depends on stored state.
+const NAME = z.string().trim().min(1).max(100);
 const updateBody = z.object({
   phone: z.string().trim().regex(PH_MOBILE, 'phone must be +63 followed by 10 digits').optional(),
   email: z.string().trim().toLowerCase().email().max(254).optional(),
-}).strict().refine((o) => o.phone !== undefined || o.email !== undefined, {
-  message: 'At least one of phone or email must be provided',
+  firstName: NAME.optional(),
+  lastName: NAME.optional(),
+  middleName: z.string().trim().max(100).optional(),
+  birthDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'birthDate must be YYYY-MM-DD').optional(),
+}).strict().refine((o) => Object.keys(o).length > 0, {
+  message: 'At least one editable field must be provided',
 });
+const DEMOGRAPHIC_FIELDS = ['firstName', 'lastName', 'middleName', 'birthDate'];
 router.patch('/me', requireAuth, updateLimit,
   validate(updateBody),
   asyncHandler(async (req, res) => {
@@ -54,6 +65,11 @@ router.patch('/me', requireAuth, updateLimit,
     const overridden = new Set(patient.manuallyOverriddenFields || []);
     if (req.body.phone !== undefined) { patch.phone = req.body.phone; overridden.add('phone'); }
     if (req.body.email !== undefined) { patch.email = req.body.email; overridden.add('email'); }
+    const demographics = DEMOGRAPHIC_FIELDS.filter((f) => req.body[f] !== undefined);
+    if (demographics.length && patient.identityVerified) {
+      throw badRequest('Verified identity details cannot be changed', demographics.map((f) => ({ path: f, message: 'locked after identity verification' })));
+    }
+    for (const f of demographics) { patch[f] = req.body[f]; overridden.add(f); }
     patch.manuallyOverriddenFields = [...overridden];
     const updated = await store.update(COLLECTIONS.PATIENTS, req.user.sub, patch);
     res.json(publicPatient(updated));

@@ -111,12 +111,20 @@ async function seedDemoData() {
   // next cold start. Only fill those three when the existing row doesn't already have them; every
   // other demoFields key (name/DOB/sex/identityVerified/address) has no patient-facing edit path,
   // so re-asserting them is harmless and keeps the seed self-healing.
+  // Anything the patient edited via PATCH /patients/me is theirs and survives re-seeding. Without
+  // this the seed silently reverted demographic edits on the next cold start — which happens every
+  // few idle minutes on serverless, so a save appeared to work and then undid itself.
+  const overridden = new Set((existing && existing.manuallyOverriddenFields) || []);
   const patch = existing
     ? {
-      ...demoFields,
+      ...Object.fromEntries(Object.entries(demoFields).filter(([k]) => !overridden.has(k))),
       phone: existing.phone || demoFields.phone,
       email: existing.email || demoFields.email,
       benefits: existing.benefits && Object.keys(existing.benefits).length ? existing.benefits : demoFields.benefits,
+      // identityVerified is the outcome of a real eVerify + liveness run once those go live.
+      // Re-asserting it on every cold start would resurrect a verified badge after a genuine
+      // failure, so an existing row keeps whatever the verification flow last decided.
+      identityVerified: existing.identityVerified,
     }
     : demoFields;
   const patient = existing

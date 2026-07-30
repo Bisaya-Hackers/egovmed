@@ -43,7 +43,10 @@ const looksLikeEmail = (raw) => /^\S+@\S+\.\S+$/.test(String(raw || '').trim());
 // Inline-editable row for phone / email. Shows read-only text with an Edit button; when
 // editing, swaps to an input + Save/Cancel pair. Validates client-side before submit so bad
 // input gets a friendly message rather than a 400 round-trip.
-function ContactRow({ field, value, placeholder, label, hint, invalidMsg, c, onSave, editing, setEditing, saving }) {
+// `normalize` returns the value to submit, or null to reject with `invalidMsg`. Phone and email
+// have their own normalizers; demographic rows pass one that only trims, since there is no
+// canonical form to coerce a name into.
+function ContactRow({ field, value, placeholder, label, hint, invalidMsg, c, onSave, editing, setEditing, saving, normalize }) {
   const [draft, setDraft] = useState(value || '');
   const [err, setErr] = useState(null);
   const isEditing = editing === field;
@@ -54,7 +57,9 @@ function ContactRow({ field, value, placeholder, label, hint, invalidMsg, c, onS
   const submit = async () => {
     const trimmed = draft.trim();
     if (!trimmed) { setErr(invalidMsg); return; }
-    const normalized = field === 'phone' ? normalizePhone(trimmed) : (looksLikeEmail(trimmed) ? trimmed.toLowerCase() : null);
+    const normalized = normalize
+      ? normalize(trimmed)
+      : (field === 'phone' ? normalizePhone(trimmed) : (looksLikeEmail(trimmed) ? trimmed.toLowerCase() : null));
     if (!normalized) { setErr(invalidMsg); return; }
     setErr(null);
     await onSave(field, normalized);
@@ -272,6 +277,29 @@ export default function Account({ c, S, A }) {
                 setEditing={setEditingField}
                 saving={savingContact}
               />
+              {/* Demographics are what eVerify matches against PhilSys. While SSO is mocked the
+                  profile is a placeholder ("Juan Dela Cruz"), which can never match a real record,
+                  so these stay editable until verification succeeds and the backend locks them. */}
+              {!patient.identityVerified && [
+                { field: 'firstName', label: c.firstNameLabel },
+                { field: 'lastName', label: c.lastNameLabel },
+                { field: 'birthDate', label: c.birthDateLabel, invalid: c.birthDateInvalid, normalize: (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null) },
+              ].map(({ field, label, invalid, normalize }) => (
+                <ContactRow
+                  key={field}
+                  field={field}
+                  value={patient[field]}
+                  placeholder={field === 'birthDate' ? 'YYYY-MM-DD' : label}
+                  label={label}
+                  invalidMsg={invalid || c.nameInvalid}
+                  normalize={normalize || ((v) => v || null)}
+                  c={c}
+                  onSave={saveContact}
+                  editing={editingField}
+                  setEditing={setEditingField}
+                  saving={savingContact}
+                />
+              ))}
             </div>
           </section>
 
