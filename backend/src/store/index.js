@@ -127,8 +127,11 @@ async function seedDemoData() {
       // that pre-granted badge is exactly what we need the patient to earn, and it also locks the
       // demographics they must correct first. So: trust the flag only if a real verification
       // actually happened (a VERIFICATIONS row exists for them).
+      // provider must be 'everify', not 'mock': a verification recorded while eVerify was mocked
+      // proves nothing about PhilSys, and trusting it would keep the badge (and the demographic
+      // lock) alive after switching to live — exactly the state the patient needs to escape.
       identityVerified: env.everify.mode === 'live'
-        ? !!(await s.findOne(COLLECTIONS.VERIFICATIONS, (v) => v.patientId === DEMO_PATIENT_ID && v.verified))
+        ? !!(await s.findOne(COLLECTIONS.VERIFICATIONS, (v) => v.patientId === DEMO_PATIENT_ID && v.verified && v.provider === 'everify'))
         : existing.identityVerified,
     }
     : demoFields;
