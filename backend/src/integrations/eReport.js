@@ -1,39 +1,73 @@
 'use strict';
 const { env } = require('../config/env');
+const { upstream } = require('../lib/errors');
 const http = require('../lib/http');
 
 const cfg = env.eReport;
 const isLive = () => cfg.mode === 'live';
 
 // per apidocumentation/eReport-API.md — POST /api/integration/token { access_code } → Bearer.
+// Verified live 2026-07-30 against stg-ereport-ws: 200 with { access_token, expires_at }, where
+// access_token is a bare UUID (36 chars) and expires_at is an ISO-8601 string with a +08:00 offset.
 let tokenCache = null;
 async function ereportToken() {
   if (!cfg.accessCode || !cfg.baseUrl) throw new Error('eReport live mode requires base URL and access code');
-  if (tokenCache && tokenCache.expiresAt > Date.now() + 5000) return tokenCache.token;
+  if (tokenCache && tokenCache.expiresAt > Date.now() + 30_000) return tokenCache.token;
   const res = await http.post(`${cfg.baseUrl}/api/integration/token`, { access_code: cfg.accessCode });
   const token = res && res.access_token;
-  if (!token) throw new Error('eReport token endpoint returned no access_token');
-  tokenCache = { token, expiresAt: Date.now() + 50 * 60 * 1000 };
+  if (!token) throw upstream('eReport token endpoint returned no access_token');
+  // Honour the server's own expiry (observed ~2 days out) instead of a hardcoded guess, minus a
+  // 60s skew margin. Falls back to 50 minutes if expires_at is missing or unparseable, so a
+  // response-shape change can only make us refresh more often, never serve a stale token.
+  const serverExpiry = Date.parse(res.expires_at);
+  const expiresAt = Number.isFinite(serverExpiry) && serverExpiry > Date.now()
+    ? serverExpiry - 60_000
+    : Date.now() + 50 * 60 * 1000;
+  tokenCache = { token, expiresAt };
   return token;
 }
+
+/**
+ * eReport wants `639XXXXXXXXX` (per the docs' example body). Patient phones are stored as
+ * `+639170000000` and are typed by hand as `09171234567`, so a bare `.replace(/^\+/,'')` used to
+ * send `09171234567` — the wrong country format. Normalize to the documented shape; anything we
+ * can't recognize is passed through digits-only rather than mangled into a different number.
+ */
+function phMobile(raw) {
+  const digits = String(raw == null ? '' : raw).replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('63')) return digits;
+  if (digits.length === 11 && digits.startsWith('0')) return `63${digits.slice(1)}`;
+  if (digits.length === 10 && digits.startsWith('9')) return `63${digits}`;
+  return digits;
+}
+
+// `contact` is a single free-text field the patient can fill with either a phone or an email, so
+// it can only be used as the email fallback when it actually looks like one. Sending a phone
+// number in complainant_email would make eReport's own OTP/notification flow undeliverable.
+const asEmail = (v) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim()) ? String(v).trim() : '');
 
 /**
  * File a complaint → POST /api/integration/submit_complaint (Bearer). Requires complainant details
  * + PSA location codes (from config). `report_type` is a fixed eReport enum (default from cfg); our
  * routing/billing/etc. category rides along as the subject.
+ *
+ * Verified live 2026-07-30: 200 with { code, message, case_number } at the TOP level (no `data`
+ * envelope), case_number formatted `PFM-MMDDYY-####`.
  */
 async function fileReport({ category, description, patient = {}, contact }) {
   if (isLive()) {
     const token = await ereportToken();
     const res = await http.post(`${cfg.baseUrl}/api/integration/submit_complaint`, {
-      mobile: String(patient.phone || contact || '').replace(/^\+/, ''),
+      mobile: phMobile(patient.phone || contact),
       first_name: patient.firstName || 'eGovMed',
       last_name: patient.lastName || 'Patient',
       gender: patient.sex === 'F' ? 'Female' : 'Male',
-      complainant_email: patient.email || contact || 'noreply@egovmed.ph',
-      // eReport enum. Default 'red_tape' predates portal docs — real valid values come from
-      // GET /api/integration/datasets/report_types (portal docs show 'crime' as an example).
-      // Confirm the enum for health-facility complaints with the eGov admin before flipping.
+      complainant_email: asEmail(patient.email) || asEmail(contact) || 'noreply@egovmed.ph',
+      // eReport enum, from GET /api/integration/datasets/report_types. Confirmed live 2026-07-30:
+      // 12 active codes, NONE health-specific (scam, gas_station_concerns, red_tape, child_abuse,
+      // women_abuse, OFW_APP, overpricing, fire, Senior Citizen, accident, crime, illegal_dumping).
+      // 'red_tape' is the closest fit for a public-hospital service complaint until the eGov team
+      // adds a health type — see docs/ereport-integration.md.
       report_type: cfg.reportType,
       subject: category,
       message: description,
@@ -42,39 +76,33 @@ async function fileReport({ category, description, patient = {}, contact }) {
       municipality_code: cfg.location.municipalityCode,
       barangay_code: cfg.location.barangayCode,
     }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
-    return { caseNumber: res.case_number, status: 'open', provider: 'ereport' };
+    // Tolerate either the observed top-level shape or a future `data` envelope, but never store a
+    // report with an undefined case number — that would leave the patient with nothing to track
+    // and no error to explain why.
+    const caseNumber = (res && (res.case_number || (res.data && res.data.case_number))) || '';
+    if (!caseNumber) throw upstream('eReport accepted the complaint but returned no case_number', res);
+    return { caseNumber, status: 'open', provider: 'ereport' };
   }
   const caseNumber = `EGM-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
   return { caseNumber, status: 'open', provider: 'mock' };
 }
 
 /**
- * Track a case → GET /api/integration/reports/:case_number.
+ * No status read-back. This is deliberate — see docs/ereport-integration.md.
  *
- * IMPORTANT (portal docs, 2026-07): the view token model is per-complainant AND time-limited.
- * Flow: submit_complaint → returns case_number only (no token).
- *       Later, POST /verify/request { email } → OTP sent.
- *       POST /verify/confirm { email, otp } → returns { report_view_token, expires_at }.
- *       GET /api/integration/reports/:case_number with `Authorization: Bearer <report_view_token>`.
+ * eReport's report lookup (GET /api/integration/reports/:case_number) is gated on a
+ * `report_view_token`, which is minted per-complainant and time-limited:
+ *   POST /verify/request { email }        → emails a 6-digit OTP to THAT complainant
+ *   POST /verify/confirm { email, otp }   → { report_view_token, expires_at }
+ * A single env-wide token therefore cannot look up an arbitrary patient's case: it only ever
+ * authorizes the one mailbox whose OTP minted it, and only until it expires. The previous
+ * EREPORT_VIEW_TOKEN config promised a capability that could not exist, so it is gone.
  *
- * The single env-wide EREPORT_VIEW_TOKEN cannot satisfy arbitrary complainants — this live path
- * only works for the specific complainant whose OTP minted the token, and only until expires_at.
- * Correct fix for MVP (per handoff option A): drop status auto-track, show the case number and
- * tell the patient to check on eReport directly. Kept here as-is until that UX decision lands.
- * Auth header is Bearer (docs), NOT the X-EReport-View-Token that was previously assumed.
+ * To restore live status later, eGovMed would have to relay eReport's OTP to the patient (collect
+ * their code, call verify/confirm on their behalf, cache the short-lived token against their
+ * session) — a real feature, not a config value. Until then the tracking screen shows the case
+ * number plus our own locally-authoritative state (open / escalated) and points the patient at
+ * eReport for the government-side status.
  */
-async function getStatus(caseNumber) {
-  if (isLive() && cfg.viewToken) {
-    const res = await http.get(`${cfg.baseUrl}/api/integration/reports/${encodeURIComponent(caseNumber)}`, {
-      headers: { Authorization: `Bearer ${cfg.viewToken}` },
-    });
-    const data = (res && (res.data || res)) || {};
-    return { caseNumber, status: String(data.status || 'PENDING').toLowerCase(), provider: 'ereport' };
-  }
-  // mock / unconfigured has no real opinion on status — return null rather than a hardcoded
-  // 'open' so reportService never mistakes "we don't know" for an authoritative status and
-  // overwrites a locally-escalated case back to open on the patient's next status check.
-  return { caseNumber, status: null, provider: 'mock' };
-}
 
-module.exports = { fileReport, getStatus, escalateAfterHours: cfg.escalateAfterHours };
+module.exports = { fileReport, escalateAfterHours: cfg.escalateAfterHours, phMobile };

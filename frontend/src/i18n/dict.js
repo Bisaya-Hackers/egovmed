@@ -83,18 +83,22 @@ export const DICT = {
     submitReport: 'Submit report', otpTitle: 'Enter the code', otpSub: 'We texted a 6-digit code to •••• 4567.',
     resendPrefix: 'Resend code in', resendReady: 'Resend code', resendSent: 'We texted you a new code',
     verifyOtp: 'Verify', caseTitle: 'Report filed', caseLabel: 'Case number',
-    escalation: 'If unresolved in 5 days, it escalates automatically.',
+    escalation: 'If unresolved in 48 hours, it escalates automatically.',
     reportTrackLink: 'Check an existing report',
-    trackTitle: 'Check report status', trackSub: 'Pick one of your reports, or enter a case number.',
+    trackTitle: 'Your reports', trackSub: 'Pick one of your reports, or enter a case number.',
     myReportsLabel: 'Your reports', myReportsLoadingText: 'Loading your reports…',
     myReportsEmpty: 'You have not filed any reports yet.',
     trackManualLabel: 'Or enter a case number',
-    caseNumberLabel: 'Case number', caseNumberPlaceholder: 'e.g. EGM-2026-000417',
-    trackButton: 'Check status', trackChecking: 'Checking…',
-    trackInvalid: 'Enter a valid case number, e.g. EGM-2026-000417.',
+    caseNumberLabel: 'Case number', caseNumberPlaceholder: 'e.g. PFM-073026-0014',
+    trackButton: 'Find report', trackChecking: 'Checking…',
+    trackInvalid: 'Enter a valid case number, e.g. PFM-073026-0014.',
     trackNotFound: "We couldn't find a report with that case number.",
     trackAnother: 'Check another case',
-    statusOpen: 'Received', statusInReview: 'Under review', statusAssigned: 'Assigned', statusResolved: 'Resolved', statusEscalated: 'Escalated',
+    filedOnLabel: 'Filed',
+    // We hold a case number, not the government's queue — say exactly that. eReport only releases
+    // case status to the complainant after its own email OTP, so eGovMed cannot mirror it here.
+    trackUpstreamNote: 'This is your eGovMed record. Updates from the government are sent to your email by eReport — use your case number there to see the latest status.',
+    statusOpen: 'Filed', statusEscalated: 'Escalated',
     chooseHospital: 'Choose a hospital', changeHospital: 'Change', hospitalPickerTitle: 'Choose a hospital',
     timeoutTitle: 'Still there?', timeoutSub: "For your privacy, we'll sign you out soon.", stayIn: 'Stay signed in', logout: 'Log out',
   },
@@ -179,18 +183,20 @@ export const DICT = {
     submitReport: 'Isumite ang ulat', otpTitle: 'Ilagay ang code', otpSub: 'Nagpadala kami ng 6-digit code sa •••• 4567.',
     resendPrefix: 'Magpadala muli sa', resendReady: 'Magpadala muli', resendSent: 'May bago kaming ipinadalang code',
     verifyOtp: 'I-verify', caseTitle: 'Naisumite ang ulat', caseLabel: 'Case number',
-    escalation: 'Kung hindi maresolba sa loob ng 5 araw, awtomatikong ie-escalate.',
+    escalation: 'Kung hindi maresolba sa loob ng 48 oras, awtomatikong ie-escalate.',
     reportTrackLink: 'Tingnan ang naisumiteng ulat',
-    trackTitle: 'Tingnan ang status ng ulat', trackSub: 'Pumili sa mga ulat mo, o maglagay ng case number.',
+    trackTitle: 'Mga ulat mo', trackSub: 'Pumili sa mga ulat mo, o maglagay ng case number.',
     myReportsLabel: 'Mga ulat mo', myReportsLoadingText: 'Kinukuha ang mga ulat mo…',
     myReportsEmpty: 'Wala ka pang naisumiteng ulat.',
     trackManualLabel: 'O maglagay ng case number',
-    caseNumberLabel: 'Case number', caseNumberPlaceholder: 'hal. EGM-2026-000417',
-    trackButton: 'Tingnan ang status', trackChecking: 'Tinitingnan…',
-    trackInvalid: 'Maglagay ng wastong case number, hal. EGM-2026-000417.',
+    caseNumberLabel: 'Case number', caseNumberPlaceholder: 'hal. PFM-073026-0014',
+    trackButton: 'Hanapin ang ulat', trackChecking: 'Tinitingnan…',
+    trackInvalid: 'Maglagay ng wastong case number, hal. PFM-073026-0014.',
     trackNotFound: 'Walang nahanap na ulat sa case number na iyan.',
     trackAnother: 'Tingnan ang ibang case',
-    statusOpen: 'Natanggap', statusInReview: 'Sinusuri', statusAssigned: 'Na-assign', statusResolved: 'Naresolba', statusEscalated: 'Na-escalate',
+    filedOnLabel: 'Naisumite',
+    trackUpstreamNote: 'Ito ang tala ng eGovMed. Ang mga update mula sa gobyerno ay ipinapadala ng eReport sa email mo — gamitin ang case number mo doon para makita ang pinakabagong status.',
+    statusOpen: 'Naisumite', statusEscalated: 'Na-escalate',
     chooseHospital: 'Pumili ng ospital', changeHospital: 'Palitan', hospitalPickerTitle: 'Pumili ng ospital',
     timeoutTitle: 'Nandiyan ka pa ba?', timeoutSub: 'Para sa iyong privacy, mala-log out ka na sa ilang sandali.', stayIn: 'Manatiling naka-sign in', logout: 'Mag-log out',
   },
@@ -267,14 +273,9 @@ export const HOSPITALS = [
   'Davao Regional Medical Center',
   'Baguio General Hospital',
 ];
-export const TRACK = {
-  en: ['Received', 'Under review', 'Assigned', 'Resolved'],
-  tl: ['Natanggap', 'Sinusuri', 'Na-assign', 'Naresolba'],
-};
-export const TRACKNOTE = {
-  en: ['Just now', 'Est. within 24 hours', '-', '-'],
-  tl: ['Ngayon lang', 'Tantiyang 24 oras', '-', '-'],
-};
+// (TRACK / TRACKNOTE removed: the 4-step "Received → Under review → Assigned → Resolved" tracker
+// showed progress eGovMed never learns. eReport releases case status only to the complainant,
+// behind its own email OTP, so those steps were animation rather than fact.)
 // Kept in sync with SPECIALTIES in backend/src/integrations/egovAi.js. Used when a patient
 // wants to book more than one department in the same visit (e.g. General Medicine + Cardiology).
 export const SPECIALTIES = [

@@ -42,13 +42,11 @@ async function getByCase(caseNumber, requesterId) {
   const report = await store.findOne(COLLECTIONS.REPORTS, (r) => r.caseNumber === caseNumber);
   // Case numbers are guessable (EGM-YYYY-######); scope to the owner. 404 (not 403) hides existence.
   if (!report || (requesterId && report.patientId !== requesterId)) throw notFound('Case not found');
-  // Never let an upstream status downgrade a case we've already escalated locally — the mock
-  // adapter (and live mode without a view token) has no real opinion and would otherwise flip an
-  // escalated case back to 'open' on the patient's very next look, silently erasing the escalation.
-  const upstream = report.escalated ? null : await eReport.getStatus(caseNumber).catch(() => null);
-  if (upstream && upstream.status && upstream.status !== report.status) {
-    return present(await store.update(COLLECTIONS.REPORTS, report.id, { status: upstream.status }));
-  }
+  // No upstream status read-back: eReport's report lookup needs a per-complainant, OTP-minted,
+  // time-limited report_view_token that a server-side integration cannot hold on a patient's
+  // behalf (see integrations/eReport.js). `status` here is eGovMed's own state — 'open' until our
+  // escalation sweep flips it to 'escalated' — and the UI says so rather than implying it mirrors
+  // the government's queue.
   return present(report);
 }
 

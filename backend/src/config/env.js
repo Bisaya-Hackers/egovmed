@@ -135,11 +135,11 @@ const env = {
   },
   eReport: {
     mode: modeFor('EREPORT'),
-    // per apidocumentation/eReport-API.md: POST /api/integration/token (access_code) → submit_complaint; view via X-EReport-View-Token
+    // per apidocumentation/eReport-API.md: POST /api/integration/token (access_code) → submit_complaint.
+    // No view token: report lookup needs a per-complainant OTP-minted token (see integrations/eReport.js).
     baseUrl: process.env.EREPORT_BASE_URL || '',
     accessCode: process.env.EREPORT_ACCESS_CODE || '',
     reportType: process.env.EREPORT_TYPE || 'red_tape',
-    viewToken: process.env.EREPORT_VIEW_TOKEN || '', // OTP-confirmed report_view_token (for status lookups)
     location: {
       regionCode: process.env.EREPORT_REGION_CODE || '',
       provinceCode: process.env.EREPORT_PROVINCE_CODE || '',

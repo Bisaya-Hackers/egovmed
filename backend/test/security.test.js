@@ -700,8 +700,9 @@ test('security regression suite', async (t) => {
     assert.equal(escalated.length, 1);
     assert.equal(escalated[0].status, 'escalated');
 
-    // The mock eReport adapter has no real opinion on status — it must not overwrite the local
-    // escalation back to 'open' when the patient looks up their own case afterward.
+    // `status` is eGovMed's own state, not eReport's — there is no upstream read-back to merge
+    // (see docs/ereport-integration.md), so a later lookup must not reset the local escalation
+    // back to 'open'. Guards against anyone reintroducing an upstream status merge.
     const tracked = await json(await request(`/reports/${filed.value.caseNumber}`, { token: owner }));
     assert.equal(tracked.response.status, 200);
     assert.equal(tracked.value.status, 'escalated');
