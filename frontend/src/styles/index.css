@@ -73,8 +73,6 @@ input, textarea { font-family: inherit; }
   padding: 12px 18px 10px;
   background: var(--canvas);
 }
-.wm { font-weight: 900; font-size: 20px; color: var(--primary); letter-spacing: -0.02em; white-space: nowrap; }
-.wm .med { color: var(--teal); font-size: 0.62em; }
 .util-right { display: flex; align-items: center; gap: 8px; }
 .seg { display: inline-flex; background: var(--line-2); border-radius: 999px; padding: 2px; }
 .iconbtn {

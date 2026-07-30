@@ -25,6 +25,7 @@ import Account from './screens/Account.jsx';
 import Report from './screens/Report.jsx';
 import Tokens from './screens/Tokens.jsx';
 import BottomNav from './components/BottomNav.jsx';
+import Wordmark from './components/Wordmark.jsx';
 import { DemoSheet, TimeoutModal, Toast, HospitalSheet } from './components/Overlays.jsx';
 
 const FONT = { 0: 17, 1: 19, 2: 21 };
@@ -606,7 +607,7 @@ export default function App() {
     <div className="device" style={{ fontSize: FONT[S.textScale] }}>
       {/* utility strip */}
       <header className="util">
-        <span className="wm">eGOV<span className="med">MED</span></span>
+        <Wordmark height={20} />
         <div className="util-right">
           <div className="seg" role="group" aria-label="Language">
             <SegBtn on={S.lang === 'en'} onClick={() => A.setLang('en')}>EN</SegBtn>

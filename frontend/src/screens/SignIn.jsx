@@ -3,6 +3,7 @@ import PinInput from '../components/PinInput.jsx';
 import { Fingerprint, Phone } from '../components/Icons.jsx';
 import { CONST } from '../i18n/dict.js';
 import communityArt from '../assets/signin-filipino-community.png';
+import Wordmark from '../components/Wordmark.jsx';
 
 export default function SignIn({ c, S, A }) {
   const live = S.authMode === 'live';
@@ -16,7 +17,7 @@ export default function SignIn({ c, S, A }) {
   return (
     <div className="screen" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
       <div style={{ textAlign: 'center', marginTop: 6 }}>
-        <span className="wm" style={{ fontSize: 26 }}>eGOV<span className="med">MED</span></span>
+        <Wordmark height={30} className="signin-wordmark" />
       </div>
 
       <h1 className="h1" style={{ marginTop: 20 }} data-stagger>{c.welcomeBack}</h1>
