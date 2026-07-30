@@ -51,7 +51,12 @@ async function verifyPhilSys({ firstName, middleName, lastName, suffix, birthDat
     // `reference` is the PhilSys reference (no `_id` suffix). Response also carries full PII
     // (full_name, gender, marital_status, blood_type, mobile_number, addresses) — do not surface
     // beyond what identityService already stores. NO `score` field is returned by /api/query.
-    const verified = data && data.code === 'AAA000';
+    // OBSERVED shape (staging, 2026-07-30): { data: { verified: boolean }, meta: {...} }.
+    // The portal docs claim { data: { code, reference } } with AAA000 for success — there is no
+    // code field at all, so the old check was undefined === 'AAA000', i.e. permanently false.
+    // eVerify could never pass regardless of the identity supplied. Prefer the boolean; fall back
+    // to the documented code so a differently-configured environment still works.
+    const verified = !!(data && (typeof data.verified === 'boolean' ? data.verified : data.code === 'AAA000'));
     // A demographic mismatch comes back as HTTP 200 with a non-AAA000 code, so lib/http.js never
     // logs it and a failed verification was previously indistinguishable from "no PhilSys record",
     // "face mismatch" or "bad session". Log the status code ONLY — the body carries full_name,
@@ -64,6 +69,7 @@ async function verifyPhilSys({ firstName, middleName, lastName, suffix, birthDat
         code: (data && data.code) || null,
         topLevelKeys: res && typeof res === 'object' ? Object.keys(res) : typeof res,
         dataKeys: data && typeof data === 'object' ? Object.keys(data) : typeof data,
+        dataVerified: data ? data.verified : undefined, // boolean status, not PII
       });
     }
     return { verified, reference: data && data.reference, code: data && data.code, provider: 'everify' };
