@@ -56,7 +56,16 @@ async function verifyPhilSys({ firstName, middleName, lastName, suffix, birthDat
     // logs it and a failed verification was previously indistinguishable from "no PhilSys record",
     // "face mismatch" or "bad session". Log the status code ONLY — the body carries full_name,
     // gender, marital_status, blood_type, mobile_number and addresses, none of which may be logged.
-    if (!verified) logger.warn('eVerify query did not pass', { code: (data && data.code) || null });
+    if (!verified) {
+      // KEY NAMES ONLY — values carry full_name, gender, blood_type, mobile_number, addresses.
+      // A null code means the envelope is not { data: { code } } as the portal docs describe, so
+      // log the shape we actually received to find where the status really lives.
+      logger.warn('eVerify query did not pass', {
+        code: (data && data.code) || null,
+        topLevelKeys: res && typeof res === 'object' ? Object.keys(res) : typeof res,
+        dataKeys: data && typeof data === 'object' ? Object.keys(data) : typeof data,
+      });
+    }
     return { verified, reference: data && data.reference, code: data && data.code, provider: 'everify' };
   }
 
