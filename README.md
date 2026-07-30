@@ -69,6 +69,13 @@ generated UUID as a control, produced byte-identical `face_liveness_error_except
 The hosted token is not interchangeable. Without the control query the first result would have
 been unreadable, since a rejection could equally have meant a bad demographic match.
 
+The SDK path is built and off by default. Turning it on needs three things: `EVERIFY_PUBKEY` on
+the backend (already set — `GET /auth/config` now serves it to the browser, which is where the
+SDK puts it anyway), `VITE_EVERIFY_SDK_ENABLED=true` on the frontend, and `EVERIFY_MODE=live`
+plus the eVerify client credentials on the backend. The frontend's `Permissions-Policy` also has
+to delegate the camera to `https://liveness.everify.gov.ph`, because the SDK captures inside a
+cross-origin iframe rather than on our own origin.
+
 ---
 
 ## Security engineering
