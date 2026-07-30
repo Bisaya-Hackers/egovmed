@@ -75,7 +75,7 @@ async function verifyPhilSys({ firstName, middleName, lastName, suffix, birthDat
         meta: res && res.meta ? res.meta : null,
       });
     }
-    return { verified, reference: data && data.reference, code: data && data.code, provider: 'everify' };
+    return { verified, reference: data && data.reference, code: data && data.code, meta: (res && res.meta) || null, provider: 'everify' };
   }
 
   // mock: verifies as long as a name is present (demo runs offline)

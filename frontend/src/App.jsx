@@ -226,7 +226,10 @@ export default function App() {
           set({ screen: 'liveness', stack: ['consent'], liveness: 'verifying', livenessSessionId: sessionId, flowError: null });
           const result = await api.verifyIdentity(sessionId);
           window.sessionStorage.removeItem('egovmed.livenessSessionId');
-          if (!result?.verified) throw new Error('Identity verification did not pass');
+          if (!result?.verified) {
+            // eVerify's own words when it gives any, so a failure is diagnosable from the screen.
+            throw new Error(result?.reason ? `eVerify: ${result.reason}` : 'Identity verification did not pass');
+          }
           set({ liveness: 'verified' });
           return;
         }
