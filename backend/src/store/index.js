@@ -92,7 +92,9 @@ async function seedDemoData() {
 
   const demoFields = {
     egovSub: DEMO_EGOV_SUB,
-    identityVerified: true,
+    // Pre-verified only when eVerify is mocked. In live mode the badge must be earned, or the
+    // demo patient starts with demographics locked against the very edit needed to verify.
+    identityVerified: env.everify.mode !== 'live',
     firstName: 'Juan',
     lastName: 'Dela Cruz',
     birthDate: '1990-05-14',
@@ -105,18 +107,29 @@ async function seedDemoData() {
   };
 
   const existing = await s.findById(COLLECTIONS.PATIENTS, DEMO_PATIENT_ID);
-  // Cold starts re-run this seed on every serverless invocation (api/index.js). `phone`, `email`,
-  // and `benefits` are patient-editable via PATCH /patients/me and PATCH /patients/me/benefits/:key
-  // — always re-applying demoFields would silently discard a demo visitor's own edits on the very
-  // next cold start. Only fill those three when the existing row doesn't already have them; every
-  // other demoFields key (name/DOB/sex/identityVerified/address) has no patient-facing edit path,
-  // so re-asserting them is harmless and keeps the seed self-healing.
+  // Cold starts re-run this seed on every serverless invocation (api/index.js), so anything it
+  // re-asserts will silently undo a patient's own edit within minutes of idling — a save that
+  // appears to work and then reverts. `phone`, `email` and `benefits` are only filled when absent,
+  // and every field listed in manuallyOverriddenFields (now including the demographics that
+  // PATCH /patients/me accepts) is left alone entirely. The rest is re-asserted to keep the seed
+  // self-healing.
+  const overridden = new Set((existing && existing.manuallyOverriddenFields) || []);
   const patch = existing
     ? {
-      ...demoFields,
+      ...Object.fromEntries(Object.entries(demoFields).filter(([k]) => !overridden.has(k))),
       phone: existing.phone || demoFields.phone,
       email: existing.email || demoFields.email,
       benefits: existing.benefits && Object.keys(existing.benefits).length ? existing.benefits : demoFields.benefits,
+      // identityVerified is the outcome of a real eVerify + liveness run once those go live.
+      // Re-asserting it on every cold start would resurrect a verified badge after a genuine
+      // failure, so an existing row keeps whatever the verification flow last decided —
+      // EXCEPT that the seed itself used to hand out identityVerified: true. In live eVerify mode
+      // that pre-granted badge is exactly what we need the patient to earn, and it also locks the
+      // demographics they must correct first. So: trust the flag only if a real verification
+      // actually happened (a VERIFICATIONS row exists for them).
+      identityVerified: env.everify.mode === 'live'
+        ? !!(await s.findOne(COLLECTIONS.VERIFICATIONS, (v) => v.patientId === DEMO_PATIENT_ID && v.verified))
+        : existing.identityVerified,
     }
     : demoFields;
   const patient = existing

@@ -45,7 +45,11 @@ async function req(path, { method = 'GET', body, timeoutMs } = {}) {
 }
 
 export const api = {
-  authConfig: () => req('/auth/config', { timeoutMs: 2000 }),
+  // 2s was too tight: the serverless backend awaits its cold-start demo seed (a patient plus three
+  // encrypted records written to Redis) before serving any request, which regularly blew the
+  // budget on low-traffic deployments and surfaced as "Backend configuration request timed out"
+  // at the login screen. Warm responses are ~200ms, so this only ever costs time on a cold start.
+  authConfig: () => req('/auth/config', { timeoutMs: 10000 }),
   // In live mode the exchange code comes from the eGovPH redirect query string.
   login: (exchangeCode = 'demo') => req('/auth/egov/exchange', { method: 'POST', body: { exchangeCode } }),
   me: () => req('/patients/me'),

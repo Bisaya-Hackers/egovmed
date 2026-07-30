@@ -280,15 +280,24 @@ test('security regression suite', async (t) => {
       assert.equal(res.status, 400, `expected 400 for phone=${bad}, got ${res.status}`);
     }
 
-    // Attempts to alter locked identity fields via strict-mode zod are rejected as 400 —
-    // firstName/lastName/birthDate/identityVerified come from SSO+eVerify and must not be
-    // user-editable via this endpoint.
-    for (const bad of [{ firstName: 'Attacker' }, { identityVerified: true }, { birthDate: '2000-01-01' }, { egovSub: 'other-user' }]) {
+    // identityVerified and egovSub are never user-writable: one is the OUTPUT of eVerify+liveness,
+    // the other is the SSO identity anchor that patientIdFor() derives the record id from.
+    for (const bad of [{ identityVerified: true }, { egovSub: 'other-user' }, { philsysId: 'x' }]) {
       const res = await request('/patients/me', { token: owner, method: 'PATCH', body: bad });
       assert.equal(res.status, 400, `expected 400 for body=${JSON.stringify(bad)}, got ${res.status}`);
     }
 
-    // Empty body (no phone AND no email) rejected — no silent no-op PATCH.
+    // Demographics ARE editable while unverified (mock SSO supplies a placeholder identity, so
+    // there is nothing authoritative to protect yet) but LOCK once eVerify has confirmed them —
+    // otherwise a verified badge could outlive the identity it was granted for.
+    const unverified = sign({ sub: 'pat_attacker' }); // seeded with identityVerified: true below
+    await store.update(COLLECTIONS.PATIENTS, 'pat_attacker', { identityVerified: false });
+    assert.equal((await request('/patients/me', { token: unverified, method: 'PATCH', body: { firstName: 'Maria' } })).status, 200);
+    await store.update(COLLECTIONS.PATIENTS, 'pat_attacker', { identityVerified: true });
+    const locked = await request('/patients/me', { token: unverified, method: 'PATCH', body: { firstName: 'Someone Else' } });
+    assert.equal(locked.status, 400, 'demographics must be locked once identity is verified');
+
+    // Empty body rejected — no silent no-op PATCH.
     assert.equal((await request('/patients/me', { token: owner, method: 'PATCH', body: {} })).status, 400);
 
     // Cross-tenant: an attacker's PATCH updates ONLY their own record (JWT sub scoping),
