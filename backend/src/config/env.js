@@ -91,6 +91,16 @@ const env = {
     clientSecret: process.env.EVERIFY_CLIENT_SECRET || '',
     pubKey: process.env.EVERIFY_PUBKEY || '', // eVerify liveness widget public key (client-side; optional)
   },
+  // Which provider performs the Step 3 face capture. The two are NOT interchangeable: eVerify
+  // rejects a session minted by the hosted Face Liveness service, so the capture provider decides
+  // whether a PhilSys identity match is even possible.
+  //   'face-liveness' → hosted capture, no identity match (eVerify stays mock)
+  //   'everify'       → in-app Web SDK capture + real PhilSys match
+  // Served via /auth/config so the frontend follows the backend rather than needing its own
+  // build-time flag kept in sync across two Vercel projects.
+  verification: {
+    method: (process.env.VERIFICATION_METHOD || 'face-liveness').toLowerCase() === 'everify' ? 'everify' : 'face-liveness',
+  },
   faceLiveness: {
     mode: modeFor('FACE_LIVENESS'),
     // per apidocumentation/Face-Liveness-API.md: x-api-key auth, hosted session → result flow

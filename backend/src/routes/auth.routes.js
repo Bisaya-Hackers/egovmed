@@ -18,6 +18,7 @@ router.get('/config', (_req, res) => {
     callbackUrl: publicUrl(env.appUrl, '/egovph/sso'),
     launchUrl: env.egovph.launchUrl || null,
     everifyPubKey: env.everify.pubKey || null,
+    verificationMethod: env.verification.method,
   });
 });
 

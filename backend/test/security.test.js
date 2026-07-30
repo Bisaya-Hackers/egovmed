@@ -161,6 +161,9 @@ test('security regression suite', async (t) => {
       // Asserting the sentinel (rather than null) pins it to env.everify.pubKey, so a future
       // rename cannot silently leave the frontend with an undefined pubKey.
       everifyPubKey: CREDENTIAL_SENTINELS.EVERIFY_PUBKEY,
+      // Which provider does the Step 3 capture. Public by nature (the frontend must branch on it)
+      // and defaults to the safer of the two: face-liveness never attempts a PhilSys match.
+      verificationMethod: 'face-liveness',
     });
     const configRaw = JSON.stringify(config.value);
     assert.equal(configRaw.includes('secret'), false);
