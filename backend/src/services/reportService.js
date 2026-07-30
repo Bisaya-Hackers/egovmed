@@ -1,13 +1,29 @@
 'use strict';
 const eReport = require('../integrations/eReport');
+const otpService = require('./otpService');
 const { getStore, COLLECTIONS } = require('../store');
 const { randomId, encryptJson, decryptJson } = require('../lib/crypto');
 const { notFound } = require('../lib/errors');
 
-async function fileReport({ patientId, category, description, contact }) {
+/**
+ * Filing is gated on a code texted to the patient's own number (POST /reports/otp mints it).
+ * A complaint carries the complainant's name and phone into a government queue, so an unverified
+ * filing puts someone else's name on a government record — and the case number that comes back is
+ * the only handle they have for it.
+ */
+async function fileReport({ patientId, category, description, contact, challengeId, code }) {
   const store = getStore();
   const patient = patientId ? await store.findById(COLLECTIONS.PATIENTS, patientId) : null;
-  const filed = await eReport.fileReport({ category, description, patient: patient || {}, contact: contact || patient?.phone });
+  // Before anything reaches eReport. Throws on a wrong, expired, reused or over-capped code.
+  await otpService.claimOtp({ patientId, purpose: otpService.PURPOSES.REPORT, challengeId, code });
+  const filed = await eReport.fileReport({ category, description, patient: patient || {}, contact: contact || patient?.phone })
+    .catch(async (err) => {
+      // Nothing was filed, so the code is retired rather than silently left claimable — the
+      // patient requests a new one. Fail closed in both directions.
+      await otpService.settleOtp(challengeId, false);
+      throw err;
+    });
+  await otpService.settleOtp(challengeId, true);
   const report = {
     id: randomId('rep_'),
     patientId: patientId || null,

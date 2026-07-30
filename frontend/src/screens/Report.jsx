@@ -69,17 +69,20 @@ export default function Report({ c, lang, S, set, A }) {
     }, 1000);
   };
 
-  // Start (and restart on re-entry) the 30s resend countdown whenever the OTP step is shown.
+  // The countdown tracks a code that actually exists, so it starts when the server confirms one
+  // was sent (otpChallengeId appears) rather than when the screen renders. A send that failed
+  // leaves the resend button live immediately — there is nothing to wait for.
   useEffect(() => {
-    if (S.reportStage === 'otp') startResendCountdown();
+    if (S.reportStage === 'otp' && S.otpChallengeId) startResendCountdown();
     return () => { if (resendTimer.current) { clearInterval(resendTimer.current); resendTimer.current = null; } };
-  }, [S.reportStage]);
+  }, [S.reportStage, S.otpChallengeId]);
 
-  const handleResend = () => {
-    if (resendSecs > 0) return;
+  const handleResend = async () => {
+    if (resendSecs > 0 || S.otpSending) return;
     setOtp(['', '', '', '', '', '']);
-    startResendCountdown();
-    A.toast(c.resendSent);
+    // A resend mints a NEW challenge server-side; the previous code stops working. Only claim we
+    // texted anything once the server says we did.
+    if (await A.sendReportOtp()) A.toast(c.resendSent);
   };
 
   if (S.reportStage === 'track') {
@@ -189,20 +192,41 @@ export default function Report({ c, lang, S, set, A }) {
   }
 
   if (S.reportStage === 'otp') {
-    const ready = otp.every((d) => d);
+    const ready = otp.every((d) => d) && !!S.otpChallengeId && !S.otpVerifying;
+    // The mask comes from the patient's own number (server-derived, last 4 digits). Until the send
+    // lands we say we are sending rather than naming a number we have not confirmed.
+    const sub = S.otpSending || !S.otpMasked ? c.otpSending : c.otpSub.replace('{phone}', S.otpMasked);
     return (
       <div className="screen" key={S.reportStage}>
         <ScreenHeader onBack={() => set({ reportStage: 'form' })} label={c.otpTitle} />
         <h1 className="h1" data-stagger>{c.otpTitle}</h1>
-        <p className="sub" data-stagger>{c.otpSub}</p>
+        <p className="sub" data-stagger>{sub}</p>
+        {/* The server refuses to file without a verified code, so every failure here is terminal
+            for this attempt and has to be readable: wrong digits, expired, too many tries, or no
+            mobile number on file (which sends the patient to Account). */}
+        {S.otpError && (
+          <div data-stagger style={{ display: 'flex', gap: 9, marginTop: 12, color: 'var(--red)', background: 'var(--red-50)', borderRadius: 14, padding: '12px 14px', fontSize: '0.85em', fontWeight: 600 }} role="alert">
+            <Warning size={18} />
+            <span>{S.otpError}</span>
+          </div>
+        )}
         <div data-stagger style={{ marginTop: 20 }}>
           <PinInput values={otp} onChange={setOtp} autoFocus ariaLabel={c.otpTitle} />
         </div>
-        <button className="btn ghost" style={{ marginTop: 14 }} disabled={resendSecs > 0} onClick={handleResend}>
+        {/* Mock mode only: the backend returns the code because no SMS actually left the process
+            (EMESSAGE_MODE=mock). A live deployment never sends this field, so this never renders. */}
+        {S.otpMockCode && (
+          <div data-stagger className="sub" style={{ marginTop: 10 }}>
+            {c.otpMockHint.replace('{code}', S.otpMockCode)}
+          </div>
+        )}
+        <button className="btn ghost" style={{ marginTop: 14 }} disabled={resendSecs > 0 || S.otpSending} onClick={handleResend}>
           {resendSecs > 0 ? `${c.resendPrefix} 0:${String(resendSecs).padStart(2, '0')}` : c.resendReady}
         </button>
         <div style={{ marginTop: 12 }}>
-          <Btn disabled={!ready} onClick={() => A.verifyOtp(CATS.en[S.reportCat])}>{c.verifyOtp}</Btn>
+          <Btn disabled={!ready} onClick={() => A.verifyOtp(CATS.en[S.reportCat], otp.join(''))}>
+            {S.otpVerifying ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}><span className="spinner white" /> {c.otpVerifying}</span> : c.verifyOtp}
+          </Btn>
         </div>
       </div>
     );

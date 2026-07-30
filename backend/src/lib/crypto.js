@@ -62,4 +62,15 @@ const decryptJson = (payload) => JSON.parse(decrypt(payload));
 
 const randomId = (prefix = '') => `${prefix}${crypto.randomBytes(9).toString('base64url')}`;
 
-module.exports = { sha256Hex, encrypt, decrypt, encryptJson, decryptJson, randomId };
+/**
+ * Constant-time string comparison. Length is compared first (and leaks, unavoidably —
+ * timingSafeEqual throws on unequal buffers), so only use this where the length is not itself
+ * the secret. Used for the admin key and for OTP hash comparison.
+ */
+function timingSafeEqualStr(provided, expected) {
+  const a = Buffer.from(String(provided == null ? '' : provided));
+  const b = Buffer.from(String(expected == null ? '' : expected));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+module.exports = { sha256Hex, encrypt, decrypt, encryptJson, decryptJson, randomId, timingSafeEqualStr };

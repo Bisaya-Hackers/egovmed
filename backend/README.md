@@ -81,7 +81,8 @@ All routes except `/auth/*`, `/payments/callback`, `/`, and `/health` require `A
 | POST | `/payments` | Create bill + eGovPay checkout |
 | POST | `/payments/callback` | Acknowledge provider notification; never marks paid without server-side status polling |
 | GET | `/payments/:id/status` | Refresh payment status |
-| POST | `/reports` | File an issue → case number |
+| POST | `/reports/otp` | Text a single-use 6-digit code to the caller's own number on file |
+| POST | `/reports` | File an issue (requires `challengeId` + `code`) → case number |
 | GET | `/reports/:caseNumber` | Track a case |
 | POST | `/reports/escalate-stale` | Escalation sweep (cron) |
 | GET | `/reports/insights/recurring` | Recurring-issue signal for triage feedback |

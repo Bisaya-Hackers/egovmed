@@ -3,6 +3,7 @@ const { Router } = require('express');
 const { z } = require('zod');
 const { rateLimit, requireAuth, requireAdmin, validate, asyncHandler } = require('../middleware');
 const reportService = require('../services/reportService');
+const otpService = require('../services/otpService');
 
 const router = Router();
 // EGM-YYYY-###### is the mock (self-generated) format; PFM-MMDDYY-#### is the live eReport
@@ -12,13 +13,27 @@ const caseParams = z.object({
 }).strict();
 const adminLimit = rateLimit({ scope: 'admin', max: 10, windowMs: 15 * 60_000, key: (req) => req.ip });
 
-// POST /reports  { category, description, contact? } → { caseNumber, status }
+// POST /reports/otp → text a 6-digit code to the caller's OWN number on file.
+// The limit is per user and deliberately tight: every call spends real SMS credit and rings a real
+// patient's phone, so this bounds both cost and using the endpoint to harass a number.
+router.post('/otp', requireAuth,
+  rateLimit({ scope: 'report-otp-request', max: 5, windowMs: 15 * 60_000 }),
+  asyncHandler(async (req, res) => {
+    res.json(await otpService.requestOtp({ patientId: req.user.sub, purpose: otpService.PURPOSES.REPORT }));
+  }));
+
+// POST /reports  { category, description, contact?, challengeId, code } → { caseNumber, status }
+// The code is verified and consumed inside fileReport before eReport is called at all.
+// This limiter is also the outer bound on OTP guessing: 10 attempts per 10 minutes per user,
+// composed with the per-challenge cap of 5 and a 5-minute TTL, against a 10^6 search space.
 router.post('/', requireAuth,
   rateLimit({ scope: 'report-create', max: 10, windowMs: 10 * 60_000 }),
   validate(z.object({
     category: z.string().trim().min(2).max(100),
     description: z.string().trim().min(3).max(5000),
     contact: z.string().trim().min(3).max(254).optional(),
+    challengeId: z.string().trim().min(1).max(100),
+    code: z.string().trim().regex(/^\d{6}$/),
   }).strict()),
   asyncHandler(async (req, res) => {
     res.status(201).json(await reportService.fileReport({ patientId: req.user.sub, ...req.body }));

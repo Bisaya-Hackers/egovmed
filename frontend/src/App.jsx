@@ -47,6 +47,9 @@ const initial = () => ({
   messages: [], unreadMessages: 0,
   notifications: [], unreadNotifications: 0,
   reportStage: 'form', reportCat: null, reportDesc: '', caseNo: CONST.caseNo,
+  // Real SMS OTP state. otpChallengeId is the server's handle for the code it texted; without one
+  // the Verify button has nothing to spend, which is the point — there is no client-side "correct".
+  otpChallengeId: null, otpMasked: null, otpMockCode: null, otpSending: false, otpVerifying: false, otpError: null,
   trackCaseNo: '', trackLoading: false, trackError: null, trackResult: null,
   myReports: [], myReportsLoading: false,
   showDemo: false, showTimeout: false, toast: null,
@@ -582,15 +585,46 @@ export default function App() {
 
     // Records + Report
     goRecords: () => A.go('records'),
-    openReport: () => { set({ reportStage: 'form', reportCat: null, reportDesc: '', trackCaseNo: '', trackError: null, trackResult: null }); A.go('report'); },
+    openReport: () => { set({ reportStage: 'form', reportCat: null, reportDesc: '', trackCaseNo: '', trackError: null, trackResult: null, otpChallengeId: null, otpMasked: null, otpMockCode: null, otpError: null }); A.go('report'); },
     setCat: (i) => set({ reportCat: i }),
     setDesc: (v) => set({ reportDesc: v }),
-    submitReport: () => { if (S.reportCat == null || !S.reportDesc.trim()) return; set({ reportStage: 'otp' }); },
-    verifyOtp: async (catLabel) => {
-      set({ reportStage: 'filed' });
-      const res = await tryApi(api.fileReport(catLabel, S.reportDesc));
-      if (res?.caseNumber) set({ caseNo: res.caseNumber });
-      A.pushNotification('report_filed', { caseNo: res?.caseNumber || S.caseNo, category: catLabel });
+    submitReport: () => {
+      if (S.reportCat == null || !S.reportDesc.trim()) return;
+      set({ reportStage: 'otp', otpChallengeId: null, otpMasked: null, otpMockCode: null, otpError: null });
+      A.sendReportOtp();
+    },
+    // Mints a code server-side and texts it to the number on the patient's record. Errors are
+    // surfaced rather than swallowed: "no phone on file" and "SMS failed" both mean the report
+    // cannot be filed, and a silent failure here would look identical to a code in flight.
+    sendReportOtp: async () => {
+      set({ otpSending: true, otpError: null });
+      try {
+        const res = await api.requestReportOtp();
+        set({
+          otpSending: false, otpChallengeId: res?.challengeId || null,
+          otpMasked: res?.maskedPhone || null, otpMockCode: res?.mockCode || null,
+        });
+        return true;
+      } catch (err) {
+        set({ otpSending: false, otpChallengeId: null, otpError: err.message || 'We could not text you a code.' });
+        return false;
+      }
+    },
+    // The report is filed by the same call that spends the code, so a bad code leaves the patient
+    // on this screen with a reason — it never advances to a case number that does not exist.
+    verifyOtp: async (catLabel, code) => {
+      if (!S.otpChallengeId || !/^\d{6}$/.test(code || '')) return;
+      set({ otpVerifying: true, otpError: null });
+      try {
+        const res = await api.fileReport(catLabel, S.reportDesc, S.otpChallengeId, code);
+        set({
+          otpVerifying: false, reportStage: 'filed', otpChallengeId: null, otpMockCode: null,
+          caseNo: res?.caseNumber || S.caseNo,
+        });
+        A.pushNotification('report_filed', { caseNo: res?.caseNumber || S.caseNo, category: catLabel });
+      } catch (err) {
+        set({ otpVerifying: false, otpError: err.message || 'That code did not work.' });
+      }
     },
 
     // Check the status of a previously filed report (GET /reports/:caseNumber)
@@ -624,7 +658,7 @@ export default function App() {
     },
 
     // Overlays / demo controls
-    resetToHome: () => set({ screen: 'home', stack: [], bookings: [], channel: null, paid: false, paying: false, reportStage: 'form', reportCat: null, reportDesc: '', trackCaseNo: '', trackResult: null, trackError: null }),
+    resetToHome: () => set({ screen: 'home', stack: [], bookings: [], channel: null, paid: false, paying: false, reportStage: 'form', reportCat: null, reportDesc: '', trackCaseNo: '', trackResult: null, trackError: null, otpChallengeId: null, otpMasked: null, otpMockCode: null, otpError: null }),
     toggleDemo: () => set((p) => ({ showDemo: !p.showDemo })),
     toggleEmergency: () => set((p) => ({ emergency: !p.emergency })),
     triggerTimeout: () => set({ showDemo: false, showTimeout: true }),
