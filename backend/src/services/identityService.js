@@ -122,7 +122,11 @@ async function verifyIdentity({ patientId, consent, livenessSessionId, requestMe
   if (result.verified) {
     await store.update(COLLECTIONS.PATIENTS, patientId, { identityVerified: true });
   }
-  return { verified: result.verified, verification, consentId: consentRecord.id };
+  // eVerify only says true/false; its meta envelope is the only hint at WHY. Surfaced so a
+  // failure is actionable on screen instead of requiring server logs that retain for minutes.
+  const reason = result.verified ? null
+    : ((result.meta && (result.meta.message || result.meta.status || result.meta.reason)) || result.code || null);
+  return { verified: result.verified, verification, consentId: consentRecord.id, reason };
 }
 
 /** Gate: throws unless the patient has completed identity verification. */
