@@ -107,6 +107,10 @@ async function verifyIdentity({ patientId, consent, livenessSessionId, requestMe
     verified: result.verified,
     score: result.score,
     reference: result.reference,
+    // eVerify's six-char status code. Not PII (the PII-bearing fields of the response are never
+    // stored), and it is the only thing that distinguishes a demographic mismatch from "no PhilSys
+    // record" from a rejected liveness session — all of which otherwise present as one dead end.
+    code: result.code || null,
     liveness: { confidence: liveness.confidence, provider: liveness.provider },
     livenessSessionId,
     consentId: consentRecord.id,

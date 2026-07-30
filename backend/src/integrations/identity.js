@@ -2,6 +2,7 @@
 const { env, publicUrl } = require('../config/env');
 const http = require('../lib/http');
 const { randomId } = require('../lib/crypto');
+const logger = require('../lib/logger');
 
 /* ── National ID eVerify (NIDAS) ───────────────────────────────
  * Live flow, per apidocumentation/eVerify-NationalID-API.md:
@@ -51,6 +52,11 @@ async function verifyPhilSys({ firstName, middleName, lastName, suffix, birthDat
     // (full_name, gender, marital_status, blood_type, mobile_number, addresses) — do not surface
     // beyond what identityService already stores. NO `score` field is returned by /api/query.
     const verified = data && data.code === 'AAA000';
+    // A demographic mismatch comes back as HTTP 200 with a non-AAA000 code, so lib/http.js never
+    // logs it and a failed verification was previously indistinguishable from "no PhilSys record",
+    // "face mismatch" or "bad session". Log the status code ONLY — the body carries full_name,
+    // gender, marital_status, blood_type, mobile_number and addresses, none of which may be logged.
+    if (!verified) logger.warn('eVerify query did not pass', { code: (data && data.code) || null });
     return { verified, reference: data && data.reference, code: data && data.code, provider: 'everify' };
   }
 
