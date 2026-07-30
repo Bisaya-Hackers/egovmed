@@ -74,8 +74,11 @@ INTEGRATION_MODE=mock                    ← start mock, flip per-service once v
 | `EGOVPAY_CALLBACK_URL` | `<backend URL>/payments/callback` |
 | `EREPORT_BASE_URL` | `https://stg-ereport-ws.oueg.info` |
 | `EREPORT_ACCESS_CODE` | your access-token |
-| `EREPORT_TYPE` | `red_tape` (or whichever fits) |
-| `EREPORT_REGION_CODE` / `PROVINCE` / `MUNICIPALITY` / `BARANGAY` | PSA codes from eReport datasets |
+| `EREPORT_TYPE` | `red_tape` (no health type exists — see `docs/ereport-integration.md`) |
+| `EREPORT_REGION_CODE` | `130000000` (NCR) |
+| `EREPORT_PROVINCE_CODE` | `133900000` (CITY OF MANILA) |
+| `EREPORT_MUNICIPALITY_CODE` | `133908000` (ERMITA — Manila districts are "municipalities" here) |
+| `EREPORT_BARANGAY_CODE` | `133908012` (Barangay 670, best available match for PGH) |
 
 **Fastest way to bulk-add:** Vercel dashboard → project → **Settings → Environment Variables → Import .env** — paste the whole file.
 

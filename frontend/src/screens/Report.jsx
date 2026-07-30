@@ -3,12 +3,23 @@ import { ScreenHeader, Btn } from '../components/ui.jsx';
 import PinInput from '../components/PinInput.jsx';
 import { Check, Warning } from '../components/Icons.jsx';
 import { Pop } from '../components/anim.jsx';
-import { CATS, TRACK, TRACKNOTE } from '../i18n/dict.js';
+import { CATS } from '../i18n/dict.js';
 
-// Map whatever status the case is in (mock always returns "open"; live eReport can also
-// return in_review/assigned/resolved/escalated) onto the 4-step tracker used for a fresh filing.
-const STATUS_STEP = { open: 0, in_review: 1, assigned: 2, resolved: 3, escalated: 1 };
-const STATUS_KEY = { open: 'statusOpen', in_review: 'statusInReview', assigned: 'statusAssigned', resolved: 'statusResolved', escalated: 'statusEscalated' };
+// eGovMed's own two states, and only those. There is deliberately no government-side status here:
+// eReport gates case lookup behind a per-complainant, OTP-minted, time-limited report_view_token
+// that a server-side integration cannot hold for an arbitrary patient, so any "Under review" /
+// "Assigned" / "Resolved" step we rendered would be invented. See docs/ereport-integration.md.
+const STATUS_KEY = { open: 'statusOpen', escalated: 'statusEscalated' };
+
+// The one honest thing we can say about the government side: here is your case number, and here
+// is where to take it. Shown on both the just-filed confirmation and the tracking result.
+function UpstreamNote({ c }) {
+  return (
+    <div data-stagger style={{ display: 'flex', gap: 9, marginTop: 12, color: 'var(--muted)', background: 'var(--surface)', border: '1.5px solid var(--line)', borderRadius: 14, padding: '12px 14px', fontSize: '0.85em', fontWeight: 600 }} role="note">
+      {c.trackUpstreamNote}
+    </div>
+  );
+}
 
 // Rows come from GET /reports, which returns summaries only (no description) — enough to pick a
 // case without having written its number down, which is the whole point of the list.
@@ -16,8 +27,7 @@ function MyReportRow({ c, lang, report, active, onPick }) {
   const status = String(report.status || '').toLowerCase();
   const statusLabel = c[STATUS_KEY[status]] || report.status;
   // Categories are stored in English (that's what gets filed upstream), so map back through
-  // CATS for display. Falls through to the raw value for anything live eReport returns that
-  // isn't one of ours.
+  // CATS for display. Falls through to the raw value for anything that isn't one of ours.
   const catIndex = CATS.en.indexOf(report.category);
   const catLabel = catIndex === -1 ? report.category : CATS[lang][catIndex];
   const filed = new Date(report.createdAt);
@@ -38,33 +48,8 @@ function MyReportRow({ c, lang, report, active, onPick }) {
           {catLabel}{when ? ` · ${when}` : ''}
         </span>
       </span>
-      <span className={`pill ${status === 'escalated' ? 'amber' : status === 'resolved' ? 'green' : 'blue'}`} style={{ flex: 'none' }}>{statusLabel}</span>
+      <span className={`pill ${status === 'escalated' ? 'amber' : 'blue'}`} style={{ flex: 'none' }}>{statusLabel}</span>
     </button>
-  );
-}
-
-// Vertical step tracker, shared by the just-filed confirmation and the status-check result.
-function Tracker({ lang, stepIndex }) {
-  return (
-    <div data-stagger className="card" style={{ marginTop: 12 }}>
-      {TRACK[lang].map((label, i) => {
-        const done = i < stepIndex, current = i === stepIndex;
-        return (
-          <div key={i} style={{ display: 'flex', gap: 12 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <span style={{ width: 26, height: 26, borderRadius: '50%', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: done ? 'var(--green)' : current ? 'var(--blue)' : 'var(--line)', boxShadow: current ? '0 0 0 4px var(--blue-50)' : 'none' }}>
-                {done && <Check size={15} color="#fff" />}
-              </span>
-              {i < 3 && <span style={{ width: 2, flex: 1, minHeight: 22, background: done ? 'var(--green)' : 'var(--line)' }} />}
-            </div>
-            <div style={{ paddingBottom: 16 }}>
-              <div style={{ fontWeight: 700, color: current ? 'var(--blue)' : done ? 'var(--ink)' : 'var(--muted)' }}>{label}</div>
-              <div className="sub" style={{ margin: '2px 0 0' }}>{TRACKNOTE[lang][i]}</div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
   );
 }
 
@@ -99,8 +84,12 @@ export default function Report({ c, lang, S, set, A }) {
 
   if (S.reportStage === 'track') {
     const result = S.trackResult;
-    const stepIndex = result ? (STATUS_STEP[String(result.status || '').toLowerCase()] ?? 0) : 0;
-    const escalated = String(result?.status || '').toLowerCase() === 'escalated';
+    const resultStatus = String(result?.status || '').toLowerCase();
+    const escalated = resultStatus === 'escalated';
+    const resultFiled = result ? new Date(result.createdAt) : null;
+    const resultWhen = resultFiled && !Number.isNaN(resultFiled.getTime())
+      ? resultFiled.toLocaleDateString(lang === 'tl' ? 'fil-PH' : 'en-PH', { day: 'numeric', month: 'short', year: 'numeric' })
+      : '';
     return (
       <div className="screen" key={S.reportStage}>
         <ScreenHeader onBack={() => set({ reportStage: 'form' })} label={c.trackTitle} />
@@ -155,9 +144,12 @@ export default function Report({ c, lang, S, set, A }) {
             <div data-stagger className="card" style={{ marginTop: 18, textAlign: 'center' }}>
               <div className="overline">{c.caseLabel}</div>
               <div className="mono" style={{ fontSize: '1.3em', fontWeight: 700, letterSpacing: '0.06em', marginTop: 6 }}>{result.caseNumber}</div>
-              {escalated && <span className="pill amber" style={{ marginTop: 10 }}>{c.statusEscalated}</span>}
+              {resultWhen && <div className="sub" style={{ margin: '6px 0 0' }}>{c.filedOnLabel} {resultWhen}</div>}
+              <span className={`pill ${escalated ? 'amber' : 'blue'}`} style={{ marginTop: 10 }}>
+                {c[STATUS_KEY[resultStatus]] || result.status}
+              </span>
             </div>
-            <Tracker lang={lang} stepIndex={stepIndex} />
+            <UpstreamNote c={c} />
             <button
               data-stagger onClick={() => set({ trackCaseNo: '', trackResult: null, trackError: null })}
               style={{ background: 'none', border: 'none', padding: 0, marginTop: 4, color: 'var(--primary)', fontWeight: 700, fontSize: '0.9em', textDecoration: 'underline' }}
@@ -183,8 +175,7 @@ export default function Report({ c, lang, S, set, A }) {
           <div className="mono" style={{ fontSize: '1.5em', fontWeight: 700, letterSpacing: '0.06em', marginTop: 6 }}>{S.caseNo}</div>
         </div>
 
-        {/* vertical tracker */}
-        <Tracker lang={lang} stepIndex={1} />
+        <UpstreamNote c={c} />
 
         <div data-stagger style={{ display: 'flex', gap: 9, marginTop: 12, color: 'var(--amber)', background: 'var(--amber-50)', borderRadius: 14, padding: '12px 14px', fontSize: '0.85em', fontWeight: 600 }} role="note">
           {c.escalation}
