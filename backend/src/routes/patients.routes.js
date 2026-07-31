@@ -4,6 +4,7 @@ const { z } = require('zod');
 const { rateLimit, requireAuth, validate, asyncHandler } = require('../middleware');
 const { getStore, COLLECTIONS } = require('../store');
 const { notFound, badRequest } = require('../lib/errors');
+const { env } = require('../config/env');
 const { publicPatient } = require('../lib/presenters');
 const { SUPPORTED_BENEFIT_KEYS } = require('../services/paymentService');
 
@@ -66,7 +67,8 @@ router.patch('/me', requireAuth, updateLimit,
     if (req.body.phone !== undefined) { patch.phone = req.body.phone; overridden.add('phone'); }
     if (req.body.email !== undefined) { patch.email = req.body.email; overridden.add('email'); }
     const demographics = DEMOGRAPHIC_FIELDS.filter((f) => req.body[f] !== undefined);
-    if (demographics.length && patient.identityVerified) {
+    // Same rule as publicPatient.demographicsLocked: only a live eVerify pass locks these.
+    if (demographics.length && env.everify.mode === 'live' && patient.identityVerified) {
       throw badRequest('Verified identity details cannot be changed', demographics.map((f) => ({ path: f, message: 'locked after identity verification' })));
     }
     for (const f of demographics) { patch[f] = req.body[f]; overridden.add(f); }
