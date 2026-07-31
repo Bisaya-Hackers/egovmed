@@ -35,7 +35,10 @@ export default function ProfileSetup({ c, onSaved, onCancel }) {
     (async () => {
       try {
         if (!getToken()) {
-          const res = await api.login('demo');
+          // No argument: api.login() defaults to THIS DEVICE's demo identity. Passing the literal 'demo'
+          // signs in as the shared canonical patient instead, so edits made here landed on a different
+          // record than the one the user gets when they actually sign in.
+          const res = await api.login();
           if (!res?.token) throw new Error('mock sign-in returned no session token');
           setToken(res.token);
         }
