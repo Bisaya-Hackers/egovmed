@@ -280,7 +280,7 @@ export default function Account({ c, S, A }) {
               {/* Demographics are what eVerify matches against PhilSys. While SSO is mocked the
                   profile is a placeholder ("Juan Dela Cruz"), which can never match a real record,
                   so these stay editable until verification succeeds and the backend locks them. */}
-              {!patient.identityVerified && [
+              {!patient.demographicsLocked && [
                 { field: 'firstName', label: c.firstNameLabel },
                 { field: 'lastName', label: c.lastNameLabel },
                 { field: 'birthDate', label: c.birthDateLabel, invalid: c.birthDateInvalid, normalize: (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null) },
