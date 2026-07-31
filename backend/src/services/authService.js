@@ -1,6 +1,6 @@
 'use strict';
 const egovph = require('../integrations/egovph');
-const { getStore, COLLECTIONS } = require('../store');
+const { getStore, COLLECTIONS, seedDemoContentFor } = require('../store');
 const { sign } = require('../lib/jwt');
 const { sha256Hex } = require('../lib/crypto');
 const { publicPatient } = require('../lib/presenters');
@@ -68,10 +68,27 @@ async function upsertAndIssue(profile) {
       createdAt: now,
       updatedAt: now,
     });
+    // Mock SSO now hands every device its own uniqid, so this branch runs for each new demo
+    // visitor rather than once ever. A brand-new patient owns no records and no benefits, which
+    // would leave the Records screen and the eGovPay step — the two things the demo is built
+    // around — empty for everyone but the one seeded patient. Give them their own copy instead.
+    // Mock-only and creation-only: a live SSO signup gets exactly the row it always did.
+    if (isDemoPatient) patient = (await seedDemoContentFor(patient.id)) || patient;
   }
 
   const token = sign({ sub: patient.id });
   if (!isDemoPatient) return { token, patient: publicPatient(patient) };
+  // Mock/demo mode has no real citizen behind it. Each device now gets its own demo patient, so
+  // this no longer stops one visitor's data reaching another — it stops a *returning* visitor
+  // inheriting the leftovers of their own previous run, which in a persistent KV store pile up
+  // forever. Wipe the transactional collections (never PATIENTS or the seeded RECORDS/benefits)
+  // so each demo run starts clean — the same "resets every time" the in-memory local store gives
+  // for free. REPORTS is included because "Your reports" lists by patient: without it a demo run
+  // opens on case numbers from the last one.
+  //
+  // Per-device identity narrows but does not remove the mid-flight hazard resetDemoHistory guards
+  // against: a second tab, or a re-login while the hosted eGovPay checkout is open, is still the
+  // same patient. See its comment for why in-flight bills must survive.
   await resetDemoHistory(store, patient.id);
   return { token, patient: publicPatient(patient) };
 }

@@ -46,6 +46,14 @@ eGov SSO (v2) is **not** OIDC redirect. It's a two-call, partner-credentialed ex
 
 The frontend sends the exchange code once; after that it uses the session JWT.
 
+**In mock mode the exchange code is the identity.** There is no eGov account behind a mock login, so
+the mock profile hashes the exchange code into the `uniqid` — meaning each distinct code resolves to
+its own patient, seeded on first use with the demo benefits and its own copies of the three demo
+labs, and returns to that same patient on every later login. The frontend generates one random code
+per browser and keeps it in `localStorage`, so two people demoing the deployed app at the same time
+get two separate records instead of overwriting each other. The bare code `demo` maps to the patient
+that `npm run seed` creates. None of this touches the live path.
+
 > **Note:** PhilSys ID is *not* in the SSO profile — it's obtained/confirmed separately via `National ID eVerify` (the `/identity/verify` step).
 
 ### Resource APIs (AI, eMessage, eVerify, Pay, Chain, Report)

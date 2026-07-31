@@ -4,6 +4,7 @@ const logger = require('../lib/logger');
 const { createMemoryStore } = require('./memoryStore');
 const { createKvStore } = require('./kvStore');
 const { sha256Hex, encryptJson } = require('../lib/crypto');
+const { DEFAULT_MOCK_UNIQID } = require('../integrations/egovph');
 
 const COLLECTIONS = {
   PATIENTS: 'patients',
@@ -43,7 +44,10 @@ function getStore() {
 
 // Derives the same patient id authService uses (sha256(egovsub:<uniqid>)) so a seeded demo patient
 // and one created via SSO login collapse to the same record — no orphan duplicates on cold start.
-const DEMO_EGOV_SUB = 'MVPCBEUVCGPZR'; // must match egovph.js mock profile uniqid
+// The uniqid comes straight from egovph.js so the seed and the mock profile can't drift apart:
+// it is what the mock returns for the bare 'demo' exchange code (any other code now resolves to
+// its own uniqid, hence its own patient — see egovph.js).
+const DEMO_EGOV_SUB = DEFAULT_MOCK_UNIQID;
 const patientIdFor = (egovSub) => 'pat_' + sha256Hex('egovsub:' + egovSub).slice(2, 22);
 const DEMO_PATIENT_ID = patientIdFor(DEMO_EGOV_SUB);
 
@@ -80,12 +84,83 @@ const DEMO_RECORDS = [
 ];
 
 /**
+ * The demo persona's non-SSO state. Mock SSO supplies the name/DOB/contact; these three are what
+ * make the demo *demoable*, so both the canonical seeded patient and every per-device mock patient
+ * minted by authService must start with them, or one visitor gets a working demo and the next gets
+ * an unverified account with no PhilHealth balance.
+ */
+const demoPatientExtras = () => ({
+  // Pre-verified only when eVerify is mocked. In live mode the badge must be earned, or the
+  // demo patient starts with demographics locked against the very edit needed to verify.
+  identityVerified: env.everify.mode !== 'live',
+  address: 'Sampaloc, Manila',
+  // PhilHealth only (White Card left inactive) so a real balance remains → the eGovPay step is demoable.
+  benefits: { philhealth: { active: true, memberId: 'PH-0001' }, whiteCard: { active: false }, sss: { active: false } },
+});
+
+// Records are ownership-scoped by patientId everywhere (recordService 404s on a mismatch), and
+// that check is the whole reason one demo visitor can't read another's PHI — so a fresh mock
+// patient gets its own COPY of the demo labs rather than a relaxed read rule on the seeded ones.
+// The canonical demo patient keeps the original flat ids so rows already in Upstash are recognised
+// and not duplicated; everyone else gets the id suffixed with their patient id, which keeps the
+// per-patient seed just as idempotent.
+const demoRecordId = (specId, patientId) => (patientId === DEMO_PATIENT_ID ? specId : `${specId}_${patientId.replace(/^pat_/, '')}`);
+
+/** Seed the three demo labs for one patient, skipping any that already exist. */
+async function seedDemoRecords(patientId) {
+  const s = getStore();
+  const seeded = [];
+  for (const spec of DEMO_RECORDS) {
+    const id = demoRecordId(spec.id, patientId);
+    if (await s.findById(COLLECTIONS.RECORDS, id)) { seeded.push({ id, action: 'kept' }); continue; }
+    // The hash covers patientId, so each copy anchors its own fingerprint — recordService
+    // recomputes exactly this at verify time, and a copy that borrowed the seeded patient's
+    // hash would show up as tampered on the "verified from another hospital" badge.
+    const hash = sha256Hex({ patientId, type: spec.type, title: spec.title, sourceFacility: spec.sourceFacility, data: spec.data });
+    await s.create(COLLECTIONS.RECORDS, {
+      id,
+      patientId,
+      type: spec.type,
+      title: spec.title,
+      sourceFacility: spec.sourceFacility,
+      encrypted: encryptJson(spec.data),
+      summary: spec.summary,
+      anchor: { hash, txHash: sha256Hex('tx:' + hash), blockNumber: null, anchoredAt: spec.createdAt, verified: true, provider: 'mock' },
+      createdAt: spec.createdAt,
+      updatedAt: spec.createdAt,
+    });
+    seeded.push({ id, action: 'created' });
+  }
+  return seeded;
+}
+
+/**
+ * Bring a patient that mock SSO just created up to the demo's starting state.
+ * Called by authService only on the mock login path and only for a patient that did not exist a
+ * moment ago, so it can assert the demo fields outright — there is no user edit to clobber yet,
+ * and it never runs again for that patient (unlike seedDemoData, which re-runs every cold start).
+ */
+async function seedDemoContentFor(patientId) {
+  const s = getStore();
+  const patient = await s.update(COLLECTIONS.PATIENTS, patientId, demoPatientExtras());
+  const records = await seedDemoRecords(patientId);
+  logger.info('demo content seeded for a per-device mock patient', { patientId, records });
+  return patient;
+}
+
+/**
  * Idempotent, self-healing demo seed:
  *   1. Guarantees the demo patient has demo benefits + identityVerified — creates the patient if
  *      absent, updates in place if the demo fields are missing (e.g. a prior SSO login pre-created
  *      the row without benefits).
  *   2. Guarantees each demo lab record exists exactly once — keyed by its stable id.
  * Safe to call on every cold start; only touches demo fields, never overwrites real user activity.
+ *
+ * Scope is deliberately ONE patient: DEMO_PATIENT_ID, i.e. whoever logs in with the bare 'demo'
+ * exchange code. Per-device mock patients are bootstrapped once, at creation, by
+ * seedDemoContentFor. Re-asserting demo fields across all of them on every cold start would undo
+ * their profile edits and resurrect a verified badge after a real eVerify failure — the same
+ * hazard the identityVerified reasoning below guards against, multiplied by the visitor count.
  */
 async function seedDemoData() {
   const s = getStore();
@@ -93,18 +168,13 @@ async function seedDemoData() {
 
   const demoFields = {
     egovSub: DEMO_EGOV_SUB,
-    // Pre-verified only when eVerify is mocked. In live mode the badge must be earned, or the
-    // demo patient starts with demographics locked against the very edit needed to verify.
-    identityVerified: env.everify.mode !== 'live',
     firstName: 'Juan',
     lastName: 'Dela Cruz',
     birthDate: '1990-05-14',
     sex: 'M',
     email: 'juan.delacruz@example.ph',
     phone: '+639170000000',
-    address: 'Sampaloc, Manila',
-    // PhilHealth only (White Card left inactive) so a real balance remains → the eGovPay step is demoable.
-    benefits: { philhealth: { active: true, memberId: 'PH-0001' }, whiteCard: { active: false }, sss: { active: false } },
+    ...demoPatientExtras(),
   };
 
   const existing = await s.findById(COLLECTIONS.PATIENTS, DEMO_PATIENT_ID);
@@ -141,27 +211,10 @@ async function seedDemoData() {
     : await s.create(COLLECTIONS.PATIENTS, { id: DEMO_PATIENT_ID, ...patch, createdAt: now, updatedAt: now });
 
   // Seed each demo lab if it isn't already present — encrypted off-chain with a real content hash.
-  const seededRecords = [];
-  for (const spec of DEMO_RECORDS) {
-    if (await s.findById(COLLECTIONS.RECORDS, spec.id)) { seededRecords.push({ id: spec.id, action: 'kept' }); continue; }
-    const hash = sha256Hex({ patientId: patient.id, type: spec.type, title: spec.title, sourceFacility: spec.sourceFacility, data: spec.data });
-    await s.create(COLLECTIONS.RECORDS, {
-      id: spec.id,
-      patientId: patient.id,
-      type: spec.type,
-      title: spec.title,
-      sourceFacility: spec.sourceFacility,
-      encrypted: encryptJson(spec.data),
-      summary: spec.summary,
-      anchor: { hash, txHash: sha256Hex('tx:' + hash), blockNumber: null, anchoredAt: spec.createdAt, verified: true, provider: 'mock' },
-      createdAt: spec.createdAt,
-      updatedAt: spec.createdAt,
-    });
-    seededRecords.push({ id: spec.id, action: 'created' });
-  }
+  const seededRecords = await seedDemoRecords(patient.id);
 
   logger.info('demo data seeded', { patientId: patient.id, patient: existing ? 'updated' : 'created', records: seededRecords });
   return patient;
 }
 
-module.exports = { getStore, COLLECTIONS, seedDemoData };
+module.exports = { getStore, COLLECTIONS, seedDemoData, seedDemoContentFor };

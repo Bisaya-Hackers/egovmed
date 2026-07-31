@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { DICT, CONST, CHANNELS, HOSPITALS, randomSlots } from './i18n/dict.js';
-import { api, getToken, setToken } from './lib/api.js';
+import { api, getToken, setToken, demoExchangeCode } from './lib/api.js';
 import { fallbackTriage } from './lib/triageFallback.js';
 import { runEverifyLivenessCapture, EVERIFY_CANCELLED } from './lib/everifySdk.js';
 import { makeRefNo } from './lib/refNo.js';
@@ -312,7 +312,8 @@ export default function App() {
     back: () => set((p) => { const k = [...p.stack]; const prev = k.pop() || 'home'; return { screen: prev, stack: k }; }),
     toast,
 
-    // Mock mode exchanges a demo code. Live mode starts the partner-provided eGovPH launch URL;
+    // Mock mode exchanges this device's own demo code, so two people demoing at once get two
+    // patients instead of fighting over one. Live mode starts the partner-provided eGovPH launch URL;
     // eGovPH returns to /egovph/sso?exchange_code=... and the mount effect above completes login.
     doSignIn: async () => {
       if (S.authMode === 'live') {
@@ -324,7 +325,7 @@ export default function App() {
         return;
       }
       set({ signingIn: true, signinErr: false });
-      const [res] = await Promise.all([tryApi(api.login('demo')), delay(900)]);
+      const [res] = await Promise.all([tryApi(api.login(demoExchangeCode())), delay(900)]);
       if (res?.token) {
         setToken(res.token);
         set({ signingIn: false, screen: 'home', stack: [], flowError: null });

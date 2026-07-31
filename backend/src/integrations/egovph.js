@@ -2,9 +2,43 @@
 const { env } = require('../config/env');
 const http = require('../lib/http');
 const { upstream } = require('../lib/errors');
+const { sha256Hex } = require('../lib/crypto');
 
 const cfg = env.egovph;
 const isLive = () => cfg.mode === 'live';
+
+// ---- mock-mode identity (never reached in live mode) ------------------------------------------
+// The deployed demo has no eGov behind it, so the mock profile used to return one hardcoded
+// uniqid. authService derives the patient id from that uniqid, so EVERY visitor collapsed onto a
+// single patient row: two people testing at the same time saw each other's name, phone,
+// appointments and payments, and overwrote each other's profile edits. The exchange code is the
+// only thing that differs between visitors (the frontend now sends a random, device-persisted
+// one), so we hash it into the uniqid instead. Live SSO already gives each account its own
+// uniqid and never touches any of this.
+const MOCK_TOKEN_PREFIX = 'mock-access-';
+const MOCK_UNIQID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const MOCK_UNIQID_LENGTH = 13;                 // matches the real eGov uniqid shape
+const DEFAULT_MOCK_SEED = 'demo';
+// The canonical seeded demo patient (store/index.js DEMO_EGOV_SUB) is keyed off this exact value.
+// Mapping the bare 'demo' code back to it keeps `curl -d '{"exchangeCode":"demo"}'`, the docs and
+// any already-persisted KV row pointing at the same patient they always did.
+const DEFAULT_MOCK_UNIQID = 'MVPCBEUVCGPZR';
+
+/** Strip the mock token wrapper so an exchange code and its mock access token resolve alike. */
+const mockSeedFor = (tokenOrCode) => {
+  const raw = String(tokenOrCode == null ? '' : tokenOrCode).trim();
+  const seed = raw.startsWith(MOCK_TOKEN_PREFIX) ? raw.slice(MOCK_TOKEN_PREFIX.length) : raw;
+  return seed || DEFAULT_MOCK_SEED;
+};
+
+/** Deterministic uniqid-shaped id for a mock seed — same seed in, same patient out (login stays idempotent). */
+function mockUniqid(seed) {
+  if (seed === DEFAULT_MOCK_SEED) return DEFAULT_MOCK_UNIQID;
+  const digest = Buffer.from(sha256Hex('egovph-mock-uniqid:' + seed).slice(2), 'hex');
+  let out = '';
+  for (let i = 0; i < MOCK_UNIQID_LENGTH; i += 1) out += MOCK_UNIQID_ALPHABET[digest[i] % MOCK_UNIQID_ALPHABET.length];
+  return out;
+}
 
 /**
  * eGovPH SSO — real flow, per apidocumentation/eGovPH-SSO-API.md
@@ -36,8 +70,10 @@ async function generateAccessToken(exchangeCode, scope = cfg.scope) {
 /** Step 2: fetch the authenticated citizen's profile with an SSO access token. */
 async function fetchSsoProfile(accessToken) {
   if (!isLive()) {
+    // Same demo persona for everyone (Juan Dela Cruz is the story the demo tells) — only the
+    // uniqid varies, which is enough to give each device its own patient row.
     return normalize({
-      uniqid: 'MVPCBEUVCGPZR',
+      uniqid: mockUniqid(mockSeedFor(accessToken)),
       email: 'juan.delacruz@example.ph',
       birth_date: '05/14/1990',
       first_name: 'JUAN',
@@ -94,4 +130,6 @@ function toIsoDate(mdY) {
   return m ? `${m[3]}-${m[1]}-${m[2]}` : mdY;
 }
 
-module.exports = { generateAccessToken, fetchSsoProfile, loginWithExchangeCode, isLive };
+// mockUniqid/DEFAULT_MOCK_UNIQID are exported for tests and for the demo seed, which has to key
+// the canonical demo patient off the same value the mock profile returns for the 'demo' code.
+module.exports = { generateAccessToken, fetchSsoProfile, loginWithExchangeCode, isLive, mockUniqid, DEFAULT_MOCK_UNIQID };
