@@ -62,13 +62,38 @@ forge create contracts/RecordAnchor.sol:RecordAnchor \
 
 <!-- Fill in after deploy — do not delete this section, it is the audit trail. -->
 
-| Field          | Value                                          |
-| -------------- | ---------------------------------------------- |
-| Address        | `0x...`                                        |
-| Deploy tx      | `0x...`                                        |
-| Deployer       | `0x...`                                        |
-| Deployed at    | `YYYY-MM-DD`                                   |
-| Explorer URL   | `https://hackathon-explorer.e.gov.ph/address/…`|
+| Field          | Value                                                                  |
+| -------------- | ---------------------------------------------------------------------- |
+| Address        | `0x77cC3DeF1Cb29ad608316F11d62cE82A0cb9703E`                            |
+| Deploy tx      | `0x8f55bb91c176f6cbb30753746672739d2e1b906f4ac2bb4d72fcf510483b4ffe`    |
+| Deployer       | `0x711434A1365D899cF1507B9B25c11410198F73AC`                            |
+| Deployed at    | `2026-07-31` (block 381081)                                             |
+| Explorer URL   | `https://hackathon-explorer.e.gov.ph/address/0x77cC3DeF1Cb29ad608316F11d62cE82A0cb9703E` |
+
+First anchor written in block 381097
+(`0xed7f283e4156de91499a9cd3d7ce9ba2c79e79d501ff8515e86307ac78aefc6a`), verified by reading
+`anchoredAt` back through the exact ABI declared in `backend/src/integrations/egovChain.js`.
+
+## Compile with `evmVersion: paris` — not the default
+
+Solidity 0.8.20 targets **Shanghai** by default, which emits the `PUSH0` (`0x5f`) opcode. The
+hackathon Besu node predates Shanghai and rejects it: the deploy fails `eth_estimateGas` with
+
+```
+-32000 Transaction processing could not be completed due to an exception: INVALID_OPERATION
+```
+
+That error names no opcode and reads exactly like a permissioning refusal, which is the wrong
+diagnosis — contract creation is *not* restricted on this chain. A minimal contract
+(`0x60006000f3`) deploys fine, and that control is what separates the two explanations.
+
+Recompiling with `evmVersion: "paris"` replaces `PUSH0` with `PUSH1 0x00` (bytecode 661 → 683
+bytes) and the same deploy estimates cleanly. **Any redeploy must pin this**, or it produces
+bytecode this chain silently refuses.
+
+```js
+settings: { evmVersion: 'paris', optimizer: { enabled: true, runs: 200 } }
+```
 
 ## Verify a record end-to-end (staging)
 
