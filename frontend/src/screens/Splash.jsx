@@ -3,26 +3,17 @@ import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import Wordmark from '../components/Wordmark.jsx';
 
-const SEEN_KEY = 'egovmed.splashSeen';
 
-// First run means first run on this device, not first render. The flag goes in localStorage
-// rather than sessionStorage — the session token uses sessionStorage precisely because it should
-// die with the tab, and a welcome the visitor has already sat through should not come back when
-// they reopen it. Deliberately not keyed to the profile: whether someone has personalised their
-// details is a separate question from whether they have seen the logo animate.
-//
-// Storage throws in Safari private mode, so both sides fail closed — no splash beats no app.
+// Plays on every app load, before the sign-in screen — a deliberate brand moment rather than a
+// one-time welcome, so it is not persisted anywhere and there is nothing to reset.
 export function shouldShowSplash() {
-  try { return !window.localStorage.getItem(SEEN_KEY); } catch { return false; }
-}
-function markSeen() {
-  try { window.localStorage.setItem(SEEN_KEY, '1'); } catch { /* storage blocked — it just replays */ }
+  return true;
 }
 
 const prefersReducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 /**
- * First-run welcome: the eGovMed wordmark fading in over the app before it hands over.
+ * Brand moment on every load: the eGovMed wordmark fading in over the app before it hands over.
  *
  * Rendered as an overlay inside the device frame rather than as a routed screen, so it never
  * competes with the resume effect for `screen` — a splash that set screen: 'signin' on finish
@@ -35,9 +26,6 @@ export default function Splash({ c, onDone }) {
   const [reduced] = useState(prefersReducedMotion);
 
   useGSAP(() => {
-    // Marked seen when it plays, not when it finishes — a reload halfway through still counts as
-    // having been shown, and the alternative is a splash that repeats for anyone who reloads fast.
-    markSeen();
     let done = false;
     const finish = () => { if (done) return; done = true; onDone(); };
 
