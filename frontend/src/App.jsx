@@ -37,6 +37,10 @@ const initial = () => ({
   patientName: null, patientPhone: null, verificationMethod: 'face-liveness',
   symptom: '', recording: false, recSec: 0, thinking: false,
   emergency: false, liveness: 'idle', livenessSessionId: null,
+  // The server's own identityVerified, not the local capture state. null while /patients/me
+  // has not answered yet, so a screen that gates on it can tell "unverified" from "don't know".
+  // verifyReturnTo names the screen to land on once verification passes; null means booking.
+  identityVerified: null, verifyReturnTo: null,
   triage: null,
   booking: false, booked: false, slotLabel: '', refNo: makeRefNo(CONST.hospital),
   // One entry per department being booked this session. Starts with just the triaged
@@ -85,6 +89,17 @@ export default function App() {
 
   const c = DICT[S.lang];
   const toast = (m) => { set({ toast: m }); after(2600, () => set({ toast: null })); };
+
+  // Every fresh /patients/me shape lands here — Account/SignIn contact edits, and the refresh
+  // after a liveness pass. Declared as a callback rather than inline in `A` because the resume
+  // effect below needs it too, and `A` is rebuilt on every render so the effect can't close over it.
+  const onPatientUpdated = useCallback((p) => set((prev) => ({
+    patientName: p?.firstName || null,
+    patientPhone: p?.phone || null,
+    // A caller that doesn't carry the flag must not be read as "unverified".
+    identityVerified: typeof p?.identityVerified === 'boolean' ? p.identityVerified : prev.identityVerified,
+    ...(p?.identityVerified ? { liveness: 'verified' } : {}),
+  })), [set]);
 
   // Screen transition (GSAP): fade/slide the content in, then stagger [data-stagger] cards.
   useGSAP(() => {
@@ -169,6 +184,9 @@ export default function App() {
       // Home greeted a hardcoded "Rosa" from the dictionary regardless of who was signed in.
       if (me?.firstName) set({ patientName: me.firstName });
       if (me?.phone) set({ patientPhone: me.phone });
+      // Records gates on this server-side. The mirrored liveness flag can't stand in for it:
+      // it stays 'idle' for an unverified patient, which is indistinguishable from "not asked yet".
+      if (me) set({ identityVerified });
       if (identityVerified) set({ liveness: 'verified' });
       if (Array.isArray(msgs)) set({ messages: msgs });
       if (Array.isArray(appts) && appts.length) {
@@ -235,8 +253,12 @@ export default function App() {
         if (current.pathname.endsWith('/liveness/callback')) {
           cleanUrl();
           const sessionId = window.sessionStorage.getItem('egovmed.livenessSessionId');
+          // The hosted capture navigates the tab away and back, so React state is gone by the
+          // time we land here. Where to return to afterwards rides in sessionStorage next to the
+          // session id for exactly that reason.
+          const returnTo = window.sessionStorage.getItem('egovmed.verifyReturnTo') === 'records' ? 'records' : null;
           if (!getToken() || !sessionId) throw new Error('The liveness session could not be resumed');
-          set({ screen: 'liveness', stack: ['consent'], liveness: 'verifying', livenessSessionId: sessionId, flowError: null });
+          set({ screen: 'liveness', stack: [returnTo || 'consent'], liveness: 'verifying', livenessSessionId: sessionId, verifyReturnTo: returnTo, flowError: null });
           const result = await api.verifyIdentity(sessionId);
           window.sessionStorage.removeItem('egovmed.livenessSessionId');
           if (!result?.verified) {
@@ -244,6 +266,9 @@ export default function App() {
             throw new Error(result?.reason ? `eVerify: ${result.reason}` : 'Identity verification did not pass');
           }
           set({ liveness: 'verified' });
+          // Records reads identityVerified, so re-read the patient before handing the screen back.
+          const verifiedMe = await tryApi(api.me());
+          if (verifiedMe) onPatientUpdated(verifiedMe);
           return;
         }
 
@@ -304,7 +329,7 @@ export default function App() {
         }));
       }
     })();
-  }, [set]);
+  }, [set, onPatientUpdated]);
 
   const A = {
     setLang: (l) => set({ lang: l }),
@@ -338,11 +363,8 @@ export default function App() {
         // — Home greeted a bare "Hi" and fell back to a placeholder phone. It only looked right
         // after a reload, because that path goes through the resume effect instead.
         const me = res.patient || await tryApi(api.me());
-        set({
-          signingIn: false, screen: 'home', stack: [], flowError: null,
-          patientName: me?.firstName || null,
-          patientPhone: me?.phone || null,
-        });
+        if (me) onPatientUpdated(me);
+        set({ signingIn: false, screen: 'home', stack: [], flowError: null });
       } else if (S.authMode === 'mock') {
         // Keep the hackathon demo usable during a backend outage without minting a
         // fake session: protected API calls remain unauthenticated and use UI fallbacks.
@@ -414,15 +436,37 @@ export default function App() {
       };
       set({ thinking: false, emergency, triage, screen: 'triage', stack: [...S.stack, 'symptom'] });
     },
-    continueTriage: () => A.go('consent'),
+    // Clearing the return target matters here: a verification abandoned on the Records path
+    // would otherwise still be pending, and send this booking run back to Records instead of Book.
+    continueTriage: () => { A.clearVerifyReturn(); A.go('consent'); },
+    // Records sits on the bottom nav, so a patient can land there having never been through
+    // triage. Consent and Liveness are identical either way, so send them through the same two
+    // screens and remember where to come back to instead of forking the flow.
+    startVerificationFromRecords: () => {
+      window.sessionStorage.setItem('egovmed.verifyReturnTo', 'records');
+      set({ verifyReturnTo: 'records' });
+      A.go('consent');
+    },
+    clearVerifyReturn: () => { window.sessionStorage.removeItem('egovmed.verifyReturnTo'); set({ verifyReturnTo: null }); },
+    // Where the Liveness screen's Continue leads. Booking stays the default, so the
+    // triage → consent → liveness → book path is untouched.
+    continueAfterVerify: () => {
+      if (S.verifyReturnTo !== 'records') { A.goBook(); return; }
+      A.clearVerifyReturn();
+      set({ screen: 'records', stack: ['home'] });
+    },
 
     // Consent + Face Liveness (National ID eVerify)
     // "Not now" means declining verification altogether — you can't book without it, so
     // stepping back to Triage would just loop you right back into this same screen.
     // Exit the flow entirely instead.
     declineConsent: () => {
+      const fromRecords = S.verifyReturnTo === 'records';
+      A.clearVerifyReturn();
       A.resetToHome();
-      toast(S.lang === 'tl' ? 'Kailangan ang pag-verify para makapag-book ng appointment' : "You'll need to verify your identity to book an appointment");
+      toast(fromRecords
+        ? c.recordsLockedDeclined
+        : (S.lang === 'tl' ? 'Kailangan ang pag-verify para makapag-book ng appointment' : "You'll need to verify your identity to book an appointment"));
     },
     acceptConsent: async () => {
       // retryLiveness() re-enters here from the Liveness screen itself — only push 'consent' onto
@@ -434,6 +478,14 @@ export default function App() {
         liveness: 'capturing',
         flowError: null,
       }));
+      // Records gates on the server's identityVerified, not on this local flag, so pull the
+      // patient back down before the screen offers to continue — otherwise verification passes
+      // and the list we return to is still locked.
+      const markVerified = async () => {
+        set({ liveness: 'verified' });
+        const me = await tryApi(api.me());
+        if (me) onPatientUpdated(me);
+      };
       try {
         // Opt-in path: the eVerify Web SDK runs its own in-browser liveness capture and returns a
         // session_id that (unlike our own Face Liveness hosted flow) is actually accepted by
@@ -450,7 +502,7 @@ export default function App() {
           await api.registerEverifySdkLiveness(sid);
           const result = await api.verifyIdentity(sid);
           if (!result?.verified) throw new Error('Identity verification did not pass');
-          set({ liveness: 'verified' });
+          await markVerified();
           return;
         }
         const sess = await api.startLiveness();
@@ -468,7 +520,7 @@ export default function App() {
         set({ liveness: 'verifying' });
         const result = await api.verifyIdentity(sid);
         if (!result?.verified) throw new Error('Identity verification did not pass');
-        set({ liveness: 'verified' });
+        await markVerified();
       } catch (err) {
         // Closing the SDK's X button is a deliberate "not right now", not a rejected identity.
         // Its own state keeps the red "Verification was not completed" alert off the screen.
@@ -481,7 +533,7 @@ export default function App() {
     },
     // Account edits patient fields through its own local state, so without this the header
     // greeting and phone kept showing the pre-edit values until a full reload.
-    onPatientUpdated: (p) => set({ patientName: p?.firstName || null, patientPhone: p?.phone || null }),
+    onPatientUpdated,
     retryLiveness: () => A.acceptConsent(),
 
     // Booking + eMessage
@@ -718,7 +770,7 @@ export default function App() {
     triggerTimeout: () => set({ showDemo: false, showTimeout: true }),
     stayIn: () => set({ showTimeout: false }),
     // Log out returns to sign-in, and the splash plays before sign-in, so replay it here too.
-    logout: () => { clearTimers(); setToken(null); window.sessionStorage.removeItem('egovmed.livenessSessionId'); window.sessionStorage.removeItem('egovmed.pendingBillId'); setSplashDone(false); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
+    logout: () => { clearTimers(); setToken(null); window.sessionStorage.removeItem('egovmed.livenessSessionId'); window.sessionStorage.removeItem('egovmed.verifyReturnTo'); window.sessionStorage.removeItem('egovmed.pendingBillId'); setSplashDone(false); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
     openTokens: () => { set({ showDemo: false }); A.go('tokens'); },
     resetFlow: () => { clearTimers(); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
   };
