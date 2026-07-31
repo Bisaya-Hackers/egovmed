@@ -83,7 +83,12 @@ export const DICT = {
     accountAbout: 'eGovMed is a government health rail built on eGovPH. Pilot: Philippine General Hospital.',
     reportTitle: 'Report an issue', reportSub: "Tell us what went wrong. You'll get a case number to track it.",
     reportCatLabel: 'What is this about?', descLabel: 'What happened?', descPlaceholder: 'Describe the issue in your own words…',
-    submitReport: 'Submit report', otpTitle: 'Enter the code', otpSub: 'We texted a 6-digit code to •••• 4567.',
+    // {phone} is filled from the mask the server derives from the patient's own number on file.
+    // It used to be a hardcoded "•••• 4567" that belonged to nobody.
+    submitReport: 'Submit report', otpTitle: 'Enter the code', otpSub: 'We texted a 6-digit code to {phone}.',
+    otpSending: 'Texting you a 6-digit code…', otpVerifying: 'Verifying…',
+    // Mock mode only — no SMS actually left the server, so the code is shown instead.
+    otpMockHint: 'Mock SMS mode — your code is {code}',
     resendPrefix: 'Resend code in', resendReady: 'Resend code', resendSent: 'We texted you a new code',
     verifyOtp: 'Verify', caseTitle: 'Report filed', caseLabel: 'Case number',
     escalation: 'If unresolved in 48 hours, it escalates automatically.',
@@ -185,7 +190,9 @@ export const DICT = {
     accountAbout: 'Ang eGovMed ay serbisyong pangkalusugan ng gobyerno na binuo sa eGovPH. Pilot: Philippine General Hospital.',
     reportTitle: 'Mag-ulat ng problema', reportSub: 'Sabihin kung ano ang nangyari. Bibigyan ka ng case number para masubaybayan.',
     reportCatLabel: 'Tungkol saan ito?', descLabel: 'Ano ang nangyari?', descPlaceholder: 'Ilarawan ang problema sa iyong sariling salita…',
-    submitReport: 'Isumite ang ulat', otpTitle: 'Ilagay ang code', otpSub: 'Nagpadala kami ng 6-digit code sa •••• 4567.',
+    submitReport: 'Isumite ang ulat', otpTitle: 'Ilagay ang code', otpSub: 'Nagpadala kami ng 6-digit code sa {phone}.',
+    otpSending: 'Ipinapadala ang 6-digit code…', otpVerifying: 'Bini-verify…',
+    otpMockHint: 'Mock SMS mode — ang code mo ay {code}',
     resendPrefix: 'Magpadala muli sa', resendReady: 'Magpadala muli', resendSent: 'May bago kaming ipinadalang code',
     verifyOtp: 'I-verify', caseTitle: 'Naisumite ang ulat', caseLabel: 'Case number',
     escalation: 'Kung hindi maresolba sa loob ng 48 oras, awtomatikong ie-escalate.',

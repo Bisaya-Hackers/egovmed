@@ -15,6 +15,7 @@ const COLLECTIONS = {
   VERIFICATIONS: 'verifications',
   CONSENTS: 'consents',
   LIVENESS: 'livenessSessions',
+  OTP_CHALLENGES: 'otpChallenges',
   MESSAGES: 'messages',
   OAUTH_STATE: 'oauthState',
   AUDIT_LOGS: 'auditLogs',

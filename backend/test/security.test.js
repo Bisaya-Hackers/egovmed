@@ -79,6 +79,19 @@ async function resetWithPatients() {
   return seeded.id;
 }
 
+/**
+ * Filing a report is gated on a code texted to the patient's own number, so every caller has to
+ * mint one first. EMESSAGE_MODE follows INTEGRATION_MODE=mock here, and mock mode returns the code
+ * it "texted" — the only reason this flow is exercisable offline (see otpService.requestOtp).
+ */
+async function fileReportWithOtp(token, body) {
+  const otp = await json(await request('/reports/otp', { token, method: 'POST' }));
+  assert.equal(otp.response.status, 200, JSON.stringify(otp.value));
+  return json(await request('/reports', {
+    token, method: 'POST', body: { ...body, challengeId: otp.value.challengeId, code: otp.value.mockCode },
+  }));
+}
+
 test.before(async () => {
   await new Promise((resolve) => { server = app.listen(0, '127.0.0.1', resolve); });
   baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -409,9 +422,7 @@ test('security regression suite', async (t) => {
     assert.equal(storedTriage.inputSymptoms, undefined);
     assert.match(storedTriage.encrypted, /^v1:/);
 
-    const report = await json(await request('/reports', {
-      token: owner, method: 'POST', body: { category: 'service', description: 'Sensitive complaint narrative' },
-    }));
+    const report = await fileReportWithOtp(owner, { category: 'service', description: 'Sensitive complaint narrative' });
     assert.equal(report.response.status, 201);
     assert.equal(report.value.description, 'Sensitive complaint narrative');
     const storedReport = await store.findById(COLLECTIONS.REPORTS, report.value.id);
@@ -638,14 +649,177 @@ test('security regression suite', async (t) => {
     assert.ok(await store.findById(COLLECTIONS.AUDIT_LOGS, 'aud_fresh_test'));
   });
 
+  await t.test('a report cannot be filed without a code texted to the number on file, and the code is single-use', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const attacker = sign({ sub: 'pat_attacker' });
+    const complaint = { category: 'Billing', description: 'Charged twice for one visit' };
+
+    // No code at all → rejected by the schema, before anything reaches eReport.
+    assert.equal((await request('/reports', { token: owner, method: 'POST', body: complaint })).status, 400);
+    assert.equal((await store.findAll(COLLECTIONS.REPORTS)).length, 0);
+
+    const otp = await json(await request('/reports/otp', { token: owner, method: 'POST' }));
+    assert.equal(otp.response.status, 200);
+    assert.match(otp.value.mockCode, /^\d{6}$/);
+    // Derived from the seeded patient's real phone (+639170000000) — the screen used to render a
+    // hardcoded "•••• 4567" belonging to nobody.
+    assert.equal(otp.value.maskedPhone, '•••• 0000');
+
+    // Only a salted hash is persisted; the code must not be recoverable from the stored challenge.
+    const stored = await store.findById(COLLECTIONS.OTP_CHALLENGES, otp.value.challengeId);
+    assert.equal(stored.status, 'pending');
+    assert.equal(stored.code, undefined);
+    assert.equal(JSON.stringify(stored).includes(otp.value.mockCode), false, 'the OTP leaked into the stored challenge');
+
+    const wrong = String((Number(otp.value.mockCode) + 1) % 1_000_000).padStart(6, '0');
+    const rejected = await request('/reports', {
+      token: owner, method: 'POST', body: { ...complaint, challengeId: otp.value.challengeId, code: wrong },
+    });
+    assert.equal(rejected.status, 400);
+    assert.equal((await store.findAll(COLLECTIONS.REPORTS)).length, 0, 'a wrong code must not file a complaint');
+
+    const filed = await json(await request('/reports', {
+      token: owner, method: 'POST', body: { ...complaint, challengeId: otp.value.challengeId, code: otp.value.mockCode },
+    }));
+    assert.equal(filed.response.status, 201);
+    assert.ok(filed.value.caseNumber);
+    assert.equal((await store.findById(COLLECTIONS.OTP_CHALLENGES, otp.value.challengeId)).status, 'consumed');
+
+    // Single use: the correct code cannot file a second complaint.
+    assert.equal((await request('/reports', {
+      token: owner, method: 'POST', body: { ...complaint, challengeId: otp.value.challengeId, code: otp.value.mockCode },
+    })).status, 400);
+    assert.equal((await store.findAll(COLLECTIONS.REPORTS)).length, 1);
+
+    // A challenge is bound to the patient it was minted for: another tenant cannot spend it even
+    // holding both halves of it.
+    const second = await json(await request('/reports/otp', { token: owner, method: 'POST' }));
+    assert.equal((await request('/reports', {
+      token: attacker, method: 'POST', body: { ...complaint, challengeId: second.value.challengeId, code: second.value.mockCode },
+    })).status, 400);
+    assert.equal((await store.findAll(COLLECTIONS.REPORTS, (r) => r.patientId === 'pat_attacker')).length, 0);
+  });
+
+  await t.test('an expired code is refused, retired, and files nothing', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const otp = await json(await request('/reports/otp', { token: owner, method: 'POST' }));
+    assert.equal(otp.value.expiresInSeconds, 300);
+
+    // Backdate past the TTL rather than sleeping five minutes.
+    await store.update(COLLECTIONS.OTP_CHALLENGES, otp.value.challengeId, {
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+    });
+    const res = await json(await request('/reports', {
+      token: owner, method: 'POST',
+      body: { category: 'Access', description: 'Could not reach the clinic', challengeId: otp.value.challengeId, code: otp.value.mockCode },
+    }));
+    assert.equal(res.response.status, 400);
+    assert.match(res.value.error.message, /expired/i);
+    assert.equal((await store.findById(COLLECTIONS.OTP_CHALLENGES, otp.value.challengeId)).status, 'expired');
+    assert.equal((await store.findAll(COLLECTIONS.REPORTS)).length, 0);
+  });
+
+  await t.test('the attempt cap retires a code rather than letting its 10^6 search space be walked', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const otp = await json(await request('/reports/otp', { token: owner, method: 'POST' }));
+    const wrong = String((Number(otp.value.mockCode) + 7) % 1_000_000).padStart(6, '0');
+    const body = (code) => ({ category: 'Access', description: 'Could not reach the clinic', challengeId: otp.value.challengeId, code });
+
+    const statuses = [];
+    for (let i = 0; i < 5; i += 1) {
+      statuses.push((await request('/reports', { token: owner, method: 'POST', body: body(wrong) })).status);
+    }
+    assert.deepEqual(statuses, [400, 400, 400, 400, 400]);
+
+    const challenge = await store.findById(COLLECTIONS.OTP_CHALLENGES, otp.value.challengeId);
+    assert.equal(challenge.attempts, 5);
+    assert.equal(challenge.status, 'locked', 'the challenge must be retired at the cap, not merely refused');
+
+    // Even the RIGHT code is dead once the cap is hit — otherwise the cap only slows an attacker down.
+    const correct = await json(await request('/reports', { token: owner, method: 'POST', body: body(otp.value.mockCode) }));
+    assert.equal(correct.response.status, 400);
+    assert.match(correct.value.error.message, /too many/i);
+    assert.equal((await store.findAll(COLLECTIONS.REPORTS)).length, 0);
+  });
+
+  await t.test('no phone on file mints no code, and OTP requests are rate limited', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    // pat_attacker is seeded without a phone. There is nothing to prove control of, so the flow
+    // stops here and the client sends them to Account rather than filing something unverified.
+    const noPhone = await json(await request('/reports/otp', { token: sign({ sub: 'pat_attacker' }), method: 'POST' }));
+    assert.equal(noPhone.response.status, 400);
+    assert.match(noPhone.value.error.message, /mobile number/i);
+    assert.equal(noPhone.value.challengeId, undefined);
+
+    // Every request spends SMS credit and rings a real handset, so the budget is small.
+    const statuses = [];
+    for (let i = 0; i < 6; i += 1) {
+      statuses.push((await request('/reports/otp', { token: owner, method: 'POST' })).status);
+    }
+    assert.deepEqual(statuses.slice(0, 5), Array(5).fill(200));
+    assert.equal(statuses[5], 429);
+  });
+
+  await t.test('in live SMS mode the code goes out over eMessage and is never returned by the API', () => {
+    // The mock-mode `mockCode` escape hatch is what makes this flow testable offline, so the gate
+    // on it is load-bearing: a live-credentialed deployment must never hand the code back to the
+    // caller. Run in a fresh process against a loopback stand-in for the eMessage SMS push
+    // endpoint, because config/env.js reads EMESSAGE_MODE once at module load.
+    const cwd = path.join(__dirname, '..');
+    const script = `
+      const nodeHttp = require('node:http');
+      let pushed = null;
+      const srv = nodeHttp.createServer((req, res) => {
+        let raw = '';
+        req.on('data', (c) => { raw += c; });
+        req.on('end', () => {
+          pushed = JSON.parse(raw);
+          res.statusCode = 201;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ data: { message: 'SMS was successfully created.' } }));
+        });
+      });
+      srv.listen(0, '127.0.0.1', async () => {
+        process.env.EMESSAGE_MODE = 'live';
+        process.env.EMESSAGE_BASE_URL = 'http://127.0.0.1:' + srv.address().port;
+        process.env.EMESSAGE_AUTH_TOKEN = 'test-only-emessage-token';
+        const { seedDemoData } = require('./src/store');
+        const otpService = require('./src/services/otpService');
+        const patient = await seedDemoData();
+        const issued = await otpService.requestOtp({ patientId: patient.id, purpose: otpService.PURPOSES.REPORT });
+        srv.close();
+
+        const sent = String((pushed && pushed.message) || '').match(/\\b(\\d{6})\\b/);
+        const problems = [];
+        if (issued.mockCode !== undefined) problems.push('live mode returned mockCode');
+        if (!sent) problems.push('no 6-digit code in the SMS body');
+        if (!pushed || pushed.number !== patient.phone) problems.push('SMS was not addressed to the patient record phone');
+        if (sent && JSON.stringify(issued).includes(sent[1])) problems.push('the code leaked into the API response');
+        // The code that was texted is the one that verifies — the hash really is of the sent code.
+        if (sent) {
+          await otpService.claimOtp({
+            patientId: patient.id, purpose: otpService.PURPOSES.REPORT,
+            challengeId: issued.challengeId, code: sent[1],
+          }).catch((err) => problems.push('the texted code did not verify: ' + err.message));
+        }
+        if (problems.length) { console.error(problems.join('; ')); process.exit(1); }
+        process.exit(0);
+      });
+    `;
+    const result = spawnSync(process.execPath, ['-e', script], { cwd, encoding: 'utf8', env: { ...process.env } });
+    assert.equal(result.status, 0, result.stderr);
+  });
+
   await t.test('GET /reports lists only the caller\'s own reports and never the description', async () => {
     const ownerId = await resetWithPatients();
     const owner = sign({ sub: ownerId });
     const attacker = sign({ sub: 'pat_attacker' });
 
-    const filed = await json(await request('/reports', {
-      token: owner, method: 'POST', body: { category: 'Billing', description: 'Charged twice for one visit' },
-    }));
+    const filed = await fileReportWithOtp(owner, { category: 'Billing', description: 'Charged twice for one visit' });
     assert.equal(filed.response.status, 201);
 
     const mine = await json(await request('/reports', { token: owner }));
@@ -712,9 +886,7 @@ test('security regression suite', async (t) => {
   await t.test('an escalated report is never silently un-escalated by a later patient status check', async () => {
     const ownerId = await resetWithPatients();
     const owner = sign({ sub: ownerId });
-    const filed = await json(await request('/reports', {
-      token: owner, method: 'POST', body: { category: 'Access', description: 'Could not reach the clinic' },
-    }));
+    const filed = await fileReportWithOtp(owner, { category: 'Access', description: 'Could not reach the clinic' });
     const row = await store.findOne(COLLECTIONS.REPORTS, (r) => r.caseNumber === filed.value.caseNumber);
     await store.update(COLLECTIONS.REPORTS, row.id, { createdAt: new Date(Date.now() - 100 * 3600e3).toISOString() });
 

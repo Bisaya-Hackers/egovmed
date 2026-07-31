@@ -84,8 +84,13 @@ export const api = {
   getRecord: (id) => req(`/records/${encodeURIComponent(id)}`),
   verifyRecord: (id) => req(`/records/${encodeURIComponent(id)}/verify`),
   doctorSummary: () => req('/records/doctor-summary'),
-  // eReport
-  fileReport: (category, description) => req('/reports', { method: 'POST', body: { category, description } }),
+  // eReport. Filing is gated on a real SMS one-time code: requestReportOtp() texts it to the
+  // number on the patient's record (the server picks the number, never the client), and fileReport
+  // spends it. Without a valid challengeId + code the backend files nothing.
+  requestReportOtp: () => req('/reports/otp', { method: 'POST', body: {} }),
+  fileReport: (category, description, challengeId, code) => req('/reports', {
+    method: 'POST', body: { category, description, challengeId, code },
+  }),
   myReports: () => req('/reports'),
   trackCase: (caseNumber) => req(`/reports/${encodeURIComponent(caseNumber)}`),
 };

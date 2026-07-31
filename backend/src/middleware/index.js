@@ -35,11 +35,8 @@ function jsonComplexity(req, _res, next) {
   next();
 }
 
-const sameSecret = (provided, expected) => {
-  const a = Buffer.from(String(provided || ''));
-  const b = Buffer.from(String(expected || ''));
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-};
+// Single implementation, shared with otpService's code check — see lib/crypto.js.
+const sameSecret = require('../lib/crypto').timingSafeEqualStr;
 
 /** Attaches req.user from the Bearer session JWT, else 401. Header-only (never from the query string — avoids token leakage into logs). */
 function requireAuth(req, _res, next) {

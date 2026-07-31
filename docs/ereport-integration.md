@@ -129,6 +129,28 @@ EREPORT_ESCALATE_AFTER_HOURS=48
 `warnIfMisconfigured()` fails the boot if `EREPORT_MODE=live` and any of base URL, access code, or
 the four location codes are empty, so a half-filled set cannot ship silently.
 
+## Filing is gated on our own SMS OTP
+
+A complaint carries the complainant's name and phone into a government queue, so filing is gated
+on a code we text to the number on the patient's record. This is eGovMed's own check, unrelated to
+eReport's email OTP for case lookup (above).
+
+- `POST /reports/otp` mints a challenge and sends the code over eMessage. **The server chooses the
+  destination — the patient's `phone` — and the request body is empty.** A client-supplied number
+  would turn "prove you control this phone" into "type a number and read your own code back".
+- `POST /reports` takes `challengeId` + `code`, verifies and consumes them, and only then calls
+  eReport. A wrong, expired, reused or over-capped code files nothing.
+- Only `sha256("otp:<challengeId>:<code>")` is stored. TTL 5 minutes, one use, 5 attempts before
+  the challenge is retired. The claim goes through `store.claimStatus` (the same Redis
+  compare-and-set the liveness flow uses) so concurrent attempts cannot share an attempt budget.
+- **No phone on file → no filing.** `POST /reports/otp` returns 400 telling the patient to add a
+  mobile number in Account. There is no email fallback: the live eMessage adapter only implements
+  SMS push, and filing unverified would defeat the point of the check.
+- **Mock mode returns the code** (`mockCode`) because no SMS leaves the process when
+  `EMESSAGE_MODE=mock`, which is the only way the flow is completable offline and on staging. The
+  field is gated on the eMessage adapter's own mode, never on `NODE_ENV`, so a live-credentialed
+  deployment never emits it.
+
 ## Adapter behaviour worth knowing
 
 - **Mobile format.** eReport wants `639XXXXXXXXX`. Patient phones are stored as `+639170000000`
