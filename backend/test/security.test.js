@@ -314,6 +314,19 @@ test('security regression suite', async (t) => {
     assert.equal(stillEditable.value.demographicsLocked, false);
     assert.equal(stillEditable.value.firstName, 'Maria');
 
+    // The Account screen edits the name as one field and splits it, so every save rewrites all
+    // three name parts together. A two-token name sends middleName: '' — that empty string is the
+    // only way to drop a stale middle name, so it has to be accepted and persisted rather than
+    // treated as missing. Omitting the key instead is what left the seeded "Dela" in place and
+    // produced "Matthew Emmanuel Dela Labrador".
+    const renamed = await json(await request('/patients/me', {
+      token: owner, method: 'PATCH', body: { firstName: 'Matthew', middleName: '', lastName: 'Labrador' },
+    }));
+    assert.equal(renamed.response.status, 200);
+    assert.equal(renamed.value.middleName, '');
+    assert.equal(renamed.value.firstName, 'Matthew');
+    assert.equal(renamed.value.lastName, 'Labrador');
+
     // Empty body rejected — no silent no-op PATCH.
     assert.equal((await request('/patients/me', { token: owner, method: 'PATCH', body: {} })).status, 400);
 
@@ -342,6 +355,63 @@ test('security regression suite', async (t) => {
     const second = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo' } }));
     assert.equal(second.response.status, 200);
     assert.equal(second.value.patient.email, 'rosa.corrected@example.ph');
+  });
+
+  await t.test('two mock exchange codes are two separate patients — no shared demo row', async () => {
+    await resetWithPatients();
+    // Mock SSO used to return one hardcoded uniqid, so every visitor of the deployed demo resolved
+    // to the same patient id: two people testing at once read each other's profile, appointments
+    // and payments, and overwrote each other's edits. The exchange code now decides the identity.
+    const alice = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo_alice_device' } }));
+    const bob = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo_bob_device' } }));
+    assert.equal(alice.response.status, 200);
+    assert.equal(bob.response.status, 200);
+    assert.notEqual(alice.value.patient.id, bob.value.patient.id);
+    // ...and neither of them is the canonical seeded 'demo' patient.
+    const canonical = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo' } }));
+    assert.notEqual(alice.value.patient.id, canonical.value.patient.id);
+    assert.notEqual(bob.value.patient.id, canonical.value.patient.id);
+
+    // Each new demo patient still gets the three seeded labs (its own copies, ownership-scoped)
+    // and the PhilHealth benefit — without those the Records screen and the eGovPay step are empty.
+    const aliceRecords = await json(await request('/records', { token: alice.value.token }));
+    const bobRecords = await json(await request('/records', { token: bob.value.token }));
+    assert.equal(aliceRecords.value.length, 3);
+    assert.equal(bobRecords.value.length, 3);
+    assert.equal(alice.value.patient.benefits.philhealth, true);
+    assert.equal(bob.value.patient.benefits.philhealth, true);
+    // Distinct record ids, and each copy re-verifies against its own anchor rather than showing
+    // up as tampered because it borrowed another patient's content hash.
+    const aliceIds = new Set(aliceRecords.value.map((r) => r.id));
+    assert.equal(bobRecords.value.some((r) => aliceIds.has(r.id)), false);
+    const verified = await json(await request(`/records/${bobRecords.value[0].id}/verify`, { token: bob.value.token }));
+    assert.equal(verified.value.verified, true);
+    // Alice cannot read Bob's copy at all — 404, same as any other cross-tenant read.
+    assert.equal((await request(`/records/${bobRecords.value[0].id}`, { token: alice.value.token })).status, 404);
+
+    // Activity stays on its own side: Alice books, Bob's list is still empty.
+    assert.equal((await request('/appointments', { token: alice.value.token, method: 'POST', body: { specialty: 'Cardiology' } })).status, 201);
+    const bobAppointments = await json(await request('/appointments', { token: bob.value.token }));
+    assert.deepEqual(bobAppointments.value, []);
+
+    // And a profile edit by one is invisible to the other — the failure the demo actually showed.
+    await request('/patients/me', { token: alice.value.token, method: 'PATCH', body: { phone: '+639175550001' } });
+    const bobMe = await json(await request('/patients/me', { token: bob.value.token }));
+    assert.equal(bobMe.value.phone, '+639170000000');
+  });
+
+  await t.test('the same exchange code always resolves to the same patient (login stays idempotent)', async () => {
+    await resetWithPatients();
+    // patientIdFor keeps SSO logins stable per egovSub — a returning device must land back on its
+    // own patient, not a fresh empty one, and must not accumulate a second set of demo records.
+    const first = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo_stable_device' } }));
+    const second = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo_stable_device' } }));
+    assert.equal(first.value.patient.id, second.value.patient.id);
+    const records = await json(await request('/records', { token: second.value.token }));
+    assert.equal(records.value.length, 3);
+    // The mock access-token login path derives the same identity from the same code.
+    const viaToken = await json(await request('/auth/token', { method: 'POST', body: { accessToken: 'mock-access-demo_stable_device' } }));
+    assert.equal(viaToken.value.patient.id, first.value.patient.id);
   });
 
   await t.test('PATCH benefits: unknown key does not reflect raw input into the response message', async () => {
@@ -931,6 +1001,66 @@ test('security regression suite', async (t) => {
     assert.equal(bill.value.status, 'paid');
     assert.equal(bill.value.provider, 'covered');
     assert.equal(bill.value.checkoutUrl, null, 'a ₱0 bill must not carry a dead mock-checkout link');
+  });
+
+  await t.test('a second demo sign-in must not delete a bill that is still at the eGovPay checkout', async () => {
+    // The bug behind "Bill not found" after a completed checkout. Mock SSO hands every visitor of
+    // the deployed demo the SAME patient, and the fresh-demo reset deleted that patient's payments
+    // outright on every login. eGovPay's hosted checkout is a full page navigation away from the
+    // app, so a bill created seconds earlier was gone the moment anyone else signed in — and the
+    // returning browser, holding only that bill id, got a 404 from GET /payments/:id/status.
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const bill = await json(await request('/payments', { token: owner, method: 'POST', body: { billAmount: 750 } }));
+    assert.equal(bill.response.status, 201);
+    // Mock eGovPay settles instantly; live mode leaves the bill 'pending' until the citizen
+    // finishes at the gateway, and that window is what this test is about.
+    await store.update(COLLECTIONS.PAYMENTS, bill.value.id, { status: 'pending' });
+
+    const second = await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo' } });
+    assert.equal(second.status, 200);
+
+    const resumed = await json(await request(`/payments/${bill.value.id}/status`, { token: owner }));
+    assert.equal(resumed.response.status, 200, 'an in-flight bill must survive the shared-demo reset');
+    assert.equal(resumed.value.id, bill.value.id);
+
+    // Settled bills are still cleared, so a new visitor doesn't inherit the last one's history.
+    const done = await json(await request('/payments', { token: owner, method: 'POST', body: { billAmount: 500 } }));
+    assert.equal(done.value.status, 'paid');
+    assert.equal((await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo' } })).status, 200);
+    assert.equal((await request(`/payments/${done.value.id}/status`, { token: owner })).status, 404);
+  });
+
+  await t.test('the bill row is written before the gateway call, so a failed checkout leaves a record not a phantom id', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const egovPay = require('../src/integrations/egovPay');
+    const original = egovPay.createCheckout;
+    egovPay.createCheckout = async () => { throw new Error('gateway unreachable'); };
+    try {
+      assert.equal((await request('/payments', { token: owner, method: 'POST', body: { billAmount: 750 } })).status, 500);
+    } finally {
+      egovPay.createCheckout = original;
+    }
+    const rows = await store.findAll(COLLECTIONS.PAYMENTS, (p) => p.patientId === ownerId);
+    assert.equal(rows.length, 1, 'the attempt must be recorded, not dropped');
+    assert.equal(rows[0].status, 'failed');
+    // No gateway reference exists to poll — the status endpoint must report the local state
+    // rather than asking eGovPay about `null`.
+    const status = await json(await request(`/payments/${rows[0].id}/status`, { token: owner }));
+    assert.equal(status.response.status, 200);
+    assert.equal(status.value.status, 'failed');
+  });
+
+  await t.test('the mock checkout link lands on a route the app serves, not the /mock-checkout/ dead end', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const bill = await json(await request('/payments', { token: owner, method: 'POST', body: { billAmount: 750 } }));
+    assert.equal(bill.value.provider, 'mock');
+    const url = new URL(bill.value.checkoutUrl);
+    assert.equal(url.pathname, '/payment/return');
+    assert.equal(url.searchParams.get('bill'), bill.value.id, 'the return link must carry the bill id, not just eGovPay\'s reference');
+    assert.notEqual(url.searchParams.get('ref'), bill.value.id, 'the gateway reference is not the bill id');
   });
 
   await t.test('POST /appointments rejects a cross-tenant triageId (no misattribution)', async () => {

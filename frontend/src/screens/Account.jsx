@@ -30,12 +30,40 @@ const WIRED_BENEFIT_KEYS = BENEFIT_CATALOG.map((b) => b.key);
 // obvious typos before we round-trip.
 const looksLikeEmail = (raw) => /^\S+@\S+\.\S+$/.test(String(raw || '').trim());
 
-// Inline-editable row for phone / email. Shows read-only text with an Edit button; when
+// Splits one typed name into the three fields PATCH /patients/me validates separately. First
+// token wins firstName, last token wins lastName, whatever sits between them is the middle name.
+// A two-token name therefore submits middleName: '' rather than omitting the key — omitting it
+// leaves whatever was already stored, which is how the seeded "Dela" survived an edit and
+// produced "Matthew Emmanuel Dela Labrador".
+// No middle name: the first token is the given name and everything after it is the surname, so
+// compound surnames ("Dela Cruz", "Del Rosario") stay intact instead of having their first word
+// silently reinterpreted as a middle name. middleName is always cleared for the same reason the
+// bug existed — omitting the key would leave a stale value behind.
+// One token returns null (rejected client-side): the backend requires a non-empty lastName, and
+// guessing which half of a single word is the surname would be worse than asking.
+// Letters only, plus the separators real names actually use: spaces, hyphens (Anne-Marie),
+// apostrophes (O'Brien) and periods (Jr.). \p{L} rather than A-Z so ñ and accented characters
+// pass — rejecting those would lock out a large share of Filipino names.
+const NAME_CHARS = /^[\p{L}\s'.-]+$/u;
+
+function splitFullName(raw) {
+  const trimmed = String(raw || '').trim();
+  if (!NAME_CHARS.test(trimmed)) return null; // digits and symbols are never part of a name
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return null;
+  return {
+    firstName: parts[0],
+    middleName: '',
+    lastName: parts.slice(1).join(' '),
+  };
+}
+
+// Inline-editable row for name / phone / email. Shows read-only text with an Edit button; when
 // editing, swaps to an input + Save/Cancel pair. Validates client-side before submit so bad
 // input gets a friendly message rather than a 400 round-trip.
 // `normalize` returns the value to submit, or null to reject with `invalidMsg`. Phone and email
-// have their own normalizers; demographic rows pass one that only trims, since there is no
-// canonical form to coerce a name into.
+// have their own normalizers; a normalizer may also return a whole patch object when one input
+// maps onto several API fields, as the full-name row does.
 function ContactRow({ field, value, placeholder, label, hint, invalidMsg, c, onSave, editing, setEditing, saving, normalize }) {
   const [draft, setDraft] = useState(value || '');
   const [err, setErr] = useState(null);
@@ -52,7 +80,7 @@ function ContactRow({ field, value, placeholder, label, hint, invalidMsg, c, onS
       : (field === 'phone' ? normalizePhone(trimmed) : (looksLikeEmail(trimmed) ? trimmed.toLowerCase() : null));
     if (!normalized) { setErr(invalidMsg); return; }
     setErr(null);
-    await onSave(field, normalized);
+    await onSave(typeof normalized === 'string' ? { [field]: normalized } : normalized);
   };
 
   if (isEditing) {
@@ -65,8 +93,10 @@ function ContactRow({ field, value, placeholder, label, hint, invalidMsg, c, onS
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') setEditing(null); }}
             placeholder={placeholder}
-            type={field === 'email' ? 'email' : 'tel'}
-            inputMode={field === 'email' ? 'email' : 'tel'}
+            // The tel keyboard belongs to phone and the all-digit birthDate; a name typed on a
+            // numeric keypad is unusable on mobile.
+            type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'}
+            inputMode={field === 'email' ? 'email' : (field === 'phone' || field === 'birthDate') ? 'tel' : 'text'}
             autoFocus
             style={{ flex: '1 1 160px', minWidth: 0, borderRadius: 12, border: '1.5px solid var(--line)', padding: '10px 13px', font: 'inherit' }}
           />
@@ -152,14 +182,17 @@ export default function Account({ c, S, A }) {
   const [showAddBenefit, setShowAddBenefit] = useState(false);
   const [addingKey, setAddingKey] = useState(null);
   const [removingKey, setRemovingKey] = useState(null);
-  const [editingField, setEditingField] = useState(null); // 'phone' | 'email' | null
+  const [editingField, setEditingField] = useState(null); // 'fullName' | 'phone' | 'email' | 'birthDate' | null
   const [savingContact, setSavingContact] = useState(false);
 
-  const saveContact = async (field, value) => {
+  // Takes a whole patch rather than one field/value pair — the full-name row rewrites
+  // firstName/middleName/lastName together, and they have to land in a single PATCH so the
+  // record never sits in a half-renamed state.
+  const saveContact = async (patch) => {
     if (savingContact) return;
     setSavingContact(true);
     try {
-      const updated = await api.updateContact({ [field]: value });
+      const updated = await api.updateContact(patch);
       setPatient(updated);
 
       A.onPatientUpdated(updated);
@@ -244,6 +277,27 @@ export default function Account({ c, S, A }) {
             </div>
             <div className="rowsep" />
             <div className="stack" style={{ color: 'var(--muted)', fontSize: '0.9em' }}>
+              {/* Demographics are what eVerify matches against PhilSys. While SSO is mocked the
+                  profile is a placeholder ("Juan Dela Cruz"), which can never match a real record,
+                  so these stay editable until verification succeeds and the backend locks them.
+                  Name is one input instead of three: people know their own name as a whole, and
+                  splitFullName rewrites all three API fields on every save so no stale part can
+                  linger. */}
+              {!patient.demographicsLocked && (
+                <ContactRow
+                  field="fullName"
+                  value={displayName(patient)}
+                  placeholder={c.fullNamePlaceholder}
+                  label={c.fullNameLabel}
+                  invalidMsg={c.fullNameInvalid}
+                  normalize={splitFullName}
+                  c={c}
+                  onSave={saveContact}
+                  editing={editingField}
+                  setEditing={setEditingField}
+                  saving={savingContact}
+                />
+              )}
               <ContactRow
                 field="phone"
                 value={patient.phone}
@@ -269,29 +323,21 @@ export default function Account({ c, S, A }) {
                 setEditing={setEditingField}
                 saving={savingContact}
               />
-              {/* Demographics are what eVerify matches against PhilSys. While SSO is mocked the
-                  profile is a placeholder ("Juan Dela Cruz"), which can never match a real record,
-                  so these stay editable until verification succeeds and the backend locks them. */}
-              {!patient.demographicsLocked && [
-                { field: 'firstName', label: c.firstNameLabel },
-                { field: 'lastName', label: c.lastNameLabel },
-                { field: 'birthDate', label: c.birthDateLabel, invalid: c.birthDateInvalid, normalize: (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null) },
-              ].map(({ field, label, invalid, normalize }) => (
+              {!patient.demographicsLocked && (
                 <ContactRow
-                  key={field}
-                  field={field}
-                  value={patient[field]}
-                  placeholder={field === 'birthDate' ? 'YYYY-MM-DD' : label}
-                  label={label}
-                  invalidMsg={invalid || c.nameInvalid}
-                  normalize={normalize || ((v) => v || null)}
+                  field="birthDate"
+                  value={patient.birthDate}
+                  placeholder="YYYY-MM-DD"
+                  label={c.birthDateLabel}
+                  invalidMsg={c.birthDateInvalid}
+                  normalize={(v) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null)}
                   c={c}
                   onSave={saveContact}
                   editing={editingField}
                   setEditing={setEditingField}
                   saving={savingContact}
                 />
-              ))}
+              )}
             </div>
           </section>
 
