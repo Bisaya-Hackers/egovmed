@@ -4,6 +4,14 @@ import rosaAvatar from '../assets/home-avatar-rosa.png';
 import digitalIdArt from '../assets/home-digital-id.png';
 import verifiedLabsArt from '../assets/home-verified-labs.png';
 
+// Greeting and phone used to come from hardcoded dictionary strings ("Hi, Rosa", a fixed number),
+// so every patient saw the same identity. Both now read the signed-in patient.
+const maskPhone = (p) => {
+  const digits = String(p || '').replace(/[^0-9]/g, '');
+  if (digits.length < 6) return null;
+  return `+${digits.slice(0, 2)} ${digits.slice(2, 5)} ••• ${digits.slice(-4)}`;
+};
+
 function Service({ icon, label, color, badge, onClick }) {
   return (
     <button onClick={onClick} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, flex: 1 }}>
@@ -26,8 +34,8 @@ export default function Home({ c, lang, S, A }) {
       <div data-stagger style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
         <img src={rosaAvatar} alt="" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', flex: 'none' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h1 style={{ fontSize: '1.3em', fontWeight: 800, color: 'var(--primary)', lineHeight: 1.1, margin: 0 }}>{c.greeting}</h1>
-          <div className="sub" style={{ margin: '3px 0 0' }}>{CONST.phone}</div>
+          <h1 style={{ fontSize: '1.3em', fontWeight: 800, color: 'var(--primary)', lineHeight: 1.1, margin: 0 }}>{S.patientName ? `${c.greeting}, ${S.patientName}` : c.greeting}</h1>
+          <div className="sub" style={{ margin: '3px 0 0' }}>{maskPhone(S.patientPhone) || CONST.phone}</div>
         </div>
         <img src={digitalIdArt} alt="Secure digital health identity" style={{ width: 92, height: 58, borderRadius: 14, objectFit: 'contain', flex: 'none' }} />
       </div>

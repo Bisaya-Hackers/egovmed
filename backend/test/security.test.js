@@ -174,6 +174,9 @@ test('security regression suite', async (t) => {
       // Asserting the sentinel (rather than null) pins it to env.everify.pubKey, so a future
       // rename cannot silently leave the frontend with an undefined pubKey.
       everifyPubKey: CREDENTIAL_SENTINELS.EVERIFY_PUBKEY,
+      // Which provider does the Step 3 capture. Public by nature (the frontend must branch on it)
+      // and defaults to the safer of the two: face-liveness never attempts a PhilSys match.
+      verificationMethod: 'face-liveness',
     });
     const configRaw = JSON.stringify(config.value);
     assert.equal(configRaw.includes('secret'), false);
@@ -300,15 +303,16 @@ test('security regression suite', async (t) => {
       assert.equal(res.status, 400, `expected 400 for body=${JSON.stringify(bad)}, got ${res.status}`);
     }
 
-    // Demographics ARE editable while unverified (mock SSO supplies a placeholder identity, so
-    // there is nothing authoritative to protect yet) but LOCK once eVerify has confirmed them —
-    // otherwise a verified badge could outlive the identity it was granted for.
-    const unverified = sign({ sub: 'pat_attacker' }); // seeded with identityVerified: true below
-    await store.update(COLLECTIONS.PATIENTS, 'pat_attacker', { identityVerified: false });
-    assert.equal((await request('/patients/me', { token: unverified, method: 'PATCH', body: { firstName: 'Maria' } })).status, 200);
+    // Demographics gate on LIVE eVerify, not on the flag alone: a seeded or mock 'verified'
+    // proves nothing about PhilSys, and locking on it would freeze the demo patient as Juan Dela
+    // Cruz with no way to correct the very fields eVerify matches on. This suite runs eVerify in
+    // mock, so they stay editable here even for a verified patient, and demographicsLocked is
+    // false — the same condition the write guard uses.
     await store.update(COLLECTIONS.PATIENTS, 'pat_attacker', { identityVerified: true });
-    const locked = await request('/patients/me', { token: unverified, method: 'PATCH', body: { firstName: 'Someone Else' } });
-    assert.equal(locked.status, 400, 'demographics must be locked once identity is verified');
+    const stillEditable = await json(await request('/patients/me', { token: sign({ sub: 'pat_attacker' }), method: 'PATCH', body: { firstName: 'Maria' } }));
+    assert.equal(stillEditable.response.status, 200, 'mock-mode verification must not lock demographics');
+    assert.equal(stillEditable.value.demographicsLocked, false);
+    assert.equal(stillEditable.value.firstName, 'Maria');
 
     // Empty body rejected — no silent no-op PATCH.
     assert.equal((await request('/patients/me', { token: owner, method: 'PATCH', body: {} })).status, 400);

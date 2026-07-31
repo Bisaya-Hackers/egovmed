@@ -33,6 +33,7 @@ const initial = () => ({
   lang: 'en', screen: 'signin', stack: [], textScale: 0,
   signingIn: false, signinErr: false,
   authMode: 'loading', authLaunchUrl: null, authCallbackUrl: null, everifyPubKey: null, flowError: null,
+  patientName: null, patientPhone: null, verificationMethod: 'face-liveness',
   symptom: '', recording: false, recSec: 0, thinking: false,
   emergency: false, liveness: 'idle', livenessSessionId: null,
   triage: null,
@@ -160,6 +161,9 @@ export default function App() {
         tryApi(api.appointments()), tryApi(api.payments()), tryApi(api.messages()), tryApi(api.me()),
       ]);
       const identityVerified = !!me?.identityVerified;
+      // Home greeted a hardcoded "Rosa" from the dictionary regardless of who was signed in.
+      if (me?.firstName) set({ patientName: me.firstName });
+      if (me?.phone) set({ patientPhone: me.phone });
       if (identityVerified) set({ liveness: 'verified' });
       if (Array.isArray(msgs)) set({ messages: msgs });
       if (Array.isArray(appts) && appts.length) {
@@ -207,6 +211,7 @@ export default function App() {
           // eVerify's browser-safe "Public API Key", served by the backend so the one already set
           // as EVERIFY_PUBKEY there is the single source of truth (see acceptConsent below).
           everifyPubKey: auth?.everifyPubKey || null,
+          verificationMethod: auth?.verificationMethod || 'face-liveness',
         });
 
         const current = new URL(window.location.href);
@@ -400,7 +405,11 @@ export default function App() {
         // Opt-in path: the eVerify Web SDK runs its own in-browser liveness capture and returns a
         // session_id that (unlike our own Face Liveness hosted flow) is actually accepted by
         // eVerify's /api/query. Off by default — see docs on VITE_EVERIFY_SDK_ENABLED.
-        if (import.meta.env.VITE_EVERIFY_SDK_ENABLED === 'true') {
+        // The backend owns this switch (VERIFICATION_METHOD) so flipping providers is one env var
+        // in one place rather than two kept in sync across two Vercel projects. The build-time flag
+        // remains an override for local development.
+        const useEverifySdk = import.meta.env.VITE_EVERIFY_SDK_ENABLED === 'true' || S.verificationMethod === 'everify';
+        if (useEverifySdk) {
           // Backend /auth/config first (one place to set and rotate the key, no frontend rebuild);
           // VITE_EVERIFY_PUBKEY stays as a local/offline override when the backend has none.
           const sid = await runEverifyLivenessCapture(S.everifyPubKey || import.meta.env.VITE_EVERIFY_PUBKEY);
