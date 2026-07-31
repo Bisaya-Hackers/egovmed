@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ScreenHeader, Btn } from '../components/ui.jsx';
 import { Check, ShieldTick, User, Plus, ChevronRight, Trash } from '../components/Icons.jsx';
 import { api } from '../lib/api.js';
-import { normalizePhone } from '../lib/profile.js';
+import { normalizePhone, splitFullName } from '../lib/profile.js';
 import rosaAvatar from '../assets/home-avatar-rosa.png';
 
 const displayName = (patient) => [patient?.firstName, patient?.middleName, patient?.lastName].filter(Boolean).join(' ');
@@ -29,34 +29,6 @@ const WIRED_BENEFIT_KEYS = BENEFIT_CATALOG.map((b) => b.key);
 // Trivial email sanity check — the real validation happens server-side. Just enough to catch
 // obvious typos before we round-trip.
 const looksLikeEmail = (raw) => /^\S+@\S+\.\S+$/.test(String(raw || '').trim());
-
-// Splits one typed name into the three fields PATCH /patients/me validates separately. First
-// token wins firstName, last token wins lastName, whatever sits between them is the middle name.
-// A two-token name therefore submits middleName: '' rather than omitting the key — omitting it
-// leaves whatever was already stored, which is how the seeded "Dela" survived an edit and
-// produced "Matthew Emmanuel Dela Labrador".
-// No middle name: the first token is the given name and everything after it is the surname, so
-// compound surnames ("Dela Cruz", "Del Rosario") stay intact instead of having their first word
-// silently reinterpreted as a middle name. middleName is always cleared for the same reason the
-// bug existed — omitting the key would leave a stale value behind.
-// One token returns null (rejected client-side): the backend requires a non-empty lastName, and
-// guessing which half of a single word is the surname would be worse than asking.
-// Letters only, plus the separators real names actually use: spaces, hyphens (Anne-Marie),
-// apostrophes (O'Brien) and periods (Jr.). \p{L} rather than A-Z so ñ and accented characters
-// pass — rejecting those would lock out a large share of Filipino names.
-const NAME_CHARS = /^[\p{L}\s'.-]+$/u;
-
-function splitFullName(raw) {
-  const trimmed = String(raw || '').trim();
-  if (!NAME_CHARS.test(trimmed)) return null; // digits and symbols are never part of a name
-  const parts = trimmed.split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return null;
-  return {
-    firstName: parts[0],
-    middleName: '',
-    lastName: parts.slice(1).join(' '),
-  };
-}
 
 // Inline-editable row for name / phone / email. Shows read-only text with an Edit button; when
 // editing, swaps to an input + Save/Cancel pair. Validates client-side before submit so bad

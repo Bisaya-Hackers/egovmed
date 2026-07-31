@@ -22,13 +22,26 @@ export function normalizePhone(raw) {
 //
 // Returns null below two tokens: the backend requires a non-empty lastName, so a lone word can't
 // fill both halves and the caller should reject it rather than send a half-name.
+// Letters only, plus the separators real names actually use: spaces, hyphens (Anne-Marie),
+// apostrophes (O'Brien) and periods (Jr.). \p{L} rather than A-Z so ñ and accented characters
+// pass — rejecting those would lock out a large share of Filipino names.
+const NAME_CHARS = /^[\p{L}\s'.-]+$/u;
+
+// No middle name: the first token is the given name and everything after it is the surname, so
+// compound surnames ("Dela Cruz", "Del Rosario") stay intact instead of having their first word
+// silently reinterpreted as a middle name. middleName is always cleared — omitting the key would
+// leave whatever was already stored, which is how the seeded "Dela" survived an edit.
+// One token returns null (rejected client-side): the backend requires a non-empty lastName, and
+// guessing which half of a single word is the surname would be worse than asking.
 export function splitFullName(raw) {
-  const parts = String(raw || '').trim().split(/\s+/).filter(Boolean);
+  const trimmed = String(raw || '').trim();
+  if (!NAME_CHARS.test(trimmed)) return null; // digits and symbols are never part of a name
+  const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length < 2) return null;
   return {
     firstName: parts[0],
-    middleName: parts.slice(1, -1).join(' '),
-    lastName: parts[parts.length - 1],
+    middleName: '',
+    lastName: parts.slice(1).join(' '),
   };
 }
 
