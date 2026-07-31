@@ -97,7 +97,7 @@ export const DICT = {
     reportCatLabel: 'What is this about?', descLabel: 'What happened?', descPlaceholder: 'Describe the issue in your own words…',
     // {phone} is filled from the mask the server derives from the patient's own number on file.
     // It used to be a hardcoded "•••• 4567" that belonged to nobody.
-    submitReport: 'Submit report', otpTitle: 'Enter the code', otpSub: 'We texted a 6-digit code to {phone}.',
+    submitReport: 'Submit report', reportCategoryRequired: 'Choose a category first.', reportDescriptionTooShort: 'Describe the issue in at least a few words.', otpTitle: 'Enter the code', otpSub: 'We texted a 6-digit code to {phone}.',
     otpSending: 'Texting you a 6-digit code…', otpVerifying: 'Verifying…',
     // Mock mode only — no SMS actually left the server, so the code is shown instead.
     otpMockHint: 'Mock SMS mode — your code is {code}',
@@ -211,7 +211,7 @@ export const DICT = {
     accountAbout: 'Ang eGovMed ay serbisyong pangkalusugan ng gobyerno na binuo sa eGovPH. Pilot: Philippine General Hospital.',
     reportTitle: 'Mag-ulat ng problema', reportSub: 'Sabihin kung ano ang nangyari. Bibigyan ka ng case number para masubaybayan.',
     reportCatLabel: 'Tungkol saan ito?', descLabel: 'Ano ang nangyari?', descPlaceholder: 'Ilarawan ang problema sa iyong sariling salita…',
-    submitReport: 'Isumite ang ulat', otpTitle: 'Ilagay ang code', otpSub: 'Nagpadala kami ng 6-digit code sa {phone}.',
+    submitReport: 'Isumite ang ulat', reportCategoryRequired: 'Pumili muna ng kategorya.', reportDescriptionTooShort: 'Ilarawan ang isyu sa ilang salita man lang.', otpTitle: 'Ilagay ang code', otpSub: 'Nagpadala kami ng 6-digit code sa {phone}.',
     otpSending: 'Ipinapadala ang 6-digit code…', otpVerifying: 'Bini-verify…',
     otpMockHint: 'Mock SMS mode — ang code mo ay {code}',
     resendPrefix: 'Magpadala muli sa', resendReady: 'Magpadala muli', resendSent: 'May bago kaming ipinadalang code',

@@ -635,6 +635,12 @@ export default function App() {
     // surfaced rather than swallowed: "no phone on file" and "SMS failed" both mean the report
     // cannot be filed, and a silent failure here would look identical to a code in flight.
     sendReportOtp: async () => {
+      // Check what POST /reports will check, BEFORE spending an SMS. Without this a too-short
+      // description sent a real text, took the patient to the code screen, and only then failed
+      // validation — burning a message and a challenge on input we could reject for free.
+      const description = String(S.reportDesc || '').trim();
+      if (S.reportCat === null || S.reportCat === undefined) { set({ otpError: c.reportCategoryRequired }); return false; }
+      if (description.length < 3) { set({ otpError: c.reportDescriptionTooShort }); return false; }
       set({ otpSending: true, otpError: null });
       try {
         const res = await api.requestReportOtp();
