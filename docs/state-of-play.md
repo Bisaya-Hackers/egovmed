@@ -100,20 +100,54 @@ When you need them to differ, remove the shared one and add two scoped ones.
 
 ## Known problems, in the order they will bite you
 
-1. **The Records verify card has never been clicked through.** Build passes, backend contract
-   confirmed, code reviewed — but no one has looked at the rendered screen. Sign in on staging
-   with a real SSO code, go straight to Records without booking, and confirm the card appears and
-   its button reaches the face scan. This is the highest-value 2 minutes available.
-2. **eVerify returns `verified: false` for real demographics.** Staging runs eVerify in mock so
+1. **Half of the Records verify card is still untested.** The card itself is confirmed rendering
+   on staging (screenshot, 01:30) with correct copy and button. What nobody has run is the round
+   trip: tap "Verify my identity", complete the face scan, and confirm you land back on **Records
+   with labs loaded** rather than in the booking flow. The return target rides in `sessionStorage`
+   (`egovmed.verifyReturnTo`) because the hosted capture navigates the tab away and back, so that
+   is the fragile part. Two failure shapes to watch for: ending on the booking screen means the
+   return target was lost across the reload; landing on Records still locked means the patient was
+   not re-fetched after verification.
+
+2. **An expired SSO exchange code shows "Internal server error".** eGovPH returns 422 from
+   `POST /api/token` when a code is spent or stale, and `backend/src/lib/http.js` normalizes every
+   non-2xx into a 502, so the user is told the app crashed when in fact they just need a fresh
+   code. Judges following the SSO instructions will hit this constantly. A PR to map that one 422
+   to an actionable 4xx was in flight as of 01:40 — check open PRs before rebuilding it. A real
+   eGovPH outage must keep returning 502, or the wrong party goes looking for the bug.
+3. **eVerify returns `verified: false` for real demographics.** Staging runs eVerify in mock so
    verification passes there. If anyone flips `EVERIFY_MODE=live`, identity verification becomes a
    hard block and Records locks for everyone. Do not flip it before the demo.
-3. **`docs/judging-qna.md` is stale.** It still says eGovChain is mock in production. It is live.
-4. **`frontend/src/i18n/dict.js` is a CRLF landmine.** It is the only file in the repo stored with
+4. **`docs/judging-qna.md` is stale.** It still says eGovChain is mock in production. It is live.
+5. **`frontend/src/i18n/dict.js` is a CRLF landmine.** It is the only file in the repo stored with
    CRLF, and it only avoids normalization because of a stray lone `\r\r\n` on the `caseNo:` line.
    Clean up that stray CR and every one of its 708 lines shows as changed. If you get a whole-file
    diff on dict.js, that is why — restore from `main` and re-apply your keys preserving endings.
-5. **Cosmetic:** Consent and Liveness render "step 3 of 4" dots. Entering from Records shows step
+6. **Cosmetic:** Consent and Liveness render "step 3 of 4" dots. Entering from Records shows step
    3 with no steps 1 and 2. Left alone deliberately, both screens are on the demo path.
+
+## Reaching production data
+
+There is no route into the live store from a laptop, and this has already been tried. `vercel env
+pull` returns every application variable **redacted to an empty string** because they are all
+encrypted, and the Upstash credentials in `backend/.env` are blank. There is also no
+`DELETE /records/:id` endpoint — records can be created and read but never removed.
+
+This matters less than it sounds. Records are ownership-scoped by `patientId`, and mock SSO gives
+every device its own patient, so a stray test record uploaded from one phone is invisible to every
+other visitor. Confirmed by signing in fresh and listing records. To clear your own test data,
+clear site data for the frontend origin and sign in again — you get a new patient with clean
+seeded records. On-chain anchors are immutable and stay regardless, which is rather the point.
+
+## Where the judging email landed
+
+`output/egovmed-judging-email.txt` (untracked) holds the reply to eGovPH: production URL with no
+credentials, a five-step path touching every integration, and the staging SSO instructions.
+
+It tells testers to generate a code and open it **in the same browser**, because a code generated
+on a PC and opened on a phone failed with 422. Whether that is a short TTL or session binding was
+never settled. If a judge reports the SSO link failing, question that first rather than assuming
+our exchange is broken — the failure happens before any patient exists on our side.
 
 ## Traps that have already cost us hours
 
