@@ -171,6 +171,8 @@ export default function Account({ c, S, A }) {
     try {
       const updated = await api.updateContact({ [field]: value });
       setPatient(updated);
+
+      A.onPatientUpdated(updated);
       setEditingField(null);
       A.toast(c.contactSaved);
     } catch {
