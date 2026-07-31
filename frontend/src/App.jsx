@@ -67,8 +67,9 @@ const NAV_SCREENS = new Set(['home', 'records', 'messages', 'account', 'notifica
 
 export default function App() {
   const [S, setS] = useState(initial);
-  // First-run splash. Held outside `initial()` so the demo Reset/Log out controls don't replay it,
-  // and outside `screen` so it can't race the resume effect's own navigation.
+  // Splash plays on every app load, before sign-in. Held outside `screen` so it can't race the
+  // resume effect's own navigation, and outside `initial()` so a state reset doesn't retrigger it
+  // mid-session — only a fresh load or an explicit logout replays it.
   const [splashDone, setSplashDone] = useState(() => !shouldShowSplash());
   const timers = useRef([]);
   const recTimer = useRef(null);
@@ -716,7 +717,8 @@ export default function App() {
     toggleEmergency: () => set((p) => ({ emergency: !p.emergency })),
     triggerTimeout: () => set({ showDemo: false, showTimeout: true }),
     stayIn: () => set({ showTimeout: false }),
-    logout: () => { clearTimers(); setToken(null); try { window.localStorage.removeItem('egovmed.splashSeen'); } catch { /* storage blocked */ } window.sessionStorage.removeItem('egovmed.livenessSessionId'); window.sessionStorage.removeItem('egovmed.pendingBillId'); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
+    // Log out returns to sign-in, and the splash plays before sign-in, so replay it here too.
+    logout: () => { clearTimers(); setToken(null); window.sessionStorage.removeItem('egovmed.livenessSessionId'); window.sessionStorage.removeItem('egovmed.pendingBillId'); setSplashDone(false); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
     openTokens: () => { set({ showDemo: false }); A.go('tokens'); },
     resetFlow: () => { clearTimers(); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
   };
