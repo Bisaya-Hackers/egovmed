@@ -63,7 +63,12 @@ async function request(url, { method = 'GET', headers = {}, body, timeoutMs = 15
 
   if (!res.ok) {
     logger.warn('http upstream non-2xx', { url, method, status: res.status });
-    throw upstream(`Upstream ${res.status} from ${url}`, data);
+    const err = upstream(`Upstream ${res.status} from ${url}`, data);
+    // Callers that must tell "upstream rejected this input" apart from "upstream is broken" need
+    // the original status. Attached as a field because the message is prose, not a parseable
+    // contract; every caller that ignores it still sees the same 502 it always did.
+    err.upstreamStatus = res.status;
+    throw err;
   }
   return raw ? { status: res.status, headers: res.headers, data } : data;
 }

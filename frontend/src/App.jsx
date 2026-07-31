@@ -34,6 +34,9 @@ const initial = () => ({
   lang: 'en', screen: 'signin', stack: [], textScale: 0,
   signingIn: false, signinErr: false,
   authMode: 'loading', authLaunchUrl: null, authCallbackUrl: null, everifyPubKey: null, flowError: null,
+  // Names the dict entry behind flowError when there is one, so the message can be re-read in the
+  // other language after the fact. null means flowError is already the only wording we have.
+  flowErrorKey: null,
   patientName: null, patientPhone: null, verificationMethod: 'face-liveness',
   symptom: '', recording: false, recSec: 0, thinking: false,
   emergency: false, liveness: 'idle', livenessSessionId: null,
@@ -241,7 +244,7 @@ export default function App() {
         const exchangeCode = current.searchParams.get('exchange_code') || current.searchParams.get('exchangeCode');
         if (exchangeCode) {
           cleanUrl();
-          set({ signingIn: true, signinErr: false, flowError: null });
+          set({ signingIn: true, signinErr: false, flowError: null, flowErrorKey: null });
           const result = await api.login(exchangeCode);
           if (!result?.token) throw new Error('eGovPH returned no session token');
           setToken(result.token);
@@ -319,13 +322,20 @@ export default function App() {
           set({ screen: 'home', stack: [] });
         }
       } catch (err) {
+        // A spent or expired eGovPH exchange code is the one failure on this path the citizen can
+        // actually fix, so it gets said in their language. The backend tags it with its own error
+        // code; flowErrorKey names the dict entry so the message follows the EN/TL toggle instead
+        // of freezing in whatever language it was in when it was thrown. Everything else keeps
+        // showing the server's own words, which is the only description we have of it.
+        const flowErrorKey = err?.data?.error?.code === 'egov_exchange_code_invalid' ? 'ssoCodeExpired' : null;
         set((p) => ({
           authMode: p.authMode === 'loading' ? 'mock' : p.authMode,
           signingIn: false,
           signinErr: true,
           liveness: 'failed',
           paying: false,
-          flowError: err.message || 'The live flow failed',
+          flowErrorKey,
+          flowError: (flowErrorKey && DICT[p.lang]?.[flowErrorKey]) || err.message || 'The live flow failed',
         }));
       }
     })();
@@ -354,7 +364,7 @@ export default function App() {
         }
         return;
       }
-      set({ signingIn: true, signinErr: false });
+      set({ signingIn: true, signinErr: false, flowErrorKey: null });
       const [res] = await Promise.all([tryApi(api.login(demoExchangeCode())), delay(900)]);
       if (res?.token) {
         setToken(res.token);

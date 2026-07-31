@@ -1,8 +1,9 @@
 'use strict';
 const { env } = require('../config/env');
 const http = require('../lib/http');
-const { upstream } = require('../lib/errors');
+const { AppError, upstream } = require('../lib/errors');
 const { sha256Hex } = require('../lib/crypto');
+const logger = require('../lib/logger');
 
 const cfg = env.egovph;
 const isLive = () => cfg.mode === 'live';
@@ -53,16 +54,36 @@ function mockUniqid(seed) {
  *          → the citizen profile (uniqid, name, birthdate, contact, address, …)
  */
 
+// eGov rejects a spent or stale exchange_code with 422 (the code is single-use and short-lived —
+// apidocumentation/eGovPH-SSO-API.md). Nothing is down when that happens, so reporting it as a 502
+// "Internal server error" both blames us and leaves the citizen with no idea what to do. Only 422
+// from the token endpoint is reclassified: a 5xx, a timeout or a malformed body stays a 502, because
+// telling someone to fetch a fresh code during a real eGov outage sends them in circles.
+const EXPIRED_CODE_STATUS = 422;
+const EXPIRED_CODE_MESSAGE = 'This eGovPH sign-in link has already been used or has expired. '
+  + 'Generate a new code in the eGovPH portal, then open the link again.';
+
 /** Step 1: exchange an eGov exchange_code for a scoped access token. */
 async function generateAccessToken(exchangeCode, scope = cfg.scope) {
   if (!isLive()) return { access_token: `mock-access-${exchangeCode || 'demo'}` };
 
-  const res = await http.post(`${cfg.baseUrl}/api/token`, {
-    exchange_code: exchangeCode,
-    scope,
-    partner_code: cfg.partnerCode,
-    partner_secret: cfg.partnerSecret,
-  });
+  let res;
+  try {
+    res = await http.post(`${cfg.baseUrl}/api/token`, {
+      exchange_code: exchangeCode,
+      scope,
+      partner_code: cfg.partnerCode,
+      partner_secret: cfg.partnerSecret,
+    });
+  } catch (err) {
+    if (err && err.upstreamStatus === EXPIRED_CODE_STATUS) {
+      // Deliberately says nothing about the code or the partner credentials — the status and the
+      // endpoint are what separate "their code expired" from "eGov is down" in the log.
+      logger.warn('egov sso exchange code rejected', { endpoint: '/api/token', status: EXPIRED_CODE_STATUS });
+      throw new AppError(EXPIRED_CODE_MESSAGE, 400, 'egov_exchange_code_invalid');
+    }
+    throw err;
+  }
   if (!res || !res.access_token) throw upstream('eGov token endpoint returned no access_token', res);
   return res;
 }

@@ -55,7 +55,9 @@ export default function SignIn({ c, S, A }) {
 
       {S.flowError && (
         <div role="alert" className="card" style={{ marginTop: 14, color: 'var(--red)', fontWeight: 650, fontSize: '0.9em' }}>
-          {S.flowError}
+          {/* Backend messages arrive in English only, so the ones we have our own wording for
+              re-resolve here and follow the EN/TL toggle. The rest show exactly what the server said. */}
+          {(S.flowErrorKey && c[S.flowErrorKey]) || S.flowError}
         </div>
       )}
 
