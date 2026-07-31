@@ -45,6 +45,10 @@ const looksLikeEmail = (raw) => /^\S+@\S+\.\S+$/.test(String(raw || '').trim());
 // A two-token name therefore submits middleName: '' rather than omitting the key — omitting it
 // leaves whatever was already stored, which is how the seeded "Dela" survived an edit and
 // produced "Matthew Emmanuel Dela Labrador".
+// No middle name: the first token is the given name and everything after it is the surname, so
+// compound surnames ("Dela Cruz", "Del Rosario") stay intact instead of having their first word
+// silently reinterpreted as a middle name. middleName is always cleared for the same reason the
+// bug existed — omitting the key would leave a stale value behind.
 // One token returns null (rejected client-side): the backend requires a non-empty lastName, and
 // guessing which half of a single word is the surname would be worse than asking.
 function splitFullName(raw) {
@@ -52,8 +56,8 @@ function splitFullName(raw) {
   if (parts.length < 2) return null;
   return {
     firstName: parts[0],
-    middleName: parts.slice(1, -1).join(' '),
-    lastName: parts[parts.length - 1],
+    middleName: '',
+    lastName: parts.slice(1).join(' '),
   };
 }
 
