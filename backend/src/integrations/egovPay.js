@@ -27,9 +27,11 @@ const mockFinalStatus = () => (MOCK_TERMINAL_STATUSES.has(cfg.mockOutcome) ? cfg
 /**
  * Create a payment transaction and return a hosted payment-gateway link.
  * live: POST {baseUrl}/api/v1/transaction with X-eGovPay-Token + digest.
- * mock: returns a fake checkout URL + reference (demo).
+ * mock: returns a checkout URL pointing back at the app's own payment-return route (demo).
+ * `billId` is our bill's id, used only to make the mock link resumable; the `reference` returned
+ * here is eGovPay's own transaction handle and is a different value entirely.
  */
-async function createCheckout({ amount, currency = 'PHP', description, items = [], mobile, email, name }) {
+async function createCheckout({ amount, currency = 'PHP', description, items = [], mobile, email, name, billId }) {
   if (isLive()) {
     if (!cfg.token || !cfg.settlementTemplateUuid) throw new Error('eGovPay live mode requires token and settlement template');
     const redirectUrl = cfg.redirectUrl || publicUrl(env.appUrl, '/payment/return');
@@ -66,9 +68,16 @@ async function createCheckout({ amount, currency = 'PHP', description, items = [
     };
   }
   const ref = randomId('pay_');
+  // This used to point at /mock-checkout/{ref}, a path nothing serves: the frontend's SPA rewrite
+  // answered it with index.html, so following the link just reloaded the app shell on a route the
+  // router doesn't know and the payment was silently abandoned. Point it at /payment/return —
+  // the route the app already uses to resume a hosted checkout — and carry the bill id so the
+  // returning page can resolve the payment from the URL alone, without needing the sessionStorage
+  // handle that a real gateway round trip is relied on to preserve.
+  const query = new URLSearchParams({ ...(billId ? { bill: billId } : {}), ref, amount: String(amount), mock: '1' });
   return {
     reference: ref,
-    checkoutUrl: `${env.appUrl}/mock-checkout/${ref}?amount=${amount}`,
+    checkoutUrl: `${publicUrl(env.appUrl, '/payment/return')}?${query}`,
     // A fully-covered bill (amount 0) needs no gateway charge and settles immediately regardless
     // of the configured mock outcome. Otherwise defer to mockFinalStatus() so a forced failure
     // (EGOVPAY_MOCK_OUTCOME=failed) is reflected consistently from creation through status checks.

@@ -72,24 +72,49 @@ async function upsertAndIssue(profile) {
 
   const token = sign({ sub: patient.id });
   if (!isDemoPatient) return { token, patient: publicPatient(patient) };
+  await resetDemoHistory(store, patient.id);
+  return { token, patient: publicPatient(patient) };
+}
 
-  // Mock/demo mode has no real citizen behind it — it's the same "Juan Dela Cruz" profile for
-  // every visitor of the deployed demo. Left alone, appointments/payments/messages/reports filed
-  // by one demo session pile up forever in the shared KV store and bleed into the next person's
-  // session. Wipe just those four transactional collections (never PATIENTS or the seeded
-  // RECORDS/benefits) on every fresh mock login, so each demo run starts clean — the same
-  // "resets every time" experience the in-memory local store gives for free.
-  // REPORTS belongs here specifically because "Your reports" on the track screen lists them by
-  // patient: without this, the first thing a new demo visitor sees is a list of case numbers
-  // filed by whoever used the demo before them.
-  await Promise.all(
-    [COLLECTIONS.APPOINTMENTS, COLLECTIONS.PAYMENTS, COLLECTIONS.MESSAGES, COLLECTIONS.REPORTS].map(async (collection) => {
-      const rows = await store.findAll(collection, (r) => r.patientId === patient.id);
+// A bill is only safe to delete once it has stopped moving. Anything else is a checkout the
+// citizen is still sitting on at eGovPay's hosted page — see resetDemoHistory below.
+const TERMINAL_PAYMENT_STATUSES = new Set([
+  'paid', 'settled', 'success', 'successful', 'completed',
+  'failed', 'voided', 'cancelled', 'canceled', 'declined', 'expired', 'refunded',
+]);
+const isInFlight = (payment) => !TERMINAL_PAYMENT_STATUSES.has(String(payment.status || '').trim().toLowerCase());
+
+/**
+ * Mock/demo mode has no real citizen behind it — it's the same "Juan Dela Cruz" profile for
+ * every visitor of the deployed demo. Left alone, appointments/payments/messages/reports filed
+ * by one demo session pile up forever in the shared KV store and bleed into the next person's
+ * session. Wipe just those four transactional collections (never PATIENTS or the seeded
+ * RECORDS/benefits) on every fresh mock login, so each demo run starts clean — the same
+ * "resets every time" experience the in-memory local store gives for free.
+ * REPORTS belongs here specifically because "Your reports" on the track screen lists them by
+ * patient: without this, the first thing a new demo visitor sees is a list of case numbers
+ * filed by whoever used the demo before them.
+ *
+ * The one exception is a payment that has NOT reached a terminal state. eGovPay's hosted checkout
+ * is a full page navigation away from the app, and the browser comes back to /payment/return
+ * holding nothing but that bill id. Because every visitor shares this one demo patient, an
+ * unconditional wipe deleted a mid-flight bill the moment *anyone* signed in — including the same
+ * person in a second tab — and the returning browser then asked for a bill that no longer existed
+ * and got a bare "Bill not found". In-flight bills survive, as does the appointment each one is
+ * attached to, so the paid state still lands on the right card when the citizen returns.
+ */
+async function resetDemoHistory(store, patientId) {
+  const payments = await store.findAll(COLLECTIONS.PAYMENTS, (p) => p.patientId === patientId);
+  const keptAppointmentIds = new Set(payments.filter(isInFlight).map((p) => p.appointmentId).filter(Boolean));
+  const appointments = await store.findAll(COLLECTIONS.APPOINTMENTS, (a) => a.patientId === patientId);
+  await Promise.all([
+    ...payments.filter((p) => !isInFlight(p)).map((p) => store.remove(COLLECTIONS.PAYMENTS, p.id)),
+    ...appointments.filter((a) => !keptAppointmentIds.has(a.id)).map((a) => store.remove(COLLECTIONS.APPOINTMENTS, a.id)),
+    ...[COLLECTIONS.MESSAGES, COLLECTIONS.REPORTS].map(async (collection) => {
+      const rows = await store.findAll(collection, (r) => r.patientId === patientId);
       await Promise.all(rows.map((r) => store.remove(collection, r.id)));
     }),
-  );
-
-  return { token, patient: publicPatient(patient) };
+  ]);
 }
 
 module.exports = { loginWithExchangeCode, loginWithAccessToken };
