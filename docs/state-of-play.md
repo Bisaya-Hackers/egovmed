@@ -119,11 +119,17 @@ When you need them to differ, remove the shared one and add two scoped ones.
    verification passes there. If anyone flips `EVERIFY_MODE=live`, identity verification becomes a
    hard block and Records locks for everyone. Do not flip it before the demo.
 4. **`docs/judging-qna.md` is stale.** It still says eGovChain is mock in production. It is live.
-5. **`frontend/src/i18n/dict.js` is a CRLF landmine.** It is the only file in the repo stored with
+5. **Line endings will bite you on any file, not just dict.js.** The repo has no `.gitattributes`
+   and `core.autocrlf=true`. Editing tools here rewrite LF files to CRLF, so a two-line change can
+   come back as a full-file rewrite. **Check `git diff --stat` before staging every commit** — if a
+   file you barely touched shows hundreds of changed lines, that is why. Convert it back to LF and
+   re-stage. The real fix is a `.gitattributes` pinning `* text=auto eol=lf` with an exception for
+   dict.js, but that forces a repo-wide renormalization, so it must not be done mid-judging.
+6. **`frontend/src/i18n/dict.js` is the worst case.** It is the only file in the repo stored with
    CRLF, and it only avoids normalization because of a stray lone `\r\r\n` on the `caseNo:` line.
    Clean up that stray CR and every one of its 708 lines shows as changed. If you get a whole-file
    diff on dict.js, that is why — restore from `main` and re-apply your keys preserving endings.
-6. **Cosmetic:** Consent and Liveness render "step 3 of 4" dots. Entering from Records shows step
+7. **Cosmetic:** Consent and Liveness render "step 3 of 4" dots. Entering from Records shows step
    3 with no steps 1 and 2. Left alone deliberately, both screens are on the demo path.
 
 ## Reaching production data
