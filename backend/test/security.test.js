@@ -314,6 +314,19 @@ test('security regression suite', async (t) => {
     assert.equal(stillEditable.value.demographicsLocked, false);
     assert.equal(stillEditable.value.firstName, 'Maria');
 
+    // The Account screen edits the name as one field and splits it, so every save rewrites all
+    // three name parts together. A two-token name sends middleName: '' — that empty string is the
+    // only way to drop a stale middle name, so it has to be accepted and persisted rather than
+    // treated as missing. Omitting the key instead is what left the seeded "Dela" in place and
+    // produced "Matthew Emmanuel Dela Labrador".
+    const renamed = await json(await request('/patients/me', {
+      token: owner, method: 'PATCH', body: { firstName: 'Matthew', middleName: '', lastName: 'Labrador' },
+    }));
+    assert.equal(renamed.response.status, 200);
+    assert.equal(renamed.value.middleName, '');
+    assert.equal(renamed.value.firstName, 'Matthew');
+    assert.equal(renamed.value.lastName, 'Labrador');
+
     // Empty body rejected — no silent no-op PATCH.
     assert.equal((await request('/patients/me', { token: owner, method: 'PATCH', body: {} })).status, 400);
 
