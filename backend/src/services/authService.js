@@ -1,6 +1,6 @@
 'use strict';
 const egovph = require('../integrations/egovph');
-const { getStore, COLLECTIONS } = require('../store');
+const { getStore, COLLECTIONS, seedDemoContentFor } = require('../store');
 const { sign } = require('../lib/jwt');
 const { sha256Hex } = require('../lib/crypto');
 const { publicPatient } = require('../lib/presenters');
@@ -68,20 +68,25 @@ async function upsertAndIssue(profile) {
       createdAt: now,
       updatedAt: now,
     });
+    // Mock SSO now hands every device its own uniqid, so this branch runs for each new demo
+    // visitor rather than once ever. A brand-new patient owns no records and no benefits, which
+    // would leave the Records screen and the eGovPay step — the two things the demo is built
+    // around — empty for everyone but the one seeded patient. Give them their own copy instead.
+    // Mock-only and creation-only: a live SSO signup gets exactly the row it always did.
+    if (isDemoPatient) patient = (await seedDemoContentFor(patient.id)) || patient;
   }
 
   const token = sign({ sub: patient.id });
   if (!isDemoPatient) return { token, patient: publicPatient(patient) };
 
-  // Mock/demo mode has no real citizen behind it — it's the same "Juan Dela Cruz" profile for
-  // every visitor of the deployed demo. Left alone, appointments/payments/messages/reports filed
-  // by one demo session pile up forever in the shared KV store and bleed into the next person's
-  // session. Wipe just those four transactional collections (never PATIENTS or the seeded
+  // Mock/demo mode has no real citizen behind it. Each device now gets its own demo patient, so
+  // this no longer stops one visitor's data reaching another — it stops a *returning* visitor
+  // inheriting the leftovers of their own previous run, which in a persistent KV store pile up
+  // forever. Wipe just those four transactional collections (never PATIENTS or the seeded
   // RECORDS/benefits) on every fresh mock login, so each demo run starts clean — the same
   // "resets every time" experience the in-memory local store gives for free.
   // REPORTS belongs here specifically because "Your reports" on the track screen lists them by
-  // patient: without this, the first thing a new demo visitor sees is a list of case numbers
-  // filed by whoever used the demo before them.
+  // patient: without this, a demo run opens on a list of case numbers from the last one.
   await Promise.all(
     [COLLECTIONS.APPOINTMENTS, COLLECTIONS.PAYMENTS, COLLECTIONS.MESSAGES, COLLECTIONS.REPORTS].map(async (collection) => {
       const rows = await store.findAll(collection, (r) => r.patientId === patient.id);

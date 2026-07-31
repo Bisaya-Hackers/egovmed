@@ -357,6 +357,63 @@ test('security regression suite', async (t) => {
     assert.equal(second.value.patient.email, 'rosa.corrected@example.ph');
   });
 
+  await t.test('two mock exchange codes are two separate patients — no shared demo row', async () => {
+    await resetWithPatients();
+    // Mock SSO used to return one hardcoded uniqid, so every visitor of the deployed demo resolved
+    // to the same patient id: two people testing at once read each other's profile, appointments
+    // and payments, and overwrote each other's edits. The exchange code now decides the identity.
+    const alice = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo_alice_device' } }));
+    const bob = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo_bob_device' } }));
+    assert.equal(alice.response.status, 200);
+    assert.equal(bob.response.status, 200);
+    assert.notEqual(alice.value.patient.id, bob.value.patient.id);
+    // ...and neither of them is the canonical seeded 'demo' patient.
+    const canonical = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo' } }));
+    assert.notEqual(alice.value.patient.id, canonical.value.patient.id);
+    assert.notEqual(bob.value.patient.id, canonical.value.patient.id);
+
+    // Each new demo patient still gets the three seeded labs (its own copies, ownership-scoped)
+    // and the PhilHealth benefit — without those the Records screen and the eGovPay step are empty.
+    const aliceRecords = await json(await request('/records', { token: alice.value.token }));
+    const bobRecords = await json(await request('/records', { token: bob.value.token }));
+    assert.equal(aliceRecords.value.length, 3);
+    assert.equal(bobRecords.value.length, 3);
+    assert.equal(alice.value.patient.benefits.philhealth, true);
+    assert.equal(bob.value.patient.benefits.philhealth, true);
+    // Distinct record ids, and each copy re-verifies against its own anchor rather than showing
+    // up as tampered because it borrowed another patient's content hash.
+    const aliceIds = new Set(aliceRecords.value.map((r) => r.id));
+    assert.equal(bobRecords.value.some((r) => aliceIds.has(r.id)), false);
+    const verified = await json(await request(`/records/${bobRecords.value[0].id}/verify`, { token: bob.value.token }));
+    assert.equal(verified.value.verified, true);
+    // Alice cannot read Bob's copy at all — 404, same as any other cross-tenant read.
+    assert.equal((await request(`/records/${bobRecords.value[0].id}`, { token: alice.value.token })).status, 404);
+
+    // Activity stays on its own side: Alice books, Bob's list is still empty.
+    assert.equal((await request('/appointments', { token: alice.value.token, method: 'POST', body: { specialty: 'Cardiology' } })).status, 201);
+    const bobAppointments = await json(await request('/appointments', { token: bob.value.token }));
+    assert.deepEqual(bobAppointments.value, []);
+
+    // And a profile edit by one is invisible to the other — the failure the demo actually showed.
+    await request('/patients/me', { token: alice.value.token, method: 'PATCH', body: { phone: '+639175550001' } });
+    const bobMe = await json(await request('/patients/me', { token: bob.value.token }));
+    assert.equal(bobMe.value.phone, '+639170000000');
+  });
+
+  await t.test('the same exchange code always resolves to the same patient (login stays idempotent)', async () => {
+    await resetWithPatients();
+    // patientIdFor keeps SSO logins stable per egovSub — a returning device must land back on its
+    // own patient, not a fresh empty one, and must not accumulate a second set of demo records.
+    const first = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo_stable_device' } }));
+    const second = await json(await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo_stable_device' } }));
+    assert.equal(first.value.patient.id, second.value.patient.id);
+    const records = await json(await request('/records', { token: second.value.token }));
+    assert.equal(records.value.length, 3);
+    // The mock access-token login path derives the same identity from the same code.
+    const viaToken = await json(await request('/auth/token', { method: 'POST', body: { accessToken: 'mock-access-demo_stable_device' } }));
+    assert.equal(viaToken.value.patient.id, first.value.patient.id);
+  });
+
   await t.test('PATCH benefits: unknown key does not reflect raw input into the response message', async () => {
     const ownerId = await resetWithPatients();
     const owner = sign({ sub: ownerId });
