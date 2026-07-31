@@ -332,7 +332,16 @@ export default function App() {
       const [res] = await Promise.all([tryApi(api.login(demoExchangeCode())), delay(900)]);
       if (res?.token) {
         setToken(res.token);
-        set({ signingIn: false, screen: 'home', stack: [], flowError: null });
+        // Load the patient before showing Home. syncPatientState() lives inside the resume effect
+        // and isn't reachable from here, so signing in normally left patientName/patientPhone null
+        // — Home greeted a bare "Hi" and fell back to a placeholder phone. It only looked right
+        // after a reload, because that path goes through the resume effect instead.
+        const me = res.patient || await tryApi(api.me());
+        set({
+          signingIn: false, screen: 'home', stack: [], flowError: null,
+          patientName: me?.firstName || null,
+          patientPhone: me?.phone || null,
+        });
       } else if (S.authMode === 'mock') {
         // Keep the hackathon demo usable during a backend outage without minting a
         // fake session: protected API calls remain unauthenticated and use UI fallbacks.
@@ -707,7 +716,7 @@ export default function App() {
     toggleEmergency: () => set((p) => ({ emergency: !p.emergency })),
     triggerTimeout: () => set({ showDemo: false, showTimeout: true }),
     stayIn: () => set({ showTimeout: false }),
-    logout: () => { clearTimers(); setToken(null); window.sessionStorage.removeItem('egovmed.livenessSessionId'); window.sessionStorage.removeItem('egovmed.pendingBillId'); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
+    logout: () => { clearTimers(); setToken(null); try { window.localStorage.removeItem('egovmed.splashSeen'); } catch { /* storage blocked */ } window.sessionStorage.removeItem('egovmed.livenessSessionId'); window.sessionStorage.removeItem('egovmed.pendingBillId'); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
     openTokens: () => { set({ showDemo: false }); A.go('tokens'); },
     resetFlow: () => { clearTimers(); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
   };

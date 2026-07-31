@@ -345,6 +345,5 @@ export const CONST = {
   refNo: 'PGH-4821-QK',
   hospital: 'Philippine General Hospital',
   dept: 'Cardiology',
-  caseNo: 'EGM-2026-000417',
-  phone: '+63 961 ••• 8546',
+  caseNo: 'EGM-2026-000417',
 };
