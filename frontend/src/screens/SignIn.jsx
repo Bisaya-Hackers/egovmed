@@ -7,6 +7,9 @@ import ProfileSetup from '../components/ProfileSetup.jsx';
 export default function SignIn({ c, S, A }) {
   const live = S.authMode === 'live';
   const loading = S.authMode === 'loading';
+  // Set when the landing URL carried an eGovPH exchange code. The code is spent by this button
+  // and nowhere else, so a link prefetch can never consume it (see the mount effect in App.jsx).
+  const codeReady = !!S.pendingExchangeCode;
   const [mpin, setMpin] = useState(['', '', '', '', '', '']);
   const [editingProfile, setEditingProfile] = useState(false);
   const onChange = (arr) => {
@@ -43,6 +46,12 @@ export default function SignIn({ c, S, A }) {
 
       <div className="rowsep" style={{ margin: '20px 0' }} />
 
+      {codeReady && (
+        <p className="sub" data-stagger style={{ textAlign: 'center', marginBottom: 12, fontWeight: 650, color: 'var(--ink)' }}>
+          {c.ssoCodeReady}
+        </p>
+      )}
+
       <button
         data-stagger
         onClick={A.doSignIn}
@@ -50,7 +59,7 @@ export default function SignIn({ c, S, A }) {
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', minHeight: 56, border: '1.5px solid var(--line)', background: 'var(--canvas)', color: 'var(--ink)', borderRadius: 16, fontWeight: 700 }}
       >
         {loading || S.signingIn ? <span className="spinner" /> : <Fingerprint size={22} color="var(--primary)" />}
-        <span>{loading ? 'Checking eGovPH…' : live ? 'Continue with eGovPH' : c.fingerprint}</span>
+        <span>{loading ? 'Checking eGovPH…' : (live || codeReady) ? 'Continue with eGovPH' : c.fingerprint}</span>
       </button>
 
       {S.flowError && (
@@ -61,7 +70,7 @@ export default function SignIn({ c, S, A }) {
         </div>
       )}
 
-      {live && !S.authLaunchUrl && !S.flowError && (
+      {live && !codeReady && !S.authLaunchUrl && !S.flowError && (
         <p className="sub" style={{ textAlign: 'center', marginTop: 14 }}>
           Launch eGovMed from the eGovPH app to sign in.
         </p>

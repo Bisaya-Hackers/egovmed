@@ -34,6 +34,9 @@ const initial = () => ({
   lang: 'en', screen: 'signin', stack: [], textScale: 0,
   signingIn: false, signinErr: false,
   authMode: 'loading', authLaunchUrl: null, authCallbackUrl: null, everifyPubKey: null, flowError: null,
+  // An eGovPH exchange code lifted off the landing URL, held until the citizen taps sign-in.
+  // In memory on purpose: see the mount effect for why it must never reach storage.
+  pendingExchangeCode: null,
   // Names the dict entry behind flowError when there is one, so the message can be re-read in the
   // other language after the fact. null means flowError is already the only wording we have.
   flowErrorKey: null,
@@ -243,13 +246,14 @@ export default function App() {
         const current = new URL(window.location.href);
         const exchangeCode = current.searchParams.get('exchange_code') || current.searchParams.get('exchangeCode');
         if (exchangeCode) {
+          // Park the code and wait for a tap. eGovPH codes are single-use, and merely fetching
+          // this URL used to spend one — link-preview crawlers and the mail security scanners
+          // that prefetch every link in an incoming email (Defender Safe Links, Proofpoint) would
+          // burn the code before the citizen ever opened it, and they'd be told it expired.
+          // A fetch must not be able to spend the code; only a click can. Memory only, never
+          // storage: persisting it just moves the spent-code-on-reload problem somewhere else.
           cleanUrl();
-          set({ signingIn: true, signinErr: false, flowError: null, flowErrorKey: null });
-          const result = await api.login(exchangeCode);
-          if (!result?.token) throw new Error('eGovPH returned no session token');
-          setToken(result.token);
-          await syncPatientState();
-          set({ signingIn: false, screen: 'home', stack: [] });
+          set({ pendingExchangeCode: exchangeCode, signingIn: false, signinErr: false, flowError: null, flowErrorKey: null, screen: 'signin', stack: [] });
           return;
         }
 
@@ -354,8 +358,35 @@ export default function App() {
 
     // Mock mode exchanges this device's own demo code, so two people demoing at once get two
     // patients instead of fighting over one. Live mode starts the partner-provided eGovPH launch URL;
-    // eGovPH returns to /egovph/sso?exchange_code=... and the mount effect above completes login.
+    // eGovPH returns to /egovph/sso?exchange_code=... and the mount effect above parks that code
+    // for this button to spend.
     doSignIn: async () => {
+      // A code already in hand outranks the launch redirect: sending the citizen back to eGovPH
+      // for a second code would strand the one they arrived with.
+      if (S.pendingExchangeCode) {
+        set({ signingIn: true, signinErr: false, flowError: null, flowErrorKey: null });
+        try {
+          const res = await api.login(S.pendingExchangeCode);
+          if (!res?.token) throw new Error('eGovPH returned no session token');
+          setToken(res.token);
+          const me = res.patient || await tryApi(api.me());
+          if (me) onPatientUpdated(me);
+          set({ pendingExchangeCode: null, signingIn: false, screen: 'home', stack: [], flowError: null });
+        } catch (err) {
+          const flowErrorKey = err?.data?.error?.code === 'egov_exchange_code_invalid' ? 'ssoCodeExpired' : null;
+          set((p) => ({
+            // Only a code eGovPH itself rejected gets dropped, so the button falls back to its
+            // normal job instead of re-spending something already dead. A network blip keeps it.
+            pendingExchangeCode: flowErrorKey ? null : p.pendingExchangeCode,
+            signingIn: false,
+            signinErr: true,
+            flowErrorKey,
+            flowError: (flowErrorKey && DICT[p.lang]?.[flowErrorKey]) || err.message || 'The eGovPH sign-in failed',
+          }));
+        }
+        return;
+      }
+
       if (S.authMode === 'live') {
         if (S.authLaunchUrl && /^https:\/\//i.test(S.authLaunchUrl)) {
           window.location.assign(S.authLaunchUrl);
