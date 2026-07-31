@@ -716,7 +716,11 @@ export default function App() {
     toggleEmergency: () => set((p) => ({ emergency: !p.emergency })),
     triggerTimeout: () => set({ showDemo: false, showTimeout: true }),
     stayIn: () => set({ showTimeout: false }),
-    logout: () => { clearTimers(); setToken(null); try { window.localStorage.removeItem('egovmed.splashSeen'); } catch { /* storage blocked */ } window.sessionStorage.removeItem('egovmed.livenessSessionId'); window.sessionStorage.removeItem('egovmed.pendingBillId'); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
+    // Clearing the flag alone was not enough: splashDone is seeded once at mount, so wiping
+    // localStorage without also resetting the state meant the splash only came back after a full
+    // page reload. Both, so logging out replays it immediately — the only way to show the welcome
+    // to someone a second time.
+    logout: () => { clearTimers(); setToken(null); try { window.localStorage.removeItem('egovmed.splashSeen'); } catch { /* storage blocked */ } window.sessionStorage.removeItem('egovmed.livenessSessionId'); window.sessionStorage.removeItem('egovmed.pendingBillId'); setSplashDone(false); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
     openTokens: () => { set({ showDemo: false }); A.go('tokens'); },
     resetFlow: () => { clearTimers(); setS((p) => ({ ...initial(), lang: p.lang, textScale: p.textScale })); },
   };
