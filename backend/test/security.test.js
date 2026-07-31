@@ -1003,6 +1003,66 @@ test('security regression suite', async (t) => {
     assert.equal(bill.value.checkoutUrl, null, 'a ₱0 bill must not carry a dead mock-checkout link');
   });
 
+  await t.test('a second demo sign-in must not delete a bill that is still at the eGovPay checkout', async () => {
+    // The bug behind "Bill not found" after a completed checkout. Mock SSO hands every visitor of
+    // the deployed demo the SAME patient, and the fresh-demo reset deleted that patient's payments
+    // outright on every login. eGovPay's hosted checkout is a full page navigation away from the
+    // app, so a bill created seconds earlier was gone the moment anyone else signed in — and the
+    // returning browser, holding only that bill id, got a 404 from GET /payments/:id/status.
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const bill = await json(await request('/payments', { token: owner, method: 'POST', body: { billAmount: 750 } }));
+    assert.equal(bill.response.status, 201);
+    // Mock eGovPay settles instantly; live mode leaves the bill 'pending' until the citizen
+    // finishes at the gateway, and that window is what this test is about.
+    await store.update(COLLECTIONS.PAYMENTS, bill.value.id, { status: 'pending' });
+
+    const second = await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo' } });
+    assert.equal(second.status, 200);
+
+    const resumed = await json(await request(`/payments/${bill.value.id}/status`, { token: owner }));
+    assert.equal(resumed.response.status, 200, 'an in-flight bill must survive the shared-demo reset');
+    assert.equal(resumed.value.id, bill.value.id);
+
+    // Settled bills are still cleared, so a new visitor doesn't inherit the last one's history.
+    const done = await json(await request('/payments', { token: owner, method: 'POST', body: { billAmount: 500 } }));
+    assert.equal(done.value.status, 'paid');
+    assert.equal((await request('/auth/egov/exchange', { method: 'POST', body: { exchangeCode: 'demo' } })).status, 200);
+    assert.equal((await request(`/payments/${done.value.id}/status`, { token: owner })).status, 404);
+  });
+
+  await t.test('the bill row is written before the gateway call, so a failed checkout leaves a record not a phantom id', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const egovPay = require('../src/integrations/egovPay');
+    const original = egovPay.createCheckout;
+    egovPay.createCheckout = async () => { throw new Error('gateway unreachable'); };
+    try {
+      assert.equal((await request('/payments', { token: owner, method: 'POST', body: { billAmount: 750 } })).status, 500);
+    } finally {
+      egovPay.createCheckout = original;
+    }
+    const rows = await store.findAll(COLLECTIONS.PAYMENTS, (p) => p.patientId === ownerId);
+    assert.equal(rows.length, 1, 'the attempt must be recorded, not dropped');
+    assert.equal(rows[0].status, 'failed');
+    // No gateway reference exists to poll — the status endpoint must report the local state
+    // rather than asking eGovPay about `null`.
+    const status = await json(await request(`/payments/${rows[0].id}/status`, { token: owner }));
+    assert.equal(status.response.status, 200);
+    assert.equal(status.value.status, 'failed');
+  });
+
+  await t.test('the mock checkout link lands on a route the app serves, not the /mock-checkout/ dead end', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const bill = await json(await request('/payments', { token: owner, method: 'POST', body: { billAmount: 750 } }));
+    assert.equal(bill.value.provider, 'mock');
+    const url = new URL(bill.value.checkoutUrl);
+    assert.equal(url.pathname, '/payment/return');
+    assert.equal(url.searchParams.get('bill'), bill.value.id, 'the return link must carry the bill id, not just eGovPay\'s reference');
+    assert.notEqual(url.searchParams.get('ref'), bill.value.id, 'the gateway reference is not the bill id');
+  });
+
   await t.test('POST /appointments rejects a cross-tenant triageId (no misattribution)', async () => {
     const ownerId = await resetWithPatients();
     const owner = sign({ sub: ownerId });

@@ -243,14 +243,32 @@ export default function App() {
         }
 
         if (current.pathname.endsWith('/payment/return')) {
-          cleanUrl();
-          const billId = window.sessionStorage.getItem('egovmed.pendingBillId');
+          // The bill id can arrive two ways: on the URL, which is what the mock gateway sends and
+          // what survives a return that lands outside the original tab; or in sessionStorage,
+          // where doPay() parks it before handing the tab to the hosted checkout. Read the URL
+          // before cleanUrl() wipes it, and only trust an id shaped like one of ours.
+          const fromUrl = current.searchParams.get('bill');
+          const billId = (/^bill_[A-Za-z0-9_-]{1,100}$/.test(fromUrl || '') ? fromUrl : null)
+            || window.sessionStorage.getItem('egovmed.pendingBillId');
           const pendingApptId = window.sessionStorage.getItem('egovmed.pendingApptId');
+          cleanUrl();
           if (!getToken() || !billId) throw new Error('The payment session could not be resumed');
           set({ screen: 'payment', stack: ['home'], paying: true, channel: 0, payingApptId: pendingApptId || null, flowError: null });
-          const payment = await finishPayment(billId);
-          window.sessionStorage.removeItem('egovmed.pendingBillId');
-          window.sessionStorage.removeItem('egovmed.pendingApptId');
+          let payment;
+          try {
+            payment = await finishPayment(billId);
+          } catch (err) {
+            // The backend's "Bill not found" says nothing a citizen can act on. Translate it, and
+            // let the finally below drop the id so a dead bill isn't retried on every return.
+            throw err?.status === 404
+              ? new Error('We could not find that bill any more. Nothing was charged twice — open Payments to check before paying again.')
+              : err;
+          } finally {
+            // Fail closed: whatever happened, this id has had its one chance. Keeping it would
+            // leave the app pointing at a bill it can no longer resolve for the rest of the session.
+            window.sessionStorage.removeItem('egovmed.pendingBillId');
+            window.sessionStorage.removeItem('egovmed.pendingApptId');
+          }
           const status = String(payment?.status || '').toLowerCase();
           const paid = ['paid', 'settled', 'success', 'successful', 'completed'].includes(status);
           set({ paying: false, paid, paymentStatus: status, flowError: paid ? null : `Payment status: ${status || 'pending'}` });
@@ -548,6 +566,9 @@ export default function App() {
         if (payment?.provider !== 'mock' && payment?.checkoutUrl) {
           const checkout = new URL(payment.checkoutUrl);
           if (checkout.protocol !== 'https:') throw new Error('Payment provider returned an insecure checkout URL');
+          // Fail closed: the bill id is the only thing that survives the trip to the gateway, so
+          // never leave for a hosted checkout we'd have no way to resume from.
+          if (!payment.id) throw new Error('Payment provider returned no bill reference');
           window.sessionStorage.setItem('egovmed.pendingBillId', payment.id);
           if (S.payingApptId) window.sessionStorage.setItem('egovmed.pendingApptId', S.payingApptId);
           window.location.assign(checkout.href);

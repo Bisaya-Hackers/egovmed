@@ -74,10 +74,13 @@ async function createBill({ patientId, billAmount, description = 'Hospital servi
   }
 
   const { applied, coveredTotal, balance } = computeBenefits(billAmount, patient.benefits);
-  const checkout = balance > 0
-    ? await egovPay.createCheckout({ amount: balance, description, channel })
-    : localCoveredCheckout();
 
+  // The row goes in BEFORE the gateway call, not after. The bill id we hand back is the only
+  // handle the citizen keeps while eGovPay's hosted checkout owns the tab, so creating the row
+  // last means anything that kills this request between the upstream call and the write (a
+  // gateway timeout, the 30s function ceiling) leaves them holding an id for a bill that was
+  // never stored — which surfaces on the way back as a bare "Bill not found". `reference` is
+  // filled in below because eGovPay mints it; it is NOT the bill id and is never used as one.
   const payment = {
     id: randomId('bill_'),
     patientId,
@@ -87,20 +90,44 @@ async function createBill({ patientId, billAmount, description = 'Hospital servi
     coveredTotal,
     balance,
     channel,
+    reference: null,
+    checkoutUrl: null,
+    status: 'creating',
+    provider: null,
+    createdAt: new Date().toISOString(),
+  };
+  await store.create(COLLECTIONS.PAYMENTS, payment);
+
+  let checkout;
+  try {
+    checkout = balance > 0
+      ? await egovPay.createCheckout({ amount: balance, description, channel, billId: payment.id })
+      : localCoveredCheckout();
+  } catch (err) {
+    // The caller still gets the error (and never learns the bill id), but the attempt stays on
+    // record as a terminal failure instead of vanishing — otherwise a run of failed checkouts is
+    // indistinguishable from nobody having tried to pay at all.
+    await store.update(COLLECTIONS.PAYMENTS, payment.id, { status: 'failed', failureReason: err.message });
+    throw err;
+  }
+
+  return store.update(COLLECTIONS.PAYMENTS, payment.id, {
     reference: checkout.reference,
     checkoutUrl: checkout.checkoutUrl,
     status: checkout.status,
     provider: checkout.provider,
-    createdAt: new Date().toISOString(),
-  };
-  await store.create(COLLECTIONS.PAYMENTS, payment);
-  return payment;
+  });
 }
 
 async function refreshStatus(billId, patientId) {
   const store = getStore();
   const payment = await store.findById(COLLECTIONS.PAYMENTS, billId);
   if (!payment || payment.patientId !== patientId) throw notFound('Bill not found');
+  // Two kinds of bill have no eGovPay transaction to poll: one whose checkout never got off the
+  // ground (no reference at all), and a fully-covered one settled locally against a `cov_…`
+  // reference the gateway has never heard of. Both are already terminal here; asking live eGovPay
+  // about either turns a knowable local state into an opaque 502.
+  if (!payment.reference || payment.provider === 'covered') return payment;
   const status = await egovPay.getStatus(payment.reference);
   return store.update(COLLECTIONS.PAYMENTS, billId, { status: status.status, paidAt: status.paidAt });
 }
