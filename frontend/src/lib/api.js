@@ -64,7 +64,13 @@ async function req(path, { method = 'GET', body, timeoutMs } = {}) {
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
   if (!res.ok) {
-    const err = new Error((data && data.error && data.error.message) || `HTTP ${res.status}`);
+    // zod rejections all share the message "Validation failed" and put the useful part — which
+    // field and why — in details[]. Dropping it left the user staring at a generic string with no
+    // way to know what to change, so fold the field messages into the thrown Error.
+    const base = (data && data.error && data.error.message) || `HTTP ${res.status}`;
+    const details = data && data.error && Array.isArray(data.error.details) ? data.error.details : [];
+    const explained = details.map((d) => (d.path ? `${d.path}: ${d.message}` : d.message)).filter(Boolean);
+    const err = new Error(explained.length ? `${base} (${explained.join('; ')})` : base);
     err.status = res.status;
     err.data = data;
     throw err;
