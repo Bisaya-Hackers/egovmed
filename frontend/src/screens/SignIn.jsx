@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import PinInput from '../components/PinInput.jsx';
-import { Fingerprint, Phone } from '../components/Icons.jsx';
-import { CONST } from '../i18n/dict.js';
+import { Fingerprint } from '../components/Icons.jsx';
 import communityArt from '../assets/signin-filipino-community.png';
-import Wordmark from '../components/Wordmark.jsx';
 import ProfileSetup from '../components/ProfileSetup.jsx';
 
 export default function SignIn({ c, S, A }) {
@@ -18,10 +16,6 @@ export default function SignIn({ c, S, A }) {
 
   return (
     <div className="screen" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-      <div style={{ textAlign: 'center', marginTop: 6 }}>
-        <Wordmark height={30} className="signin-wordmark" />
-      </div>
-
       <h1 className="h1" style={{ marginTop: 20 }} data-stagger>{c.welcomeBack}</h1>
       <p className="sub" data-stagger>
         {live ? 'Continue securely through your eGovPH account.' : c.mpinPrompt}
@@ -71,11 +65,6 @@ export default function SignIn({ c, S, A }) {
         </p>
       )}
 
-      {!live && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, color: 'var(--muted)' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: '1px solid var(--line)', borderRadius: 999, padding: '7px 14px', fontSize: '0.9em', fontWeight: 600 }}>
-          <Phone size={16} /> {CONST.phone}
-        </span>
-      </div>}
       {/* "Not you?" is a question, so the answer has to be "then set who I am". It used to toast
           its own label; now it opens the two fields that actually decide whose profile this is.
           Mock mode only — a live eGovPH session brings its own PhilSys-backed identity. */}
