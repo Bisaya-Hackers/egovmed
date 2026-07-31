@@ -77,7 +77,7 @@ export const DICT = {
     fullNameLabel: 'Full name', fullNamePlaceholder: 'Juan Santos Dela Cruz',
     // Shown for a one-word entry too, which is why it asks for both parts rather than just
     // saying the field is required.
-    fullNameInvalid: 'Enter at least a first name and a last name.',
+    fullNameInvalid: 'Enter a first and last name using letters only.',
     birthDateLabel: 'Date of birth', birthDateInvalid: 'Use YYYY-MM-DD', phoneLabel: 'Phone', phonePlaceholder: '+63 917 000 0000',
     phoneInvalid: 'Enter a Philippine mobile like 09171234567 or +639171234567.',
     phoneMissingHint: 'Add your mobile number so we can text you booking confirmations and reminders.',
@@ -186,7 +186,7 @@ export const DICT = {
     benefitOn: 'Aktibo', benefitOff: 'Hindi aktibo', benefitAdd: 'Idagdag', benefitAdding: 'Idinaragdag…', benefitComingSoon: 'Malapit na', benefitAddCta: 'Magdagdag ng benepisyo', benefitsNone: 'Wala pang naidagdag na benepisyo.', benefitCatalogEmpty: 'Naidagdag mo na ang lahat ng available na benepisyo.', benefitCovered: 'Nasakop na', benefitRemove: 'Alisin', languageLabel: 'Wika', textSizeLabel: 'Laki ng teksto', notAvailable: 'Walang inilagay',
     contactEdit: 'I-edit', contactSave: 'I-save', contactSaving: 'Sine-save…', contactCancel: 'Kanselahin',
     fullNameLabel: 'Buong pangalan', fullNamePlaceholder: 'Juan Santos Dela Cruz',
-    fullNameInvalid: 'Maglagay ng pangalan at apelyido.',
+    fullNameInvalid: 'Maglagay ng pangalan at apelyido, mga letra lamang.',
     birthDateLabel: 'Petsa ng kapanganakan', birthDateInvalid: 'Gamitin ang YYYY-MM-DD', phoneLabel: 'Numero ng telepono', phonePlaceholder: '+63 917 000 0000',
     phoneInvalid: 'Maglagay ng PH mobile katulad ng 09171234567 o +639171234567.',
     phoneMissingHint: 'Ilagay ang iyong mobile number para makatanggap ng SMS confirmations at paalala.',
