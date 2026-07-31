@@ -35,7 +35,7 @@ export default function Home({ c, lang, S, A }) {
         <img src={rosaAvatar} alt="" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', flex: 'none' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={{ fontSize: '1.3em', fontWeight: 800, color: 'var(--primary)', lineHeight: 1.1, margin: 0 }}>{S.patientName ? `${c.greeting}, ${S.patientName}` : c.greeting}</h1>
-          <div className="sub" style={{ margin: '3px 0 0' }}>{maskPhone(S.patientPhone) || CONST.phone}</div>
+          <div className="sub" style={{ margin: '3px 0 0' }}>{maskPhone(S.patientPhone) || c.notAvailable}</div>
         </div>
         <img src={digitalIdArt} alt="Secure digital health identity" style={{ width: 92, height: 58, borderRadius: 14, objectFit: 'contain', flex: 'none' }} />
       </div>
