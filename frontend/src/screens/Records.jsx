@@ -20,7 +20,13 @@ const splitBullets = (text) => String(text || '')
   .map((l) => l.replace(/^\s*[-*•·]\s*/, '').trim())
   .filter(Boolean);
 
-export default function Records({ c, lang, A }) {
+export default function Records({ c, lang, S, A }) {
+  // Every /records route is gated server-side on identityVerified, so an unverified patient gets
+  // "Identity must be verified before accessing records" from the list, the upload, and the
+  // summary alike. A patient created by real eGovPH SSO starts unverified, which is why this only
+  // ever showed up outside mock testing. null means /patients/me hasn't answered yet — only an
+  // explicit false locks the screen, so a backend outage still falls back to the demo records.
+  const locked = S.identityVerified === false;
   const [records, setRecords] = useState(() => demo(lang));
   const [openId, setOpenId] = useState(null); // record id whose detail sheet is open
   const [summary, setSummary] = useState(null); // { summary: string, verifiedLabs: [], recordCount, triageCount }
@@ -46,6 +52,8 @@ export default function Records({ c, lang, A }) {
 
   // Upgrade to live eGovChain-anchored records + fetch the AI doctor summary in parallel.
   useEffect(() => {
+    // Both calls are behind the verification gate, so while locked they can only 400.
+    if (locked) { setSummaryLoading(false); return undefined; }
     let alive = true;
     (async () => {
       try {
@@ -68,23 +76,36 @@ export default function Records({ c, lang, A }) {
       if (alive) setSummaryLoading(false);
     })();
     return () => { alive = false; };
-  }, [lang]);
+  }, [lang, locked]);
 
   return (
     <div className="screen">
       <ScreenHeader onBack={A.back} label={c.recordsTitle} />
       <h1 className="h1" data-stagger>{c.recordsTitle}</h1>
       <p className="sub" data-stagger>{c.recordsSub}</p>
-      <button
-        data-stagger
-        onClick={() => setUploading(true)}
-        className="card"
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, border: '1.5px dashed var(--border)', background: 'transparent', color: 'var(--primary)', fontWeight: 700, width: '100%' }}
-      >
-        <FileUp size={18} /> {c.uploadRecord}
-      </button>
+      {locked ? (
+        <div data-stagger className="card" style={{ marginTop: 16, textAlign: 'center' }}>
+          <span className="icirc" style={{ width: 44, height: 44, background: 'var(--blue-50)', margin: '2px auto 12px' }}>
+            <ShieldTick size={22} color="var(--primary)" />
+          </span>
+          <h2 className="h2" style={{ margin: 0 }}>{c.recordsLockedTitle}</h2>
+          <p className="sub" style={{ marginTop: 8 }}>{c.recordsLockedBody}</p>
+          <div style={{ marginTop: 16 }}>
+            <Btn onClick={A.startVerificationFromRecords}>{c.recordsLockedAction}</Btn>
+          </div>
+        </div>
+      ) : (
+        <button
+          data-stagger
+          onClick={() => setUploading(true)}
+          className="card"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, border: '1.5px dashed var(--border)', background: 'transparent', color: 'var(--primary)', fontWeight: 700, width: '100%' }}
+        >
+          <FileUp size={18} /> {c.uploadRecord}
+        </button>
+      )}
 
-      {(summary || summaryLoading) && (
+      {!locked && (summary || summaryLoading) && (
         <div data-stagger className="card tint" style={{ marginTop: 16 }}>
           <button
             onClick={() => setSummaryOpen((v) => !v)}
@@ -115,7 +136,7 @@ export default function Records({ c, lang, A }) {
       )}
 
       <div className="stack" style={{ marginTop: 18 }}>
-        {records.map((r) => (
+        {!locked && records.map((r) => (
           <button
             key={r.id}
             data-stagger
@@ -145,6 +166,8 @@ export default function Records({ c, lang, A }) {
         <UploadSheet
           lang={lang}
           c={c}
+          locked={locked}
+          onVerify={() => { setUploading(false); A.startVerificationFromRecords(); }}
           onClose={() => setUploading(false)}
           onSaved={(saved) => { addUploadedRecord(saved); setUploading(false); }}
         />
@@ -160,7 +183,7 @@ const RECORD_TYPES = [
   ['other', (c) => c.recordTypeOther],
 ];
 
-function UploadSheet({ lang, c, onClose, onSaved }) {
+function UploadSheet({ lang, c, locked, onVerify, onClose, onSaved }) {
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState('');
   const [type, setType] = useState('lab');
@@ -175,6 +198,10 @@ function UploadSheet({ lang, c, onClose, onSaved }) {
   }, [onClose]);
 
   const submit = async () => {
+    // POST /records is behind the same verification gate as the list. The sheet is unreachable
+    // while locked, but the flag can flip under an already-open sheet, and a filled-in form
+    // rejected with a backend string is a worse answer than the flow that fixes it.
+    if (locked) { onVerify(); return; }
     if (!file) { setError(c.uploadRecordNeedFile); return; }
     if (title.trim().length < 2) { setError(c.uploadRecordTitleTooShort); return; }
     if (source.trim() && source.trim().length < 2) { setError(c.uploadRecordSourceTooShort); return; }
@@ -264,7 +291,9 @@ function UploadSheet({ lang, c, onClose, onSaved }) {
 
         <div className="stack" style={{ marginTop: 18 }}>
           <Btn onClick={submit} disabled={saving}>
-            {saving ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}><span className="spinner white" /> {c.uploadRecordSaving}</span> : c.uploadRecordSave}
+            {locked ? c.recordsLockedAction
+              : saving ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}><span className="spinner white" /> {c.uploadRecordSaving}</span>
+                : c.uploadRecordSave}
           </Btn>
           <Btn variant="secondary" onClick={onClose}>{c.uploadRecordCancel}</Btn>
         </div>

@@ -98,7 +98,7 @@ export default function Liveness({ c, S, A }) {
       <div className="spacer" style={{ minHeight: 20 }} />
       {verified && (
         <div style={{ width: '100%' }}>
-          <Btn onClick={A.goBook}>{c.continue}</Btn>
+          <Btn onClick={A.continueAfterVerify}>{S.verifyReturnTo === 'records' ? c.recordsLockedBackToRecords : c.continue}</Btn>
         </div>
       )}
     </div>
