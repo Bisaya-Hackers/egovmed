@@ -51,8 +51,15 @@ const looksLikeEmail = (raw) => /^\S+@\S+\.\S+$/.test(String(raw || '').trim());
 // bug existed — omitting the key would leave a stale value behind.
 // One token returns null (rejected client-side): the backend requires a non-empty lastName, and
 // guessing which half of a single word is the surname would be worse than asking.
+// Letters only, plus the separators real names actually use: spaces, hyphens (Anne-Marie),
+// apostrophes (O'Brien) and periods (Jr.). \p{L} rather than A-Z so ñ and accented characters
+// pass — rejecting those would lock out a large share of Filipino names.
+const NAME_CHARS = /^[\p{L}\s'.-]+$/u;
+
 function splitFullName(raw) {
-  const parts = String(raw || '').trim().split(/\s+/).filter(Boolean);
+  const trimmed = String(raw || '').trim();
+  if (!NAME_CHARS.test(trimmed)) return null; // digits and symbols are never part of a name
+  const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length < 2) return null;
   return {
     firstName: parts[0],
