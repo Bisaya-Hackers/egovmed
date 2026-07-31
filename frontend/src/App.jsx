@@ -446,6 +446,9 @@ export default function App() {
         set({ liveness: 'failed', flowError: err.message || 'Identity verification failed' });
       }
     },
+    // Account edits patient fields through its own local state, so without this the header
+    // greeting and phone kept showing the pre-edit values until a full reload.
+    onPatientUpdated: (p) => set({ patientName: p?.firstName || null, patientPhone: p?.phone || null }),
     retryLiveness: () => A.acceptConsent(),
 
     // Booking + eMessage
