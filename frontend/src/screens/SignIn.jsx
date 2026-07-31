@@ -4,11 +4,13 @@ import { Fingerprint, Phone } from '../components/Icons.jsx';
 import { CONST } from '../i18n/dict.js';
 import communityArt from '../assets/signin-filipino-community.png';
 import Wordmark from '../components/Wordmark.jsx';
+import ProfileSetup from '../components/ProfileSetup.jsx';
 
 export default function SignIn({ c, S, A }) {
   const live = S.authMode === 'live';
   const loading = S.authMode === 'loading';
   const [mpin, setMpin] = useState(['', '', '', '', '', '']);
+  const [editingProfile, setEditingProfile] = useState(false);
   const onChange = (arr) => {
     setMpin(arr);
     if (arr.every((d) => d)) setTimeout(() => A.doSignIn(), 260);
@@ -74,9 +76,20 @@ export default function SignIn({ c, S, A }) {
           <Phone size={16} /> {CONST.phone}
         </span>
       </div>}
-      {!live && <button className="btn ghost" style={{ marginTop: 10 }} onClick={() => A.toast(c.switchAccount)}>
-        {c.notYou} {c.switchAccount}
-      </button>}
+      {/* "Not you?" is a question, so the answer has to be "then set who I am". It used to toast
+          its own label; now it opens the two fields that actually decide whose profile this is.
+          Mock mode only — a live eGovPH session brings its own PhilSys-backed identity. */}
+      {!live && (editingProfile ? (
+        <ProfileSetup
+          c={c}
+          onCancel={() => setEditingProfile(false)}
+          onSaved={(patient) => { setEditingProfile(false); A.onPatientUpdated(patient); A.toast(c.contactSaved); }}
+        />
+      ) : (
+        <button className="btn ghost" style={{ marginTop: 10 }} onClick={() => setEditingProfile(true)}>
+          {c.notYou} {c.switchAccount}
+        </button>
+      ))}
 
       <div className="spacer" style={{ minHeight: 16 }} />
       <img

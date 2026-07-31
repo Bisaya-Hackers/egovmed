@@ -27,6 +27,7 @@ import Tokens from './screens/Tokens.jsx';
 import BottomNav from './components/BottomNav.jsx';
 import Wordmark from './components/Wordmark.jsx';
 import { DemoSheet, TimeoutModal, Toast, HospitalSheet } from './components/Overlays.jsx';
+import Splash, { shouldShowSplash } from './screens/Splash.jsx';
 
 const FONT = { 0: 17, 1: 19, 2: 21 };
 const initial = () => ({
@@ -66,6 +67,9 @@ const NAV_SCREENS = new Set(['home', 'records', 'messages', 'account', 'notifica
 
 export default function App() {
   const [S, setS] = useState(initial);
+  // First-run splash. Held outside `initial()` so the demo Reset/Log out controls don't replay it,
+  // and outside `screen` so it can't race the resume effect's own navigation.
+  const [splashDone, setSplashDone] = useState(() => !shouldShowSplash());
   const timers = useRef([]);
   const recTimer = useRef(null);
   const recognizer = useRef(null); // Web Speech API instance
@@ -738,6 +742,7 @@ export default function App() {
       {showNav && <BottomNav c={c} S={S} A={A} />}
 
       {/* overlays */}
+      {!splashDone && <Splash c={c} onDone={() => setSplashDone(true)} />}
       {S.toast && <Toast msg={S.toast} icon={<Check size={16} />} />}
       {S.showTimeout && <TimeoutModal c={c} A={A} />}
       {S.showDemo && <DemoSheet c={c} S={S} A={A} />}
