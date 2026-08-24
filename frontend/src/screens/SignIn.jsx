@@ -33,6 +33,21 @@ export default function SignIn({ c, S, A }) {
       partnerCode: S.ssoPartnerCode,
       host: S.ssoHost,
       partnerName: 'eGovMed',
+      // The widget's default theme is 'auto', which follows the OS. eGovMed has no dark mode, so
+      // on a dark-mode phone that painted a black eGovPH button into a white app. Pin it to the
+      // only theme the app actually has.
+      theme: 'light',
+      // The widget hard-resets its own subtree with !important under an `egov-armor` cascade layer,
+      // so its trigger cannot be restyled from here by design. `size` is the one lever it does
+      // offer, and 'lg' is the closest it gets to the 58px full-width buttons around it.
+      size: 'lg',
+      // The widget speaks en/fil, and the app already has an EN/TL toggle — hand it the same
+      // choice so a Tagalog session doesn't hit an English OTP screen halfway through signing in.
+      locale: S.lang === 'tl' ? 'fil' : 'en',
+      // Puts eGovPH's sandbox accounts in the widget itself. There is no real PhilSys account to
+      // sign in with on this deployment, so without this a tester is staring at a mobile-number
+      // field with nothing valid to type into it.
+      showTestAccounts: true,
       // Redeem immediately. Unlike a code lifted off the landing URL, this one was minted by a
       // deliberate act the citizen just performed, so there is no prefetch to guard against and
       // making them tap a second button only gives the short-lived code time to expire.
@@ -49,7 +64,7 @@ export default function SignIn({ c, S, A }) {
     });
 
     return () => { cancelled = true; if (cleanup) cleanup(); };
-  }, [showWidget, S.ssoPartnerCode, S.ssoHost, widgetAttempt, A]);
+  }, [showWidget, S.ssoPartnerCode, S.ssoHost, S.lang, widgetAttempt, A]);
   const onChange = (arr) => {
     setMpin(arr);
     if (arr.every((d) => d)) setTimeout(() => A.doSignIn(), 260);
@@ -90,29 +105,26 @@ export default function SignIn({ c, S, A }) {
         </p>
       )}
 
-      <button
-        data-stagger
-        onClick={A.doSignIn}
-        disabled={loading || S.signingIn}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', minHeight: 56, border: '1.5px solid var(--line)', background: 'var(--canvas)', color: 'var(--ink)', borderRadius: 16, fontWeight: 700 }}
-      >
-        {loading || S.signingIn ? <span className="spinner" /> : <Fingerprint size={22} color="var(--primary)" />}
-        <span>{loading ? 'Checking eGovPH…' : (live || codeReady) ? 'Continue with eGovPH' : c.fingerprint}</span>
-      </button>
-
-      {S.flowError && (
-        <div role="alert" className="card" style={{ marginTop: 14, color: 'var(--red)', fontWeight: 650, fontSize: '0.9em' }}>
-          {/* Backend messages arrive in English only, so the ones we have our own wording for
-              re-resolve here and follow the EN/TL toggle. The rest show exactly what the server said. */}
-          {(S.flowErrorKey && c[S.flowErrorKey]) || S.flowError}
-        </div>
+      {/* Hidden while the widget is up. With a partner code and no launch URL this button has
+          nothing left to do — doSignIn's live branch returns immediately — so leaving it there
+          offered two ways in, one of which silently did nothing. The widget IS the button now. */}
+      {!showWidget && (
+        <button
+          data-stagger
+          onClick={A.doSignIn}
+          disabled={loading || S.signingIn}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', minHeight: 56, border: '1.5px solid var(--line)', background: 'var(--canvas)', color: 'var(--ink)', borderRadius: 16, fontWeight: 700 }}
+        >
+          {loading || S.signingIn ? <span className="spinner" /> : <Fingerprint size={22} color="var(--primary)" />}
+          <span>{loading ? 'Checking eGovPH…' : (live || codeReady) ? 'Continue with eGovPH' : c.fingerprint}</span>
+        </button>
       )}
 
+      {/* The widget replaces that button, so it takes its spot above the error slot rather than
+          appearing under it. */}
       {showWidget && (
-        <div data-stagger style={{ marginTop: 4 }}>
-          {/* eGovPH's own OTP + PIN screens render in here. Nothing about this container is ours
-              beyond its size, so it carries no styling that the widget would have to fight. */}
-          <div ref={widgetRef} />
+        <div data-stagger>
+          <div className="egov-login-slot" ref={widgetRef} />
           {widgetError && (
             <div role="alert" className="card" style={{ marginTop: 12, color: 'var(--red)', fontWeight: 650, fontSize: '0.9em' }}>
               <div>{widgetError}</div>
@@ -125,6 +137,14 @@ export default function SignIn({ c, S, A }) {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {S.flowError && (
+        <div role="alert" className="card" style={{ marginTop: 14, color: 'var(--red)', fontWeight: 650, fontSize: '0.9em' }}>
+          {/* Backend messages arrive in English only, so the ones we have our own wording for
+              re-resolve here and follow the EN/TL toggle. The rest show exactly what the server said. */}
+          {(S.flowErrorKey && c[S.flowErrorKey]) || S.flowError}
         </div>
       )}
 

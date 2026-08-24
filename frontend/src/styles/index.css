@@ -229,3 +229,16 @@ input, textarea { font-family: inherit; }
 @keyframes pulsering { 0% { box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.45); } 70% { box-shadow: 0 0 0 16px rgba(229, 72, 77, 0); } 100% { box-shadow: 0 0 0 0 rgba(229, 72, 77, 0); } }
 .pulse-red { animation: pulsering 1.5s infinite; }
 @keyframes scanline { 0% { top: 8%; } 100% { top: 92%; } }
+
+/* ── "Login as eGov" widget ──────────────────────────────────
+   The widget hard-resets its own subtree under an "@layer egov-armor" with !important on every
+   declaration, and a layered !important outranks an unlayered one — so its trigger genuinely
+   cannot be restyled from here. That is deliberate on eGovPH's part: the button is their mark and
+   partners are not meant to repaint it.
+
+   So don't fight it. Centre it and let the widget own everything inside its own box. The "size"
+   option on the render call is the one dimension lever it does expose. */
+.egov-login-slot {
+  display: flex;
+  justify-content: center;
+}

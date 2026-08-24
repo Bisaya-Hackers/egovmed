@@ -44,7 +44,11 @@ function loadScript() {
  * writes directly into the DOM node it is given, so without this the second mount stacks a second
  * set of OTP fields on top of the first.
  */
-export async function mountEgovLogin({ target, partnerCode, host, partnerName, onSuccess, onError, onCancel }) {
+export async function mountEgovLogin({
+  target, partnerCode, host, partnerName,
+  theme, size, locale, showTestAccounts,
+  onSuccess, onError, onCancel,
+}) {
   if (!partnerCode) throw new Error('eGovPH partner code is not configured');
   if (!host) throw new Error('eGovPH gateway host is not configured');
   await loadScript();
@@ -54,6 +58,13 @@ export async function mountEgovLogin({ target, partnerCode, host, partnerName, o
     partnerCode,
     host,
     partnerName,
+    // Every one of these has a widget-side default, so they are forwarded only when set. They also
+    // have to be named explicitly: the widget reads its options off a plain object, so anything not
+    // listed in this signature is dropped on the floor without a warning.
+    theme,
+    size,
+    locale,
+    showTestAccounts,
     // The widget hands back { exchangeCode }. It is single-use and short-lived, so the caller
     // redeems it immediately rather than parking it the way an arrived-by-link code is parked.
     onSuccess: (payload) => onSuccess?.(payload?.exchangeCode || payload?.exchange_code || null),

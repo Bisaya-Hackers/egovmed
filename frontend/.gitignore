@@ -1,5 +1,4 @@
 .vercel
-.env*
-
-.vercel
-.env*
+.env
+.env.*
+!.env.example
