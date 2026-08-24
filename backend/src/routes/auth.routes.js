@@ -13,12 +13,21 @@ const router = Router();
 // which stays server-side. Serving it here rather than baking it into the frontend bundle keeps one
 // source of truth (backend EVERIFY_PUBKEY) and lets the key rotate without a frontend rebuild.
 router.get('/config', (_req, res) => {
+  const live = env.egovph.mode === 'live';
   res.json({
-    mode: env.egovph.mode === 'live' ? 'live' : 'mock',
+    mode: live ? 'live' : 'mock',
     callbackUrl: publicUrl(env.appUrl, '/egovph/sso'),
     launchUrl: env.egovph.launchUrl || null,
     everifyPubKey: env.everify.pubKey || null,
     verificationMethod: env.verification.method,
+    // "Login as eGov" widget config. Per the eGov SSO integration guide, partner_code is the ONLY
+    // credential the browser ever sees — the widget posts it to {host}/api/otp_generate,
+    // /otp_validate and /authenticate, all of which are free and take no secret. partner_secret
+    // stays here and is spent only by POST /auth/egov/exchange below.
+    // Served rather than baked into the bundle so rotating the credential needs no frontend build,
+    // and so the widget can never be rendered against a partner code the backend isn't using.
+    ssoPartnerCode: live ? (env.egovph.partnerCode || null) : null,
+    ssoHost: live ? env.egovph.baseUrl : null,
   });
 });
 

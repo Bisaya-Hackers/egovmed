@@ -70,7 +70,7 @@ const env = {
   egovph: {
     mode: modeFor('EGOVPH'),
     // SSO host (per apidocumentation/eGovPH-SSO-API.md). Token endpoint: {baseUrl}/api/token
-    baseUrl: process.env.EGOVPH_BASE_URL || 'https://hackathon-sso.e.gov.ph',
+    baseUrl: process.env.EGOVPH_BASE_URL || 'https://platforms-api.e.gov.ph/egov-sso',
     partnerCode: process.env.EGOVPH_PARTNER_CODE || process.env.EGOVPH_CLIENT_ID || '',
     partnerSecret: process.env.EGOVPH_PARTNER_SECRET || process.env.EGOVPH_CLIENT_SECRET || '',
     scope: process.env.EGOVPH_SCOPE || 'SSO_AUTHENTICATION',
@@ -79,14 +79,14 @@ const env = {
   egovAi: {
     mode: modeFor('EGOV_AI'),
     // per apidocumentation/eGov-AI-API.md: POST /api/v1/egov/integration/token (access_code) → Bearer, then /ai_assistant/generate
-    baseUrl: process.env.EGOV_AI_BASE_URL || '',
+    baseUrl: process.env.EGOV_AI_BASE_URL || 'https://platforms-api.e.gov.ph/egov-ai',
     accessCode: process.env.EGOV_AI_ACCESS_CODE || '',
     category: process.env.EGOV_AI_CATEGORY || 'PH',
   },
   everify: {
     mode: modeFor('EVERIFY'),
     // NIDAS eVerify (per apidocumentation/eVerify-NationalID-API.md): /api/auth → /api/query
-    baseUrl: process.env.EVERIFY_BASE_URL || 'https://hackathon-everify-api.e.gov.ph',
+    baseUrl: process.env.EVERIFY_BASE_URL || 'https://platforms-api.e.gov.ph/everify',
     clientId: process.env.EVERIFY_CLIENT_ID || '',
     clientSecret: process.env.EVERIFY_CLIENT_SECRET || '',
     pubKey: process.env.EVERIFY_PUBKEY || '', // eVerify liveness widget public key (client-side; optional)
@@ -113,7 +113,7 @@ const env = {
   eMessage: {
     mode: modeFor('EMESSAGE'),
     // per apidocumentation/eMessage-API.md: POST /messaging/v1/sms/push, X-EMESSAGE-Auth header
-    baseUrl: process.env.EMESSAGE_BASE_URL || 'https://ws-message.e.gov.ph',
+    baseUrl: process.env.EMESSAGE_BASE_URL || 'https://platforms-api.e.gov.ph/emessage',
     authToken: process.env.EMESSAGE_AUTH_TOKEN || process.env.EMESSAGE_API_KEY || '',
     senderId: process.env.EMESSAGE_SENDER_ID || 'eGovMed',
   },

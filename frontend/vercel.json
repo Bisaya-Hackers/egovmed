@@ -10,7 +10,7 @@
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://hackathon-everify-face-liveness.e.gov.ph; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://egovmed-backend.vercel.app https://egovmed-backend-git-staging-starrayxs-projects.vercel.app https://hackathon-everify-face-liveness.e.gov.ph; img-src 'self' data: blob:; media-src 'self' blob:; frame-src https://liveness.everify.gov.ph; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://widgets.e.gov.ph https://hackathon-everify-face-liveness.e.gov.ph; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://egovmed-api.vercel.app https://platforms-api.e.gov.ph https://widgets.e.gov.ph https://hackathon-everify-face-liveness.e.gov.ph; img-src 'self' data: blob: https://egov-cdn.e.gov.ph; media-src 'self' blob:; frame-src https://liveness.everify.gov.ph https://widgets.e.gov.ph; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" },
         { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" },
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "X-Content-Type-Options", "value": "nosniff" },

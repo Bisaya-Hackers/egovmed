@@ -34,6 +34,9 @@ const initial = () => ({
   lang: 'en', screen: 'signin', stack: [], textScale: 0,
   signingIn: false, signinErr: false,
   authMode: 'loading', authLaunchUrl: null, authCallbackUrl: null, everifyPubKey: null, flowError: null,
+  // "Login as eGov" widget config, served by GET /auth/config. partnerCode is the only credential
+  // the browser is allowed to hold; both are null unless the backend is in live SSO mode.
+  ssoPartnerCode: null, ssoHost: null,
   // An eGovPH exchange code lifted off the landing URL, held until the citizen taps sign-in.
   // In memory on purpose: see the mount effect for why it must never reach storage.
   pendingExchangeCode: null,
@@ -241,6 +244,8 @@ export default function App() {
           // as EVERIFY_PUBKEY there is the single source of truth (see acceptConsent below).
           everifyPubKey: auth?.everifyPubKey || null,
           verificationMethod: auth?.verificationMethod || 'face-liveness',
+          ssoPartnerCode: auth?.ssoPartnerCode || null,
+          ssoHost: auth?.ssoHost || null,
         });
 
         const current = new URL(window.location.href);
@@ -345,6 +350,37 @@ export default function App() {
     })();
   }, [set, onPatientUpdated]);
 
+  // Spends an eGovPH exchange code for an eGovMed session. Shared by the two ways a code can
+  // arrive: parked off the landing URL by the mount effect (in-app launch), and handed over by the
+  // "Login as eGov" widget (browser sign-in). Both are single-use and short-lived, so the only
+  // difference between them is who supplies the string.
+  const redeemExchangeCode = useCallback(async (code) => {
+    if (!code) {
+      set({ signinErr: true, flowError: 'eGovPH did not return a sign-in code' });
+      return;
+    }
+    set({ signingIn: true, signinErr: false, flowError: null, flowErrorKey: null });
+    try {
+      const res = await api.login(code);
+      if (!res?.token) throw new Error('eGovPH returned no session token');
+      setToken(res.token);
+      const me = res.patient || await tryApi(api.me());
+      if (me) onPatientUpdated(me);
+      set({ pendingExchangeCode: null, signingIn: false, screen: 'home', stack: [], flowError: null });
+    } catch (err) {
+      const flowErrorKey = err?.data?.error?.code === 'egov_exchange_code_invalid' ? 'ssoCodeExpired' : null;
+      set((p) => ({
+        // Only a code eGovPH itself rejected gets dropped, so the button falls back to its
+        // normal job instead of re-spending something already dead. A network blip keeps it.
+        pendingExchangeCode: flowErrorKey ? null : p.pendingExchangeCode,
+        signingIn: false,
+        signinErr: true,
+        flowErrorKey,
+        flowError: (flowErrorKey && DICT[p.lang]?.[flowErrorKey]) || err.message || 'The eGovPH sign-in failed',
+      }));
+    }
+  }, [set, onPatientUpdated]);
+
   const A = {
     setLang: (l) => set({ lang: l }),
     cycleText: () => set((p) => ({ textScale: (p.textScale + 1) % 3 })),
@@ -364,34 +400,18 @@ export default function App() {
       // A code already in hand outranks the launch redirect: sending the citizen back to eGovPH
       // for a second code would strand the one they arrived with.
       if (S.pendingExchangeCode) {
-        set({ signingIn: true, signinErr: false, flowError: null, flowErrorKey: null });
-        try {
-          const res = await api.login(S.pendingExchangeCode);
-          if (!res?.token) throw new Error('eGovPH returned no session token');
-          setToken(res.token);
-          const me = res.patient || await tryApi(api.me());
-          if (me) onPatientUpdated(me);
-          set({ pendingExchangeCode: null, signingIn: false, screen: 'home', stack: [], flowError: null });
-        } catch (err) {
-          const flowErrorKey = err?.data?.error?.code === 'egov_exchange_code_invalid' ? 'ssoCodeExpired' : null;
-          set((p) => ({
-            // Only a code eGovPH itself rejected gets dropped, so the button falls back to its
-            // normal job instead of re-spending something already dead. A network blip keeps it.
-            pendingExchangeCode: flowErrorKey ? null : p.pendingExchangeCode,
-            signingIn: false,
-            signinErr: true,
-            flowErrorKey,
-            flowError: (flowErrorKey && DICT[p.lang]?.[flowErrorKey]) || err.message || 'The eGovPH sign-in failed',
-          }));
-        }
+        await redeemExchangeCode(S.pendingExchangeCode);
         return;
       }
 
       if (S.authMode === 'live') {
+        // An explicit partner launch URL still wins when one is configured — that is the in-app
+        // path, and it costs the citizen no OTP. Otherwise the sign-in screen renders the widget
+        // itself, so this button is not the way in and there is nothing to do here.
         if (S.authLaunchUrl && /^https:\/\//i.test(S.authLaunchUrl)) {
           window.location.assign(S.authLaunchUrl);
-        } else {
-          set({ signinErr: true, flowError: 'Open eGovMed from the eGovPH app, or configure EGOVPH_LAUNCH_URL.' });
+        } else if (!S.ssoPartnerCode) {
+          set({ signinErr: true, flowError: 'eGovPH sign-in is not configured on the server.' });
         }
         return;
       }
@@ -575,6 +595,7 @@ export default function App() {
     // Account edits patient fields through its own local state, so without this the header
     // greeting and phone kept showing the pre-edit values until a full reload.
     onPatientUpdated,
+    redeemExchangeCode,
     retryLiveness: () => A.acceptConsent(),
 
     // Booking + eMessage

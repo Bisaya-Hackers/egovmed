@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PinInput from '../components/PinInput.jsx';
 import { Fingerprint } from '../components/Icons.jsx';
 import communityArt from '../assets/signin-filipino-community.png';
 import ProfileSetup from '../components/ProfileSetup.jsx';
+import { mountEgovLogin } from '../lib/egovLoginWidget.js';
 
 export default function SignIn({ c, S, A }) {
   const live = S.authMode === 'live';
@@ -12,6 +13,58 @@ export default function SignIn({ c, S, A }) {
   const codeReady = !!S.pendingExchangeCode;
   const [mpin, setMpin] = useState(['', '', '', '', '', '']);
   const [editingProfile, setEditingProfile] = useState(false);
+
+  // The widget is the browser sign-in path: it runs eGovPH's own mobile -> OTP -> PIN screens and
+  // hands back an exchange code. Skipped when a code is already in hand (arrived via the in-app
+  // launch) or when a partner launch URL is configured, since both already have a way in.
+  const showWidget = live && !codeReady && !!S.ssoPartnerCode && !S.authLaunchUrl;
+  const widgetRef = useRef(null);
+  const [widgetError, setWidgetError] = useState(null);
+  const [widgetAttempt, setWidgetAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!showWidget || !widgetRef.current) return undefined;
+    let cleanup = null;
+    let cancelled = false;
+    setWidgetError(null);
+
+    mountEgovLogin({
+      target: widgetRef.current,
+      partnerCode: S.ssoPartnerCode,
+      host: S.ssoHost,
+      partnerName: 'eGovMed',
+      // The widget's default theme is 'auto', which follows the OS. eGovMed has no dark mode, so
+      // on a dark-mode phone that painted a black eGovPH button into a white app. Pin it to the
+      // only theme the app actually has.
+      theme: 'light',
+      // The widget hard-resets its own subtree with !important under an `egov-armor` cascade layer,
+      // so its trigger cannot be restyled from here by design. `size` is the one lever it does
+      // offer, and 'lg' is the closest it gets to the 58px full-width buttons around it.
+      size: 'lg',
+      // The widget speaks en/fil, and the app already has an EN/TL toggle — hand it the same
+      // choice so a Tagalog session doesn't hit an English OTP screen halfway through signing in.
+      locale: S.lang === 'tl' ? 'fil' : 'en',
+      // Puts eGovPH's sandbox accounts in the widget itself. There is no real PhilSys account to
+      // sign in with on this deployment, so without this a tester is staring at a mobile-number
+      // field with nothing valid to type into it.
+      showTestAccounts: true,
+      // Redeem immediately. Unlike a code lifted off the landing URL, this one was minted by a
+      // deliberate act the citizen just performed, so there is no prefetch to guard against and
+      // making them tap a second button only gives the short-lived code time to expire.
+      onSuccess: (exchangeCode) => A.redeemExchangeCode(exchangeCode),
+      onError: (err) => setWidgetError(err.message || 'The eGovPH sign-in failed'),
+      onCancel: () => setWidgetError(null),
+    }).then((fn) => {
+      // The effect can be torn down while the script is still loading; without this the widget
+      // mounts into a container React has already discarded.
+      if (cancelled) { fn(); return; }
+      cleanup = fn;
+    }).catch((err) => {
+      if (!cancelled) setWidgetError(err.message || 'Could not load the eGovPH sign-in');
+    });
+
+    return () => { cancelled = true; if (cleanup) cleanup(); };
+  }, [showWidget, S.ssoPartnerCode, S.ssoHost, S.lang, widgetAttempt, A]);
   const onChange = (arr) => {
     setMpin(arr);
     if (arr.every((d) => d)) setTimeout(() => A.doSignIn(), 260);
@@ -52,15 +105,40 @@ export default function SignIn({ c, S, A }) {
         </p>
       )}
 
-      <button
-        data-stagger
-        onClick={A.doSignIn}
-        disabled={loading || S.signingIn}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', minHeight: 56, border: '1.5px solid var(--line)', background: 'var(--canvas)', color: 'var(--ink)', borderRadius: 16, fontWeight: 700 }}
-      >
-        {loading || S.signingIn ? <span className="spinner" /> : <Fingerprint size={22} color="var(--primary)" />}
-        <span>{loading ? 'Checking eGovPH…' : (live || codeReady) ? 'Continue with eGovPH' : c.fingerprint}</span>
-      </button>
+      {/* Hidden while the widget is up. With a partner code and no launch URL this button has
+          nothing left to do — doSignIn's live branch returns immediately — so leaving it there
+          offered two ways in, one of which silently did nothing. The widget IS the button now. */}
+      {!showWidget && (
+        <button
+          data-stagger
+          onClick={A.doSignIn}
+          disabled={loading || S.signingIn}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', minHeight: 56, border: '1.5px solid var(--line)', background: 'var(--canvas)', color: 'var(--ink)', borderRadius: 16, fontWeight: 700 }}
+        >
+          {loading || S.signingIn ? <span className="spinner" /> : <Fingerprint size={22} color="var(--primary)" />}
+          <span>{loading ? 'Checking eGovPH…' : (live || codeReady) ? 'Continue with eGovPH' : c.fingerprint}</span>
+        </button>
+      )}
+
+      {/* The widget replaces that button, so it takes its spot above the error slot rather than
+          appearing under it. */}
+      {showWidget && (
+        <div data-stagger>
+          <div className="egov-login-slot" ref={widgetRef} />
+          {widgetError && (
+            <div role="alert" className="card" style={{ marginTop: 12, color: 'var(--red)', fontWeight: 650, fontSize: '0.9em' }}>
+              <div>{widgetError}</div>
+              <button
+                className="btn ghost"
+                style={{ marginTop: 10 }}
+                onClick={() => { setWidgetError(null); setWidgetAttempt((n) => n + 1); }}
+              >
+                {c.tryAgain || 'Try again'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {S.flowError && (
         <div role="alert" className="card" style={{ marginTop: 14, color: 'var(--red)', fontWeight: 650, fontSize: '0.9em' }}>
@@ -70,7 +148,7 @@ export default function SignIn({ c, S, A }) {
         </div>
       )}
 
-      {live && !codeReady && !S.authLaunchUrl && !S.flowError && (
+      {live && !codeReady && !S.ssoPartnerCode && !S.authLaunchUrl && !S.flowError && (
         <p className="sub" style={{ textAlign: 'center', marginTop: 14 }}>
           Launch eGovMed from the eGovPH app to sign in.
         </p>
