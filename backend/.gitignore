@@ -8,3 +8,6 @@ npm-debug.log*
 coverage/
 dist/
 .env*
+
+.vercel
+.env*

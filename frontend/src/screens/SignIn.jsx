@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PinInput from '../components/PinInput.jsx';
 import { Fingerprint } from '../components/Icons.jsx';
 import communityArt from '../assets/signin-filipino-community.png';
 import ProfileSetup from '../components/ProfileSetup.jsx';
+import { mountEgovLogin } from '../lib/egovLoginWidget.js';
 
 export default function SignIn({ c, S, A }) {
   const live = S.authMode === 'live';
@@ -12,6 +13,43 @@ export default function SignIn({ c, S, A }) {
   const codeReady = !!S.pendingExchangeCode;
   const [mpin, setMpin] = useState(['', '', '', '', '', '']);
   const [editingProfile, setEditingProfile] = useState(false);
+
+  // The widget is the browser sign-in path: it runs eGovPH's own mobile -> OTP -> PIN screens and
+  // hands back an exchange code. Skipped when a code is already in hand (arrived via the in-app
+  // launch) or when a partner launch URL is configured, since both already have a way in.
+  const showWidget = live && !codeReady && !!S.ssoPartnerCode && !S.authLaunchUrl;
+  const widgetRef = useRef(null);
+  const [widgetError, setWidgetError] = useState(null);
+  const [widgetAttempt, setWidgetAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!showWidget || !widgetRef.current) return undefined;
+    let cleanup = null;
+    let cancelled = false;
+    setWidgetError(null);
+
+    mountEgovLogin({
+      target: widgetRef.current,
+      partnerCode: S.ssoPartnerCode,
+      host: S.ssoHost,
+      partnerName: 'eGovMed',
+      // Redeem immediately. Unlike a code lifted off the landing URL, this one was minted by a
+      // deliberate act the citizen just performed, so there is no prefetch to guard against and
+      // making them tap a second button only gives the short-lived code time to expire.
+      onSuccess: (exchangeCode) => A.redeemExchangeCode(exchangeCode),
+      onError: (err) => setWidgetError(err.message || 'The eGovPH sign-in failed'),
+      onCancel: () => setWidgetError(null),
+    }).then((fn) => {
+      // The effect can be torn down while the script is still loading; without this the widget
+      // mounts into a container React has already discarded.
+      if (cancelled) { fn(); return; }
+      cleanup = fn;
+    }).catch((err) => {
+      if (!cancelled) setWidgetError(err.message || 'Could not load the eGovPH sign-in');
+    });
+
+    return () => { cancelled = true; if (cleanup) cleanup(); };
+  }, [showWidget, S.ssoPartnerCode, S.ssoHost, widgetAttempt, A]);
   const onChange = (arr) => {
     setMpin(arr);
     if (arr.every((d) => d)) setTimeout(() => A.doSignIn(), 260);
@@ -70,7 +108,27 @@ export default function SignIn({ c, S, A }) {
         </div>
       )}
 
-      {live && !codeReady && !S.authLaunchUrl && !S.flowError && (
+      {showWidget && (
+        <div data-stagger style={{ marginTop: 4 }}>
+          {/* eGovPH's own OTP + PIN screens render in here. Nothing about this container is ours
+              beyond its size, so it carries no styling that the widget would have to fight. */}
+          <div ref={widgetRef} />
+          {widgetError && (
+            <div role="alert" className="card" style={{ marginTop: 12, color: 'var(--red)', fontWeight: 650, fontSize: '0.9em' }}>
+              <div>{widgetError}</div>
+              <button
+                className="btn ghost"
+                style={{ marginTop: 10 }}
+                onClick={() => { setWidgetError(null); setWidgetAttempt((n) => n + 1); }}
+              >
+                {c.tryAgain || 'Try again'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {live && !codeReady && !S.ssoPartnerCode && !S.authLaunchUrl && !S.flowError && (
         <p className="sub" style={{ textAlign: 'center', marginTop: 14 }}>
           Launch eGovMed from the eGovPH app to sign in.
         </p>
