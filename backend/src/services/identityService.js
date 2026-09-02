@@ -134,7 +134,14 @@ async function assertVerified(patientId) {
   const store = getStore();
   const patient = await store.findById(COLLECTIONS.PATIENTS, patientId);
   if (!patient) throw notFound('Patient not found');
-  if (!patient.identityVerified) throw badRequest('Identity must be verified before accessing records');
+  // Its own code, not a bare bad_request: the Records screen has to tell "you are not verified
+  // yet" (show the verify card) apart from "the backend is having a bad day" (keep the records it
+  // already has on screen), and it cannot do that by matching on an English message string.
+  if (!patient.identityVerified) {
+    const err = badRequest('Identity must be verified before accessing records');
+    err.code = 'identity_not_verified';
+    throw err;
+  }
   return true;
 }
 

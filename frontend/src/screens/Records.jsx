@@ -26,7 +26,16 @@ export default function Records({ c, lang, S, A }) {
   // summary alike. A patient created by real eGovPH SSO starts unverified, which is why this only
   // ever showed up outside mock testing. null means /patients/me hasn't answered yet — only an
   // explicit false locks the screen, so a backend outage still falls back to the demo records.
-  const locked = S.identityVerified === false;
+  // 'loading' until /records answers, then 'ready' or 'locked'. Records used to derive its lock
+  // purely from S.identityVerified, which App fills in from /patients/me on boot — a different
+  // request on a different clock. Between the two the screen rendered the demo records unlocked
+  // and then swapped to the lock card seconds later, which is the "records change by themselves"
+  // report. Now the screen's own request decides, and nothing renders until it has.
+  const [gate, setGate] = useState(() => (S.identityVerified === false ? 'locked' : 'loading'));
+  // App's answer still counts when it lands first, so a patient it already knows is unverified
+  // gets the lock card immediately instead of a spinner they have to sit through.
+  const locked = gate === 'locked' || S.identityVerified === false;
+  const settling = gate === 'loading' && !locked;
   const [records, setRecords] = useState(() => demo(lang));
   const [openId, setOpenId] = useState(null); // record id whose detail sheet is open
   const [summary, setSummary] = useState(null); // { summary: string, verifiedLabs: [], recordCount, triageCount }
@@ -50,31 +59,47 @@ export default function Records({ c, lang, S, A }) {
     A.notifyRecordUploaded(saved);
   };
 
-  // Upgrade to live eGovChain-anchored records + fetch the AI doctor summary in parallel.
+  // The eGovChain-anchored list. Deliberately NOT awaited alongside the doctor summary any more:
+  // Promise.all held the record list back until the eGov AI generation returned, so the list
+  // appeared seconds after the screen did even when /records had answered straight away.
   useEffect(() => {
-    // Both calls are behind the verification gate, so while locked they can only 400.
+    if (S.identityVerified === false) { setGate('locked'); return undefined; }
+    let alive = true;
+    api.records().then((list) => {
+      if (!alive) return;
+      if (Array.isArray(list) && list.length) {
+        setRecords(list.map((r) => ({
+          id: r.id,
+          name: r.title,
+          date: formatDate(r.createdAt, lang),
+          source: r.sourceFacility,
+          type: r.type,
+          summary: r.summary,
+          verified: !!(r.anchor && r.anchor.verified),
+          isDemo: false,
+        })));
+      }
+      setGate('ready');
+    }).catch((err) => {
+      if (!alive) return;
+      // The verification gate is the only failure with a different answer. Anything else — the
+      // backend cold-starting, a dropped connection — keeps the demo records rather than telling
+      // a verified patient their identity is the problem.
+      setGate(err?.data?.error?.code === 'identity_not_verified' ? 'locked' : 'ready');
+    });
+    return () => { alive = false; };
+  }, [lang, S.identityVerified]);
+
+  // The AI summary on its own clock. It is the slowest call on the screen and nothing else
+  // depends on it, so it renders its own skeleton and never delays the records.
+  useEffect(() => {
     if (locked) { setSummaryLoading(false); return undefined; }
     let alive = true;
-    (async () => {
-      try {
-        const [list, sum] = await Promise.all([api.records(), api.doctorSummary().catch(() => null)]);
-        if (!alive) return;
-        if (Array.isArray(list) && list.length) {
-          setRecords(list.map((r) => ({
-            id: r.id,
-            name: r.title,
-            date: formatDate(r.createdAt, lang),
-            source: r.sourceFacility,
-            type: r.type,
-            summary: r.summary,
-            verified: !!(r.anchor && r.anchor.verified),
-            isDemo: false,
-          })));
-        }
-        setSummary(sum);
-      } catch { /* keep demo fallback */ }
-      if (alive) setSummaryLoading(false);
-    })();
+    setSummaryLoading(true);
+    api.doctorSummary()
+      .then((sum) => { if (alive) setSummary(sum); })
+      .catch(() => { /* the summary is an extra, not the point of the screen */ })
+      .finally(() => { if (alive) setSummaryLoading(false); });
     return () => { alive = false; };
   }, [lang, locked]);
 
@@ -83,7 +108,14 @@ export default function Records({ c, lang, S, A }) {
       <ScreenHeader onBack={A.back} label={c.recordsTitle} />
       <h1 className="h1" data-stagger>{c.recordsTitle}</h1>
       <p className="sub" data-stagger>{c.recordsSub}</p>
-      {locked ? (
+      {settling ? (
+        // Neither the upload button nor the lock card, because we do not know yet which one this
+        // patient gets. Rendering a guess here is what made the screen rearrange itself.
+        <div data-stagger className="card" style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted)', fontWeight: 600 }} role="status">
+          <span className="spinner" />
+          <span>{lang === 'tl' ? 'Kinukuha ang iyong mga rekord…' : 'Fetching your records…'}</span>
+        </div>
+      ) : locked ? (
         <div data-stagger className="card" style={{ marginTop: 16, textAlign: 'center' }}>
           <span className="icirc" style={{ width: 44, height: 44, background: 'var(--blue-50)', margin: '2px auto 12px' }}>
             <ShieldTick size={22} color="var(--primary)" />
@@ -105,7 +137,7 @@ export default function Records({ c, lang, S, A }) {
         </button>
       )}
 
-      {!locked && (summary || summaryLoading) && (
+      {!locked && !settling && (summary || summaryLoading) && (
         <div data-stagger className="card tint" style={{ marginTop: 16 }}>
           <button
             onClick={() => setSummaryOpen((v) => !v)}
@@ -136,7 +168,7 @@ export default function Records({ c, lang, S, A }) {
       )}
 
       <div className="stack" style={{ marginTop: 18 }}>
-        {!locked && records.map((r) => (
+        {!locked && !settling && records.map((r) => (
           <button
             key={r.id}
             data-stagger
