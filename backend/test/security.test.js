@@ -45,7 +45,7 @@ const path = require('node:path');
 const app = require('../src/app');
 const { sign } = require('../src/lib/jwt');
 const { getStore, COLLECTIONS, seedDemoData } = require('../src/store');
-const { normalizePaymentStatus } = require('../src/integrations/egovPay');
+const { normalizePaymentStatus, apiTokenForHeader } = require('../src/integrations/egovPay');
 const http = require('../src/lib/http');
 const reportService = require('../src/services/reportService');
 
@@ -107,6 +107,9 @@ test('security regression suite', async (t) => {
     assert.equal(normalizePaymentStatus({ status: 'SUCCESSFUL' }), 'successful');
     assert.equal(normalizePaymentStatus({ state: 'completed' }), 'completed');
     assert.equal(normalizePaymentStatus({}), 'pending');
+    assert.equal(apiTokenForHeader('bare-portal-key'), 'test_bare-portal-key');
+    assert.equal(apiTokenForHeader('test_already-prefixed'), 'test_already-prefixed');
+    assert.equal(apiTokenForHeader('live_explicit-live-key'), 'live_explicit-live-key');
   });
 
   await t.test('mock eGovPay can be forced to simulate a failed payment', () => {
@@ -177,6 +180,9 @@ test('security regression suite', async (t) => {
       // Which provider does the Step 3 capture. Public by nature (the frontend must branch on it)
       // and defaults to the safer of the two: face-liveness never attempts a PhilSys match.
       verificationMethod: 'face-liveness',
+      // Browser-safe widget inputs are deliberately absent while SSO is mocked.
+      ssoPartnerCode: null,
+      ssoHost: null,
     });
     const configRaw = JSON.stringify(config.value);
     assert.equal(configRaw.includes('secret'), false);
@@ -922,6 +928,20 @@ test('security regression suite', async (t) => {
     assert.equal((await request('/records', { token: owner })).status, 400);
     const verify = await request('/records/rec_demo_cbc/verify', { token: owner });
     assert.equal(verify.status, 400, 'unverified identity must not be able to read a record\'s verify badge/title/facility');
+  });
+
+  await t.test('GET /records/doctor-summary reaches its static route without fanning out chain verification', async () => {
+    const ownerId = await resetWithPatients();
+    const owner = sign({ sub: ownerId });
+    const summary = await json(await request('/records/doctor-summary', { token: owner }));
+    assert.equal(summary.response.status, 200, JSON.stringify(summary.value));
+    assert.equal(summary.value.recordCount, 3);
+    assert.equal(summary.value.verifiedLabs.length, 3);
+
+    // Regression guard for the quota incident: live record creation may submit one transaction,
+    // but must never invoke ethers' receipt-polling helper.
+    const chainSource = require('node:fs').readFileSync(path.join(__dirname, '../src/integrations/egovChain.js'), 'utf8');
+    assert.equal(/^\s*(?:const\s+\w+\s*=\s*)?await\s+tx\.wait\s*\(/m.test(chainSource), false, 'eGovChain must not poll receipts with tx.wait()');
   });
 
   await t.test('dual-version PHI decryption: legacy (v1, no encryptedVersion) demo records stay readable', async () => {

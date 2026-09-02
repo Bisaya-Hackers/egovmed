@@ -62,17 +62,19 @@ async function anchorLive(recordHash, meta) {
   // sourceFacility etc. are dropped here — only a non-identifying record-type tag is anchored.
   const safeMeta = { type: meta.type || null, anchoredAt: new Date().toISOString() };
   // eGovChain (Besu QBFT) is zero-fee: submit with gasPrice 0 (no ETH needed for gas).
-  // Note: this blocks on block confirmation inside a user-facing POST. QBFT blocks are ~1s so
-  // fine at hackathon volume; if /records latency becomes an issue, capture the tx hash immediately
-  // and confirm asynchronously.
+  // IMPORTANT: never call tx.wait() here. ethers implements it by polling
+  // eth_getTransactionReceipt, and this gateway bills every JSON-RPC request. A previous
+  // deployment exhausted the account in minutes that way. Submission is the only operation in
+  // this request; the explicit per-record verify endpoint performs one eth_call when the citizen
+  // asks to check the anchor.
   const tx = await contract.anchor(recordHash, JSON.stringify(safeMeta), { gasPrice: 0 });
-  const receipt = await tx.wait();
   return {
     hash: recordHash,
-    txHash: receipt.hash,
-    blockNumber: receipt.blockNumber,
+    txHash: tx.hash,
+    blockNumber: null,
     anchoredAt: new Date().toISOString(),
-    verified: true,
+    verified: false,
+    status: 'submitted',
     provider: 'egovchain',
   };
 }
