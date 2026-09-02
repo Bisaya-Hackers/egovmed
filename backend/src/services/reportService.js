@@ -4,6 +4,7 @@ const otpService = require('./otpService');
 const { getStore, COLLECTIONS } = require('../store');
 const { randomId, encryptJson, decryptJson } = require('../lib/crypto');
 const { notFound } = require('../lib/errors');
+const { smsRecipientFor } = require('../lib/recipient');
 
 /**
  * Filing is gated on a code texted to the patient's own number (POST /reports/otp mints it).
@@ -16,7 +17,11 @@ async function fileReport({ patientId, category, description, contact, challenge
   const patient = patientId ? await store.findById(COLLECTIONS.PATIENTS, patientId) : null;
   // Before anything reaches eReport. Throws on a wrong, expired, reused or over-capped code.
   await otpService.claimOtp({ patientId, purpose: otpService.PURPOSES.REPORT, challengeId, code });
-  const filed = await eReport.fileReport({ category, description, patient: patient || {}, contact: contact || patient?.phone })
+  // The contact number that goes into the government queue is what a caseworker will ring back.
+  // An explicit `contact` on the request still wins — the citizen typed it for this complaint —
+  // and otherwise this resolves the same way every other notification does, so a sandbox persona's
+  // undialable +63909... number is not what ends up on a filed case.
+  const filed = await eReport.fileReport({ category, description, patient: patient || {}, contact: contact || smsRecipientFor(patient).to })
     .catch(async (err) => {
       // Nothing was filed, so the code is retired rather than silently left claimable — the
       // patient requests a new one. Fail closed in both directions.

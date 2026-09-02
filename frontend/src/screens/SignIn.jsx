@@ -48,6 +48,24 @@ export default function SignIn({ c, S, A }) {
       // sign in with on this deployment, so without this a tester is staring at a mobile-number
       // field with nothing valid to type into it.
       showTestAccounts: true,
+      // The widget only shows that panel on its first step, so it vanishes the moment a number is
+      // submitted — taking the one-time code and the PIN off screen on the two steps that ask for
+      // them. This copy drives a replacement panel that stays up for the whole flow.
+      testAccountsCopy: S.lang === 'tl' ? {
+        title: 'Mga test account',
+        desc: 'Pang-develop lamang. Gamitin ang alinman sa mga numerong ito.',
+        mobile: 'Mobile number',
+        otp: 'One-time code',
+        pin: 'PIN',
+        mobileOnly: 'Sa Mobile number lang gumagana ang mga ito. Walang email sa likod ng sandbox accounts.',
+      } : {
+        title: 'Test accounts',
+        desc: 'Development only. Sign in with any of these.',
+        mobile: 'Mobile number',
+        otp: 'One-time code',
+        pin: 'PIN',
+        mobileOnly: 'These work on the Mobile number tab only. The sandbox accounts have no email behind them.',
+      },
       // Redeem immediately. Unlike a code lifted off the landing URL, this one was minted by a
       // deliberate act the citizen just performed, so there is no prefetch to guard against and
       // making them tap a second button only gives the short-lived code time to expire.

@@ -110,6 +110,13 @@ const env = {
     callbackUrl: process.env.FACE_LIVENESS_CALLBACK_URL || '',
     minConfidence: int(process.env.FACE_LIVENESS_MIN_CONFIDENCE, 95),
   },
+  // Where notifications actually land. eGovPH's sandbox hands back +63909000000N personas whose
+  // numbers no carrier will ever deliver to, so on a demo deployment every SMS the app "sends"
+  // disappears. NOTIFY_DEFAULT_PHONE is the one reachable handset that stands in for them; unset
+  // (the production default) the behaviour is exactly what it was before.
+  notify: {
+    defaultPhone: (process.env.NOTIFY_DEFAULT_PHONE || '').trim(),
+  },
   eMessage: {
     mode: modeFor('EMESSAGE'),
     // per apidocumentation/eMessage-API.md: POST /messaging/v1/sms/push, X-EMESSAGE-Auth header
@@ -202,6 +209,20 @@ function warnIfMisconfigured(log) {
   // any catch/log path would then persist. Live-mode gated so mock deploys don't need a key.
   if (env.egovChain.mode === 'live' && !/^0x[0-9a-fA-F]{64}$/.test(env.egovChain.privateKey)) {
     throw new Error('EGOVCHAIN_PRIVATE_KEY must be "0x" + 64 hex chars (check for trailing whitespace, quotes, or CRLF from a paste).');
+  }
+  // eMessage rejects anything that is not E.164, and it does so at send time — which for the OTP
+  // path is inside a fail-closed block, so a typo here would surface as "report filing is broken"
+  // rather than "that env var is malformed". Check it at boot instead.
+  if (env.notify.defaultPhone && !/^\+63\d{10}$/.test(env.notify.defaultPhone)) {
+    throw new Error('NOTIFY_DEFAULT_PHONE must be E.164 Philippine mobile: "+63" followed by 10 digits.');
+  }
+  // Loud, but not fatal. This redirects every unedited patient's SMS to one handset, which is
+  // indefensible in a real citizen-facing deployment — and also the only way an evaluator watching
+  // a demo ever sees a message arrive, because eGovPH's sandbox personas carry undialable numbers.
+  // A hard throw would take the whole backend down mid-demo over a variable somebody set on
+  // purpose, so this warns at every boot instead and the README says to unset it before launch.
+  if (env.notify.defaultPhone && env.isProd) {
+    log.warn('NOTIFY_DEFAULT_PHONE is set: every notification for a patient who has not set their own number in Account goes to that one handset. Demo affordance — unset it for a real deployment.');
   }
   if (env.isProd && !env.allowMockInProduction) {
     // All eight eGov integrations must be live + credentialed once the mock escape hatch is off.

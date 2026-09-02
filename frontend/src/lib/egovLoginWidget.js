@@ -10,6 +10,10 @@
 // there the flow rejoins the documented path: the backend redeems it with partner_secret at
 // POST /api/token and pulls the profile. No secret and no access token ever reaches this file.
 //
+// The widget drops its own test-accounts panel after the first step; this puts one back for the
+// OTP and PIN screens. See that module for why it has to be done from outside the widget.
+import { keepTestAccountsVisible } from './egovTestAccounts.js';
+
 // Version is pinned in the URL per the integration guide — an unpinned widget is a third-party
 // script that can change shape under a running deployment.
 const WIDGET_SRC = 'https://widgets.e.gov.ph/v1.0.0/egov-login.min.js';
@@ -46,7 +50,7 @@ function loadScript() {
  */
 export async function mountEgovLogin({
   target, partnerCode, host, partnerName,
-  theme, size, locale, showTestAccounts,
+  theme, size, locale, identifierTypes, showTestAccounts, testAccountsCopy,
   onSuccess, onError, onCancel,
 }) {
   if (!partnerCode) throw new Error('eGovPH partner code is not configured');
@@ -64,6 +68,9 @@ export async function mountEgovLogin({
     theme,
     size,
     locale,
+    // ['mobile'] | ['email'] | both. With one entry the widget drops its Mobile/Email tab strip
+    // entirely, which is the supported way to keep a sandbox-only deployment off the email path.
+    identifierTypes,
     showTestAccounts,
     // The widget hands back { exchangeCode }. It is single-use and short-lived, so the caller
     // redeems it immediately rather than parking it the way an arrived-by-link code is parked.
@@ -72,7 +79,14 @@ export async function mountEgovLogin({
     onCancel: () => onCancel?.(),
   });
 
+  // Only worth running when the widget was told to advertise test accounts in the first place: in
+  // a production build showTestAccounts is off and this observer must not exist at all.
+  const stopTestAccounts = showTestAccounts && testAccountsCopy
+    ? keepTestAccountsVisible(testAccountsCopy)
+    : null;
+
   return () => {
+    stopTestAccounts?.();
     // destroy() is the documented teardown, but it is the widget's own method on a third-party
     // script — if a future pinned version drops it, clearing the container is what actually
     // prevents a duplicate mount, so do that regardless of whether destroy() worked.

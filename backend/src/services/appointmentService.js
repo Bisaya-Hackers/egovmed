@@ -3,6 +3,8 @@ const eMessage = require('../integrations/eMessage');
 const { getStore, COLLECTIONS } = require('../store');
 const { randomId } = require('../lib/crypto');
 const { notFound, conflict } = require('../lib/errors');
+// One place decides who a notification is addressed to — see lib/recipient.js for the order.
+const { recipientFor } = require('../lib/recipient');
 
 const messageAudit = (notification, patientId, kind, meta) => ({
   id: notification.id,
@@ -48,7 +50,7 @@ async function book({ patientId, specialty, hospital = 'PGH', scheduledFor, tria
 
   // Notify the verified contact — BEST EFFORT. A failed/absent notification must never
   // fail the booking or leave it orphaned (the appointment is the source of truth).
-  const to = patient.phone || patient.email;
+  const { to, channel } = recipientFor(patient);
   let notification;
   if (!to) {
     notification = { status: 'skipped', reason: 'no_verified_contact' };
@@ -56,7 +58,7 @@ async function book({ patientId, specialty, hospital = 'PGH', scheduledFor, tria
     try {
       notification = await eMessage.send({
         to,
-        channel: patient.phone ? 'sms' : 'email',
+        channel,
         subject: 'eGovMed appointment confirmed',
         body: `Hi ${patient.firstName}, your ${specialty} appointment at ${hospital} is booked. Queue #${queueNumber}.`,
       });
@@ -85,11 +87,11 @@ async function sendReminder(appointmentId, patientId) {
   if (!appt || appt.patientId !== patientId) throw notFound('Appointment not found');
   const patient = await store.findById(COLLECTIONS.PATIENTS, appt.patientId);
   if (!patient) throw notFound('Patient not found');
-  const to = patient.phone || patient.email;
-  if (!to) return { status: 'skipped', reason: 'no_verified_contact' };
+  const recipient = recipientFor(patient);
+  if (!recipient.to) return { status: 'skipped', reason: 'no_verified_contact' };
   const notification = await eMessage.send({
-    to,
-    channel: patient.phone ? 'sms' : 'email',
+    to: recipient.to,
+    channel: recipient.channel,
     subject: 'Appointment reminder',
     body: `Reminder: your ${appt.specialty} appointment at ${appt.hospital}. Queue #${appt.queueNumber}.`,
   });
