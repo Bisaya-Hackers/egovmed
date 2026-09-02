@@ -57,8 +57,8 @@ router.get('/status',
         egovChain: {
           mode: env.egovChain.mode,
           baseUrl: safeOrigin(env.egovChain.rpcUrl),
-          hasCredentials: !!(env.egovChain.contractAddress && env.egovChain.privateKey),
-          contractAddressConfigured: !!env.egovChain.contractAddress,
+          hasCredentials: !!(env.egovChain.rpcUrl && env.egovChain.privateKey),
+          strategy: 'calldata',
         },
         egovPay: {
           mode: env.egovPay.mode,

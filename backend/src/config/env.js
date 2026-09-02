@@ -119,10 +119,9 @@ const env = {
   },
   egovChain: {
     mode: modeFor('EGOVCHAIN'),
-    // per apidocumentation/eGovChain-API.md: Hyperledger Besu QBFT, zero-fee (gasPrice 0), chainId 13371
+    // Live portal: credential base_url + / + token, Hyperledger Besu QBFT, gasPrice 0, chain 13371.
     rpcUrl: process.env.EGOVCHAIN_RPC_URL || 'https://hackathon-blockchain.e.gov.ph',
     chainId: int(process.env.EGOVCHAIN_CHAIN_ID, 13371),
-    contractAddress: process.env.EGOVCHAIN_CONTRACT_ADDRESS || '',
     // .trim() collapses the most common paste-error path (trailing newline / space / CR).
     // Without this, ethers.getBytes rejects the whitespaced value and echoes the FULL
     // still-valid key into err.message — which the anchorHash catch block would then log.
@@ -204,13 +203,6 @@ function warnIfMisconfigured(log) {
   if (env.egovChain.mode === 'live' && !/^0x[0-9a-fA-F]{64}$/.test(env.egovChain.privateKey)) {
     throw new Error('EGOVCHAIN_PRIVATE_KEY must be "0x" + 64 hex chars (check for trailing whitespace, quotes, or CRLF from a paste).');
   }
-  // Same rationale as the private-key check above, gated the same way: without this, EGOVCHAIN_MODE=live
-  // with an empty/malformed contract address boots successfully, then every POST /records 500s (anchoring
-  // is fail-closed) and every existing record's verify badge silently goes grey (verifyAnchor fail-safes
-  // to unverified) — the failure only surfaces on the first real write, not at boot.
-  if (env.egovChain.mode === 'live' && !/^0x[0-9a-fA-F]{40}$/.test(env.egovChain.contractAddress)) {
-    throw new Error('EGOVCHAIN_CONTRACT_ADDRESS must be "0x" + 40 hex chars when EGOVCHAIN_MODE=live.');
-  }
   if (env.isProd && !env.allowMockInProduction) {
     // All eight eGov integrations must be live + credentialed once the mock escape hatch is off.
     // A silent mock in production could serve fake triage, identity, or payment data to a real citizen.
@@ -226,7 +218,7 @@ function warnIfMisconfigured(log) {
       [env.eReport.mode === 'live' && env.eReport.baseUrl && env.eReport.accessCode
         && env.eReport.location.regionCode && env.eReport.location.provinceCode
         && env.eReport.location.municipalityCode && env.eReport.location.barangayCode, 'eReport'],
-      [env.egovChain.mode === 'live' && env.egovChain.contractAddress && env.egovChain.privateKey, 'eGovChain'],
+      [env.egovChain.mode === 'live' && env.egovChain.rpcUrl && env.egovChain.privateKey, 'eGovChain'],
       [env.egovAi.mode === 'live' && env.egovAi.accessCode && env.egovAi.baseUrl, 'eGov AI'],
     ];
     const missing = requirements.filter(([ok]) => !ok).map(([, name]) => name);

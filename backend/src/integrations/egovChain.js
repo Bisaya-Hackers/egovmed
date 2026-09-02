@@ -1,113 +1,112 @@
 'use strict';
 const crypto = require('crypto');
 const { env } = require('../config/env');
+const http = require('../lib/http');
 const logger = require('../lib/logger');
 
 const cfg = env.egovChain;
 
-// Deployed ABI — must match contracts/RecordAnchor.sol exactly.
-//   anchor(bytes32,string) : write, called during record creation
-//   anchoredAt(bytes32)    : view, called during tamper-evidence verify
-//   Anchored(...)          : indexed event, for future off-chain indexers
-const ABI = [
-  'function anchor(bytes32 recordHash, string metadata) external returns (bool)',
-  'function anchoredAt(bytes32 recordHash) external view returns (uint256)',
-  'event Anchored(bytes32 indexed recordHash, address indexed submitter, uint256 timestamp)',
-];
-
 let ethersMod = null;
 function loadEthers() {
   if (ethersMod) return ethersMod;
-  // ethers is now a hard dependency (see package.json). This require will only fail if the
-  // dep install itself broke — in which case exploding here is the correct behavior.
   ethersMod = require('ethers');
   return ethersMod;
 }
 
-// Redact any 0x-prefixed hex run of 40+ chars from a log message. Covers private keys (64 hex)
-// and addresses (40 hex) — the latter aren't sensitive but over-redacting costs nothing.
-// Defense in depth against libraries (ethers included) that echo unvalidated input into errors.
 function scrubSecrets(msg) {
   return String(msg == null ? '' : msg).replace(/0x[0-9a-fA-F]{40,}/g, '0x<redacted>');
 }
 
-/**
- * Anchor a record fingerprint (hash) on eGovChain (Besu) for tamper-evidence.
- * Raw PHI never leaves the off-chain store — only the sha256 hash is anchored (Data Privacy Act 2012).
- *
- * Fail policy: FAIL-CLOSED on live anchor failure. The whole record write fails so we never
- * store a lab that cannot be verified later. RPC outage → 5xx to the caller is by design, not a bug.
- *
- * live: requires EGOVCHAIN_RPC_URL, EGOVCHAIN_PRIVATE_KEY, EGOVCHAIN_CONTRACT_ADDRESS.
- * mock: returns a deterministic pseudo-transaction hash derived from the record hash.
- */
-async function anchorHash(recordHash, meta = {}) {
-  if (cfg.mode === 'live' && cfg.rpcUrl) {
-    try {
-      return await anchorLive(recordHash, meta);
-    } catch (err) {
-      logger.error('eGovChain live anchor failed', { integration: 'egovChain', err: scrubSecrets(err.message) });
-      throw err;
-    }
+/** Exactly one JSON-RPC request. No retries or polling are allowed here. */
+async function rpc(method, params) {
+  const response = await http.post(cfg.rpcUrl, { jsonrpc: '2.0', id: 1, method, params });
+  if (response && response.error) {
+    const error = new Error(`eGovChain ${method} failed: ${response.error.message || 'JSON-RPC error'}`);
+    error.code = response.error.code;
+    throw error;
   }
-  return mockAnchor(recordHash);
+  return response && response.result;
 }
 
-async function anchorLive(recordHash, meta) {
+/**
+ * Anchor a SHA-256 fingerprint directly in zero-value transaction calldata.
+ *
+ * This is the live-verified strategy used by another public hackathon implementation. It avoids
+ * a separate contract while preserving the material guarantee: an immutable signed transaction
+ * contains the record fingerprint and no PHI or patient identifier.
+ *
+ * Submission makes exactly two metered calls: nonce read + raw transaction broadcast. The
+ * explicit verify endpoint later performs one transaction read. Never add tx.wait(), a receipt
+ * loop, a watcher, or a provider subscription to this gateway.
+ */
+async function anchorHash(recordHash) {
+  if (cfg.mode !== 'live' || !cfg.rpcUrl) return mockAnchor(recordHash);
+  try {
+    return await anchorLive(recordHash);
+  } catch (err) {
+    logger.error('eGovChain live anchor failed', { integration: 'egovChain', err: scrubSecrets(err.message) });
+    throw err;
+  }
+}
+
+async function anchorLive(recordHash) {
   const ethers = loadEthers();
-  const provider = new ethers.JsonRpcProvider(cfg.rpcUrl, cfg.chainId);
-  const wallet = new ethers.Wallet(cfg.privateKey, provider);
-  const contract = new ethers.Contract(cfg.contractAddress, ABI, wallet);
-  // NEVER put identifiers/clinical content on-chain (Data Privacy Act). patientId, title,
-  // sourceFacility etc. are dropped here — only a non-identifying record-type tag is anchored.
-  const safeMeta = { type: meta.type || null, anchoredAt: new Date().toISOString() };
-  // eGovChain (Besu QBFT) is zero-fee: submit with gasPrice 0 (no ETH needed for gas).
-  // IMPORTANT: never call tx.wait() here. ethers implements it by polling
-  // eth_getTransactionReceipt, and this gateway bills every JSON-RPC request. A previous
-  // deployment exhausted the account in minutes that way. Submission is the only operation in
-  // this request; the explicit per-record verify endpoint performs one eth_call when the citizen
-  // asks to check the anchor.
-  const tx = await contract.anchor(recordHash, JSON.stringify(safeMeta), { gasPrice: 0 });
+  const wallet = new ethers.Wallet(cfg.privateKey);
+  const nonceHex = await rpc('eth_getTransactionCount', [wallet.address, 'pending']);
+  const raw = await wallet.signTransaction({
+    type: 0,
+    chainId: cfg.chainId,
+    nonce: Number(BigInt(nonceHex)),
+    gasLimit: 100000,
+    gasPrice: 0,
+    to: ethers.ZeroAddress,
+    data: recordHash,
+    value: 0,
+  });
+  const txHash = await rpc('eth_sendRawTransaction', [raw]);
+  if (!/^0x[0-9a-fA-F]{64}$/.test(String(txHash || ''))) {
+    throw new Error('eGovChain returned an invalid transaction hash');
+  }
   return {
     hash: recordHash,
-    txHash: tx.hash,
+    txHash,
     blockNumber: null,
     anchoredAt: new Date().toISOString(),
     verified: false,
     status: 'submitted',
+    strategy: 'calldata',
     provider: 'egovchain',
   };
 }
 
 function mockAnchor(recordHash) {
   const txHash = '0x' + crypto.createHash('sha256').update('tx:' + recordHash).digest('hex');
-  return { hash: recordHash, txHash, blockNumber: null, anchoredAt: new Date().toISOString(), verified: true, provider: 'mock' };
+  return { hash: recordHash, txHash, blockNumber: null, anchoredAt: new Date().toISOString(), verified: true, strategy: 'mock', provider: 'mock' };
 }
 
-/**
- * Verify a hash is anchored (used by the "verified lab" badge).
- *
- * Real check: eth_call → anchoredAt(recordHash). A non-zero return means the same hash
- * exists on-chain, which combined with the off-chain contentHash comparison in recordService
- * gives real tamper-evidence. The previous eth_getTransactionReceipt approach only proved
- * a transaction existed — it never checked that the anchored hash matched the record.
- *
- * Fail policy: fail-safe. RPC outage → verified:false so a badge is only shown when we're
- * sure. A bad rpc must never grant a green badge.
- */
+/** Verify a calldata anchor with exactly one eth_getTransactionByHash call. */
 async function verifyAnchor(recordHash, txHash) {
-  if (cfg.mode !== 'live' || !cfg.rpcUrl || !cfg.contractAddress) {
-    // mock / unconfigured: preserve prior behavior (any non-empty txHash trusted).
+  if (cfg.mode !== 'live' || !cfg.rpcUrl) {
     return { verified: cfg.mode !== 'live' && !!txHash, recordHash, txHash };
   }
-  if (!recordHash) return { verified: false, recordHash, txHash, error: 'missing_hash' };
+  if (!recordHash || !txHash) return { verified: false, recordHash, txHash, error: 'missing_hash' };
   try {
     const ethers = loadEthers();
-    const provider = new ethers.JsonRpcProvider(cfg.rpcUrl, cfg.chainId);
-    const contract = new ethers.Contract(cfg.contractAddress, ABI, provider);
-    const ts = await contract.anchoredAt(recordHash); // BigInt; 0 = never anchored
-    const verified = ts !== undefined && ts !== null && BigInt(ts) > 0n;
-    return { verified, recordHash, txHash, anchoredAt: verified ? Number(ts) : null };
+    const expectedSigner = new ethers.Wallet(cfg.privateKey).address.toLowerCase();
+    const tx = await rpc('eth_getTransactionByHash', [txHash]);
+    const input = String((tx && (tx.input || tx.data)) || '').toLowerCase();
+    const verified = !!tx
+      && tx.blockNumber != null
+      && String(tx.from || '').toLowerCase() === expectedSigner
+      && String(tx.to || '').toLowerCase() === ethers.ZeroAddress.toLowerCase()
+      && input === String(recordHash).toLowerCase();
+    return {
+      verified,
+      recordHash,
+      txHash,
+      blockNumber: tx && tx.blockNumber ? Number(BigInt(tx.blockNumber)) : null,
+      strategy: 'calldata',
+    };
   } catch (err) {
     logger.warn('anchor verify RPC failed — silently degrading', { integration: 'egovChain', fallback: 'rpc_unavailable', err: scrubSecrets(err.message) });
     return { verified: false, recordHash, txHash, error: 'rpc_unavailable' };
