@@ -20,6 +20,19 @@ const CAPTURE_TIMEOUT_MS = 3 * 60_000;
 export const EVERIFY_CANCELLED = 'EVERIFY_CANCELLED';
 export const EVERIFY_TIMEOUT = 'EVERIFY_TIMEOUT';
 
+/**
+ * Whether this session verifies through the eVerify Web SDK — i.e. whether the camera belongs to
+ * the SDK's iframe rather than to us.
+ *
+ * Every screen that touches the camera has to agree on this, and the answer moved from a
+ * build-time flag to the backend's VERIFICATION_METHOD. When the two call sites each carried
+ * their own copy of the check, the Liveness preview kept testing only the stale build-time half
+ * and grabbed the front camera out from under the SDK. One predicate, one source of truth.
+ */
+export function usesEverifySdk(state) {
+  return import.meta.env.VITE_EVERIFY_SDK_ENABLED === 'true' || state?.verificationMethod === 'everify';
+}
+
 function livenessError(code, message) {
   const err = new Error(message);
   err.code = code;

@@ -27,7 +27,9 @@ export default function Consent({ c, lang, S, A }) {
 
       <div className="spacer" style={{ minHeight: 18 }} />
       <div className="stack">
-        <Btn onClick={A.acceptConsent}>{c.consentAccept}</Btn>
+        {/* Wrapped, not passed directly: acceptConsent takes an options object, and onClick would
+            hand it a click event whose properties it would then read as options. */}
+        <Btn onClick={() => A.acceptConsent()}>{c.consentAccept}</Btn>
         <Btn variant="secondary" onClick={A.declineConsent}>{c.consentDecline}</Btn>
       </div>
     </div>

@@ -4,7 +4,8 @@ import gsap from 'gsap';
 import { DICT, CONST, CHANNELS, HOSPITALS, randomSlots } from './i18n/dict.js';
 import { api, getToken, setToken, demoExchangeCode } from './lib/api.js';
 import { fallbackTriage } from './lib/triageFallback.js';
-import { runEverifyLivenessCapture, EVERIFY_CANCELLED } from './lib/everifySdk.js';
+import { runEverifyLivenessCapture, usesEverifySdk, EVERIFY_CANCELLED } from './lib/everifySdk.js';
+import { cameraLikelyBlocked, detectInAppBrowser } from './lib/inAppBrowser.js';
 import { makeRefNo } from './lib/refNo.js';
 import { Gear, Bell, Check } from './components/Icons.jsx';
 
@@ -46,6 +47,9 @@ const initial = () => ({
   patientName: null, patientPhone: null, verificationMethod: 'face-liveness',
   symptom: '', recording: false, recSec: 0, thinking: false,
   emergency: false, liveness: 'idle', livenessSessionId: null,
+  // Names the chat app whose embedded browser is showing this page, when the face check is about
+  // to be run somewhere the camera cannot work. null in a real browser.
+  livenessBrowserName: null,
   // The server's own identityVerified, not the local capture state. null while /patients/me
   // has not answered yet, so a screen that gates on it can tell "unverified" from "don't know".
   // verifyReturnTo names the screen to land on once verification passes; null means booking.
@@ -537,7 +541,8 @@ export default function App() {
         ? c.recordsLockedDeclined
         : (S.lang === 'tl' ? 'Kailangan ang pag-verify para makapag-book ng appointment' : "You'll need to verify your identity to book an appointment"));
     },
-    acceptConsent: async () => {
+    // `force` skips the in-app-browser gate below — the patient chose "try anyway".
+    acceptConsent: async ({ force = false } = {}) => {
       // retryLiveness() re-enters here from the Liveness screen itself — only push 'consent' onto
       // the back stack when we're actually arriving from it, or repeated retries pile up duplicate
       // entries and Back takes as many presses as the patient made attempts.
@@ -547,6 +552,16 @@ export default function App() {
         liveness: 'capturing',
         flowError: null,
       }));
+      // Most citizens arrive from a link in Messenger or Facebook, which opens the app inside the
+      // chat app's own webview. That webview has no usable camera grant, so the eVerify iframe
+      // dead-ends on "Camera is not accessible" with no permission prompt to accept and nothing
+      // on screen to do about it. Say it up front, while there is still a screen to say it on —
+      // once the SDK's full-screen overlay is up, the only way out is its X button.
+      // The check is UA-based, so it can be wrong: 'try anyway' has to stay one tap away.
+      if (!force && usesEverifySdk(S) && cameraLikelyBlocked()) {
+        set({ liveness: 'blocked', livenessBrowserName: detectInAppBrowser(), flowError: null });
+        return;
+      }
       // Records gates on the server's identityVerified, not on this local flag, so pull the
       // patient back down before the screen offers to continue — otherwise verification passes
       // and the list we return to is still locked.
@@ -561,9 +576,9 @@ export default function App() {
         // eVerify's /api/query. Off by default — see docs on VITE_EVERIFY_SDK_ENABLED.
         // The backend owns this switch (VERIFICATION_METHOD) so flipping providers is one env var
         // in one place rather than two kept in sync across two Vercel projects. The build-time flag
-        // remains an override for local development.
-        const useEverifySdk = import.meta.env.VITE_EVERIFY_SDK_ENABLED === 'true' || S.verificationMethod === 'everify';
-        if (useEverifySdk) {
+        // remains an override for local development. Shared with the Liveness screen, which has to
+        // reach the same answer to know whether the camera is ours or the SDK's.
+        if (usesEverifySdk(S)) {
           // Backend /auth/config first (one place to set and rotate the key, no frontend rebuild);
           // VITE_EVERIFY_PUBKEY stays as a local/offline override when the backend has none.
           const sid = await runEverifyLivenessCapture(S.everifyPubKey || import.meta.env.VITE_EVERIFY_PUBKEY);
@@ -605,6 +620,8 @@ export default function App() {
     onPatientUpdated,
     redeemExchangeCode,
     retryLiveness: () => A.acceptConsent(),
+    // "Try anyway" from the in-app-browser card: run the capture despite the UA check.
+    forceLiveness: () => A.acceptConsent({ force: true }),
 
     // Booking + eMessage
     goBook: () => {
