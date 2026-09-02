@@ -125,6 +125,16 @@ export default function SignIn({ c, S, A }) {
       {showWidget && (
         <div data-stagger>
           <div className="egov-login-slot" ref={widgetRef} />
+          <div
+            role="note"
+            className="card tint"
+            style={{ marginTop: 12, padding: '12px 14px', color: 'var(--ink)', fontSize: '0.86em', lineHeight: 1.45 }}
+          >
+            <strong>{S.lang === 'tl' ? 'Para sa test accounts:' : 'For test accounts:'}</strong>{' '}
+            {S.lang === 'tl'
+              ? 'Piliin ang Mobile number. Hindi gumagana sa Email address ang ibinigay na sandbox credentials; para lang iyon sa totoong eGovPH account.'
+              : 'Choose Mobile number. The supplied sandbox credentials do not work with Email address; email is only for a real eGovPH account.'}
+          </div>
           {widgetError && (
             <div role="alert" className="card" style={{ marginTop: 12, color: 'var(--red)', fontWeight: 650, fontSize: '0.9em' }}>
               <div>{widgetError}</div>
