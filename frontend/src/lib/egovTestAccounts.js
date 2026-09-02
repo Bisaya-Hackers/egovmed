@@ -91,10 +91,10 @@ function buildPanel(copy) {
  */
 export function keepTestAccountsVisible(copy) {
   if (typeof document === 'undefined') return () => {};
-  let frame = 0;
+  let timer = 0;
 
   const sync = () => {
-    frame = 0;
+    timer = 0;
     const modal = document.querySelector('.egov-modal');
     const mine = document.querySelector(OWN);
 
@@ -120,16 +120,20 @@ export function keepTestAccountsVisible(copy) {
     host.appendChild(panel);
   };
 
-  // Coalesce to one DOM write per frame: the widget mutates heavily while typing an OTP, and an
-  // observer that re-inserts on every record would fight its own mutations.
-  const schedule = () => { if (!frame) frame = requestAnimationFrame(sync); };
+  // Coalesced to one DOM write per tick: the widget mutates heavily while an OTP is typed, and an
+  // observer that re-inserted on every record would fight its own mutations.
+  //
+  // A timer, not requestAnimationFrame. rAF does not fire in a backgrounded tab, so a modal opened
+  // (or stepped through) while the tab is hidden would come back to the foreground with no panel
+  // until something else mutated the DOM. This has no animation to align to; it just needs to run.
+  const schedule = () => { if (!timer) timer = setTimeout(sync, 0); };
   const observer = new MutationObserver(schedule);
   observer.observe(document.body, { childList: true, subtree: true });
   schedule();
 
   return () => {
     observer.disconnect();
-    if (frame) cancelAnimationFrame(frame);
+    if (timer) clearTimeout(timer);
     document.querySelector(OWN)?.remove();
   };
 }
