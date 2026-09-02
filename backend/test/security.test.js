@@ -48,6 +48,7 @@ const { getStore, COLLECTIONS, seedDemoData } = require('../src/store');
 const { normalizePaymentStatus, apiTokenForHeader } = require('../src/integrations/egovPay');
 const http = require('../src/lib/http');
 const reportService = require('../src/services/reportService');
+const { isEgovSandboxPhone, isEgovSandboxPatient } = require('../src/lib/egovSandbox');
 
 let server;
 let baseUrl;
@@ -102,6 +103,16 @@ test.after(async () => {
 });
 
 test('security regression suite', async (t) => {
+  await t.test('only the five official eGovPH fixture numbers are recognized as sandbox accounts', () => {
+    assert.equal(isEgovSandboxPhone('+639090000001'), true);
+    assert.equal(isEgovSandboxPhone('639090000005'), true);
+    assert.equal(isEgovSandboxPhone('+639090000006'), false);
+    assert.equal(isEgovSandboxPhone('+639171234567'), false);
+    assert.equal(isEgovSandboxPatient({ phone: '+639090000001' }), true, 'legacy SSO row migrates without a re-login');
+    assert.equal(isEgovSandboxPatient({ phone: '+639090000001', manuallyOverriddenFields: ['phone'] }), false);
+    assert.equal(isEgovSandboxPatient({ phone: '+639090000001', egovSandboxAccount: false }), false);
+  });
+
   await t.test('eGovPay sandbox payment_status values are normalized', () => {
     assert.equal(normalizePaymentStatus({ payment_status: 'PAID' }), 'paid');
     assert.equal(normalizePaymentStatus({ status: 'SUCCESSFUL' }), 'successful');
@@ -567,6 +578,46 @@ test('security regression suite', async (t) => {
       token: owner, method: 'POST', body: { consent: true, livenessSessionId: sessionId },
     });
     assert.equal(replay.status, 400);
+  });
+
+  await t.test('an immutable eGovPH sandbox persona uses checked liveness without an impossible PhilSys face match', async () => {
+    const ownerId = await resetWithPatients();
+    await store.update(COLLECTIONS.PATIENTS, ownerId, {
+      identityVerified: false,
+      egovSandboxAccount: true,
+      phone: '+639090000001',
+    });
+    const owner = sign({ sub: ownerId });
+    const started = await json(await request('/identity/liveness', { token: owner, method: 'POST' }));
+    assert.equal(started.response.status, 200);
+
+    const verified = await json(await request('/identity/verify', {
+      token: owner,
+      method: 'POST',
+      body: { consent: true, livenessSessionId: started.value.sessionId },
+    }));
+    assert.equal(verified.response.status, 200);
+    assert.equal(verified.value.verified, true);
+    assert.equal(verified.value.verification.provider, 'egov-sandbox');
+    assert.equal(verified.value.verification.liveness.provider, 'mock');
+
+    const me = await json(await request('/patients/me', { token: owner }));
+    assert.equal(me.value.sandboxAccount, true);
+    assert.equal(me.value.identityVerified, true);
+    assert.equal(me.value.demographicsLocked, false);
+  });
+
+  await t.test('editing a real patient contact to a sandbox number cannot enable the sandbox path', async () => {
+    await resetWithPatients();
+    const owner = sign({ sub: 'pat_attacker' });
+    const updated = await json(await request('/patients/me', {
+      token: owner,
+      method: 'PATCH',
+      body: { phone: '+639090000001' },
+    }));
+    assert.equal(updated.response.status, 200);
+    assert.equal(updated.value.phone, '+639090000001');
+    assert.equal(updated.value.sandboxAccount, false);
   });
 
   await t.test('a raw (unregistered) client-supplied session_id is rejected, not silently trusted', async () => {

@@ -3,6 +3,7 @@ const identity = require('../integrations/identity');
 const { getStore, COLLECTIONS } = require('../store');
 const { randomId } = require('../lib/crypto');
 const { notFound, badRequest } = require('../lib/errors');
+const { isEgovSandboxPatient } = require('../lib/egovSandbox');
 
 async function startLiveness(patientId) {
   const store = getStore();
@@ -85,18 +86,26 @@ async function verifyIdentity({ patientId, consent, livenessSessionId, requestMe
   };
   await store.create(COLLECTIONS.CONSENTS, consentRecord);
 
-  const result = await identity.verifyPhilSys({
-    firstName: patient.firstName,
-    middleName: patient.middleName,
-    lastName: patient.lastName,
-    suffix: patient.suffix,
-    birthDate: patient.birthDate,          // YYYY-MM-DD
-    faceLivenessSessionId: livenessSessionId,
-    consent,
-  }).catch(async (err) => {
-    await store.update(COLLECTIONS.LIVENESS, livenessSessionId, { status: 'failed' });
-    throw err;
-  });
+  // eGovPH's five widget test accounts are fictional personas. A real tester can prove that a
+  // live person is present, but can never match that face against the fake persona's PhilSys
+  // demographics: eVerify correctly returns Tier II result_grade 0 every time. For those accounts
+  // only, the frontend uses the separate hosted Face Liveness service, whose result we checked
+  // server-to-server above, and we record the verification honestly as an eGov sandbox result.
+  // Real accounts still take the full eVerify + PhilSys path below.
+  const result = isEgovSandboxPatient(patient)
+    ? { verified: true, reference: null, provider: 'egov-sandbox' }
+    : await identity.verifyPhilSys({
+      firstName: patient.firstName,
+      middleName: patient.middleName,
+      lastName: patient.lastName,
+      suffix: patient.suffix,
+      birthDate: patient.birthDate,          // YYYY-MM-DD
+      faceLivenessSessionId: livenessSessionId,
+      consent,
+    }).catch(async (err) => {
+      await store.update(COLLECTIONS.LIVENESS, livenessSessionId, { status: 'failed' });
+      throw err;
+    });
   await store.update(COLLECTIONS.LIVENESS, livenessSessionId, {
     status: 'consumed', consumedAt: new Date().toISOString(),
   });

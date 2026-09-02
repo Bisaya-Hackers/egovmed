@@ -44,7 +44,7 @@ const initial = () => ({
   // Names the dict entry behind flowError when there is one, so the message can be re-read in the
   // other language after the fact. null means flowError is already the only wording we have.
   flowErrorKey: null,
-  patientName: null, patientPhone: null, verificationMethod: 'face-liveness',
+  patientName: null, patientPhone: null, sandboxAccount: false, verificationMethod: 'face-liveness',
   symptom: '', recording: false, recSec: 0, thinking: false,
   emergency: false, liveness: 'idle', livenessSessionId: null,
   // Names the chat app whose embedded browser is showing this page, when the face check is about
@@ -114,6 +114,7 @@ export default function App() {
   const onPatientUpdated = useCallback((p) => set((prev) => ({
     patientName: p?.firstName || null,
     patientPhone: p?.phone || null,
+    sandboxAccount: typeof p?.sandboxAccount === 'boolean' ? p.sandboxAccount : prev.sandboxAccount,
     // A caller that doesn't carry the flag must not be read as "unverified".
     identityVerified: typeof p?.identityVerified === 'boolean' ? p.identityVerified : prev.identityVerified,
     ...(p?.identityVerified ? { liveness: 'verified' } : {}),
@@ -200,8 +201,7 @@ export default function App() {
       ]);
       const identityVerified = !!me?.identityVerified;
       // Home greeted a hardcoded "Rosa" from the dictionary regardless of who was signed in.
-      if (me?.firstName) set({ patientName: me.firstName });
-      if (me?.phone) set({ patientPhone: me.phone });
+      if (me) onPatientUpdated(me);
       // Records gates on this server-side. The mirrored liveness flag can't stand in for it:
       // it stays 'idle' for an unverified patient, which is indistinguishable from "not asked yet".
       if (me) set({ identityVerified });
