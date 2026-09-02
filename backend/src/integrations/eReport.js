@@ -58,7 +58,12 @@ async function fileReport({ category, description, patient = {}, contact }) {
   if (isLive()) {
     const token = await ereportToken();
     const res = await http.post(`${cfg.baseUrl}/api/integration/submit_complaint`, {
-      mobile: phMobile(patient.phone || contact),
+      // `contact` first, not patient.phone. The caller has already resolved who is actually
+      // reachable (services/reportService → lib/recipient): a number the citizen typed for this
+      // complaint, else NOTIFY_DEFAULT_PHONE, else the SSO-supplied number. Preferring
+      // patient.phone here silently undid that and filed the sandbox +63909... number, which is
+      // the number eReport itself texts the complainant on.
+      mobile: phMobile(contact || patient.phone),
       first_name: patient.firstName || 'eGovMed',
       last_name: patient.lastName || 'Patient',
       gender: patient.sex === 'F' ? 'Female' : 'Male',

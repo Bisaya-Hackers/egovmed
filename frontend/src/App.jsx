@@ -50,6 +50,11 @@ const initial = () => ({
   // has not answered yet, so a screen that gates on it can tell "unverified" from "don't know".
   // verifyReturnTo names the screen to land on once verification passes; null means booking.
   identityVerified: null, verifyReturnTo: null,
+  // False until syncPatientState has come back once. Screens use it to avoid asserting a fact
+  // they cannot know yet — "no upcoming appointments" is a claim, and rendering it before the
+  // server has answered means the page contradicts itself a second later. Same class of bug as
+  // the one Records had.
+  patientSynced: false,
   triage: null,
   booking: false, booked: false, slotLabel: '', refNo: makeRefNo(CONST.hospital),
   // One entry per department being booked this session. Starts with just the triaged
@@ -196,6 +201,9 @@ export default function App() {
       // Records gates on this server-side. The mirrored liveness flag can't stand in for it:
       // it stays 'idle' for an unverified patient, which is indistinguishable from "not asked yet".
       if (me) set({ identityVerified });
+      // Set regardless of whether `me` came back: on a backend outage the screens still have to
+      // stop waiting and show their empty states rather than spinning forever.
+      set({ patientSynced: true });
       if (identityVerified) set({ liveness: 'verified' });
       if (Array.isArray(msgs)) set({ messages: msgs });
       if (Array.isArray(appts) && appts.length) {
