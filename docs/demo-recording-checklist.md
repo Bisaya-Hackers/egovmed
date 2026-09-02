@@ -1,4 +1,4 @@
-# eGovMed — demo video checklist
+# eGovMed: demo video checklist
 
 For the 3-minute submission video. The two things being marked are **a live working demo** and
 **DICT API implementation**, so every shot below is chosen to show a real government API
@@ -13,7 +13,7 @@ responding, not a UI walkthrough.
 
 - [ ] Open the app once and sign in, then sign out. First load wakes a cold serverless function
       and adds a few seconds of nothing happening.
-- [ ] Phone on Do Not Disturb, but **keep SMS visible** — the arriving text is the proof shot.
+- [ ] Phone on Do Not Disturb, but **keep SMS visible**. The arriving text is the proof shot.
 - [ ] Record portrait, on a real phone. It is a citizen app.
 
 ---
@@ -25,7 +25,7 @@ responding, not a UI walkthrough.
 | 1 | Tap **Login via eGovPH**, sign in with `+639090000001` | Real eGovPH sign-in in a browser, no pasted codes. Say out loud: **the name and profile that fill in came from PhilSys, we typed nothing** | **eGovPH SSO** |
 | 2 | **Start a visit**, describe symptoms in Taglish | Live AI triage returning specialty + urgency + red flags. Show that it answered a mixed-language sentence | **eGov AI** |
 | 3 | Consent, then **verify identity** with the face capture | Liveness capture, then a PhilSys demographic match under recorded consent | **Face Liveness** + **eVerify** |
-| 4 | **Book** the appointment | Queue number on screen — then cut to **the SMS landing on the phone** | **eMessage** |
+| 4 | **Book** the appointment | Queue number on screen, then cut to **the SMS landing on the phone** | **eMessage** |
 | 5 | Open **Records**, tap a record, show the **content hash and chain tx** | Records anchored on-chain, hash only. Say: **no patient data goes on the chain, only the fingerprint** | **eGovChain** |
 | 6 | Open **Payments**, start a payment | Hosted government checkout with statutory discounts applied | **eGovPay** |
 | 7 | Open **Report**, file one, show the **case number** | Complaint filed into the real government queue, OTP-gated | **eReport** (+ eMessage for the code) |
@@ -59,8 +59,8 @@ They are the difference between "a nice app" and "a real integration":
 
 ## If something breaks mid-take
 
-- **Sign-in dialog shows nothing** — reload once. The widget script is loaded from
+- **Sign-in dialog shows nothing.** Reload once. The widget script is loaded from
   `widgets.e.gov.ph` and a cold start can lose the race.
-- **Triage is slow** — it is a real generation call. Let it run; the wait is honest.
-- **SMS does not arrive** — keep going. The confirmation is on screen either way; the text is a
+- **Triage is slow.** It is a real generation call. Let it run; the wait is honest.
+- **SMS does not arrive.** Keep going. The confirmation is on screen either way; the text is a
   bonus shot, not the demo.

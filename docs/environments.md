@@ -35,8 +35,8 @@ sufficient, because CI never talks to Upstash or to a real eGov endpoint. Push t
 look at it there first. After a merge, confirm production actually came up:
 
 ```bash
-curl -sS https://egovmed-backend.vercel.app/health
-curl -sS -H "x-admin-key: $ADMIN_KEY" https://egovmed-backend.vercel.app/integrations/status
+curl -sS https://egovmed-api.vercel.app/health
+curl -sS -H "x-admin-key: $ADMIN_KEY" https://egovmed-api.vercel.app/integrations/status
 ```
 
 Manual deploys still work and still override, which is the escape hatch if a Git deploy fails:

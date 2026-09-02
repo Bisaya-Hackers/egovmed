@@ -39,7 +39,7 @@ NODE_ENV=production
 PORT=4000                    # Vercel ignores this but env.js still reads it
 STORE_DRIVER=kv
 APP_URL=<paste after frontend deploy>   ← e.g. https://egovmed.vercel.app
-API_PUBLIC_URL=<self URL>               ← e.g. https://egovmed-backend.vercel.app
+API_PUBLIC_URL=<self URL>               ← e.g. https://egovmed-api.vercel.app
 JWT_SECRET=<your 64-hex from .env>
 PHI_ENCRYPTION_KEY=<your 64-hex from .env>
 ADMIN_KEY=<generate 32+ char string>
@@ -94,7 +94,7 @@ vercel --prod
 ### Frontend env vars
 
 ```
-VITE_API_BASE_URL=<backend URL>/         ← e.g. https://egovmed-backend.vercel.app
+VITE_API_BASE_URL=<backend URL>/         ← e.g. https://egovmed-api.vercel.app
 ```
 
 ## 4 · Wire the URLs back together
@@ -129,7 +129,7 @@ cd backend
 vercel env rm ALLOW_MOCK_IN_PRODUCTION production --yes
 printf 'false' | vercel env add ALLOW_MOCK_IN_PRODUCTION production
 vercel --prod --yes --force
-curl -sS https://egovmed-backend.vercel.app/health   # must return {"status":"ok"}
+curl -sS https://egovmed-api.vercel.app/health   # must return {"status":"ok"}
 ```
 
 If `/health` returns 500 after this, the log will name the integration still in mock — flip it to `live` and redeploy.

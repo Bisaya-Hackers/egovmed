@@ -7,15 +7,29 @@ stack. Pilot target: Philippine General Hospital (PGH).
 > One login, one medical record, one payment. Patients stop re-entering data, stop repeating
 > labs, and stop lining up to pay.
 
-**Live app:** [egovmed.vercel.app](https://egovmed.vercel.app) ·
-**API:** [egovmed-api.vercel.app/health](https://egovmed-api.vercel.app/health)
-**Team:** Bisaya-Hackers (UP Manila) · **Event:** eGov Hackathon PH 2026
-**Stack:** React 18 + Vite · Node/Express · Upstash Redis · Hyperledger Besu · Vercel
+| | |
+|---|---|
+| **Live app** | **https://egovmed.vercel.app** |
+| **API** | https://egovmed-api.vercel.app/health |
+| **Repository** | https://github.com/M4tyu633/egovmed |
+| **Team** | Bisaya-Hackers. Matthew Labrador, Clarence Pagaduan, Paul Recio, Harry Gomez, Hans Lao, Javier Mendoza |
+| **Event** | eGov Hackathon PH 2026 |
+| **Stack** | React 18 + Vite · Node/Express · Upstash Redis · Hyperledger Besu · Vercel |
+
+### Try it in 30 seconds
+
+Open **https://egovmed.vercel.app**, tap **Login via eGovPH**, and sign in with a sandbox
+account. The dialog lists all five and keeps them on screen through every step:
+
+| Mobile number | One-time code | PIN |
+|---|---|---|
+| `+639090000001` … `+639090000005` | `123456` | `000000` |
+
+Mobile number only. On the hackathon SSO credentials an account resolves from a number rather
+than an email address, so the widget is configured to offer just that one path.
 
 All eight eGov APIs run **live** against the API Developer Portal gateway
 (`https://platforms-api.e.gov.ph/<service>`). No legacy `hackathon-*` host is in use.
-Sign in with a sandbox account — mobile number `+639090000001` through `+639090000005`,
-one-time code `123456`, PIN `000000`. The sign-in dialog lists them.
 
 ---
 
@@ -74,8 +88,8 @@ credentialed, and names the offender. It stays on only for an explicitly labelle
 
 **Gateway calls are metered, and blockchain RPC reads are not free.** One shared pool of 500
 credits covers all eight APIs. Standard Ethereum tooling (`tx.wait()`, `waitForDeployment()`)
-polls `eth_getTransactionReceipt` in a loop, and every poll is a billed gateway call — that is
-536 requests and an emptied allowance in under five minutes. eGovChain is therefore submit-once,
+polls `eth_getTransactionReceipt` in a loop, and every poll is a billed gateway call. That comes
+to 536 requests and an emptied allowance in under five minutes. eGovChain is therefore submit-once,
 check-once, never in a loop, and record anchoring uses a calldata strategy rather than a deployed
 contract. See [CLAUDE.md](CLAUDE.md) for the full rules.
 
@@ -150,98 +164,62 @@ and [docs/pentest-handoff.md](docs/pentest-handoff.md).
 
 ### System flow
 
-Where a patient's request goes, and which government API it touches on the way.
-
 ```mermaid
-flowchart TB
-    subgraph client["Patient app · React 18 + Vite · Vercel"]
-        UI["Sign in → Triage → Verify → Book → Pay → Records → Report"]
+flowchart LR
+    UI["<b>Patient app</b><br/>React 18 + Vite"]
+    W["widgets.e.gov.ph<br/>Login as eGov"]
+
+    subgraph BE["Backend · Node/Express · Vercel sin1"]
+        direction LR
+        R["routes<br/><i>validate · rate limit · auth</i>"]
+        SV["services<br/><i>logic · consent · audit</i>"]
+        IN["integrations<br/><i>mock + live per API</i>"]
+        R --> SV --> IN
     end
 
-    subgraph api["Backend · Node/Express · Vercel Functions (sin1)"]
-        direction TB
-        R["routes/<br/>zod validation · rate limits · auth"]
-        S["services/<br/>business logic · consent + audit writes"]
-        I["integrations/<br/>one adapter per API, mock path + live path"]
-        R --> S --> I
-    end
+    KV[("Upstash Redis<br/>sessions · encrypted PHI")]
+    GOV["<b>platforms-api.e.gov.ph</b><br/>all 8 eGov APIs, live"]
 
-    subgraph store["State"]
-        KV[("Upstash Redis<br/>sessions · PHI encrypted at rest · rate-limit counters")]
-    end
-
-    subgraph gov["platforms-api.e.gov.ph"]
-        direction TB
-        G1["eGovPH SSO"]
-        G2["eGov AI"]
-        G3["eVerify + Face Liveness"]
-        G4["eMessage"]
-        G5["eGovPay"]
-        G6["eReport"]
-        G7["eGovChain · Besu"]
-    end
-
-    UI -->|"HTTPS · Bearer session · CORS pinned"| R
-    S <--> KV
-    I --> G1 & G2 & G3 & G4 & G5 & G6 & G7
-
-    W["widgets.e.gov.ph<br/>Login as eGov widget"] -.->|"exchange_code"| UI
+    W -.->|"exchange_code"| UI
+    UI -->|"HTTPS · Bearer · CORS pinned"| R
+    SV <--> KV
+    IN --> GOV
 ```
+
+Validation and rate limiting sit at the edge of every route, so nothing reaches a service
+unchecked. Each integration adapter carries both a mock and a live path, which is what lets the
+whole product run offline with no credentials and makes the demo survive a sandbox outage.
 
 The backend is client-agnostic on purpose. An assisted kiosk client for walk-in patients with no
 phone plugs in as a second client with no backend changes.
 
 ### eGov API integration points
 
-Each numbered step is one citizen action and the API call it makes.
+One row per citizen action, and the government API it calls.
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor P as Patient
-    participant FE as eGovMed app
-    participant BE as eGovMed backend
-    participant GOV as eGov API gateway
+flowchart LR
+    S1["1 · Sign in"] --> S2["2 · Triage"] --> S3["3 · Verify ID"] --> S4["4 · Book"]
+    S4 --> S5["5 · Pay"] --> S6["6 · Records"] --> S7["7 · Report"]
 
-    P->>FE: Tap "Login via eGovPH"
-    FE->>GOV: Login widget (partner_code only)
-    GOV-->>FE: exchange_code
-    FE->>BE: POST /auth/egov/exchange
-    BE->>GOV: eGovPH SSO · /api/token + /api/partner/sso_authentication
-    GOV-->>BE: PhilSys-backed profile
-    BE-->>FE: session token + patient
-
-    P->>FE: Describe symptoms (EN / TL / Taglish)
-    FE->>BE: POST /triage
-    BE->>GOV: eGov AI · generation
-    GOV-->>BE: specialty · urgency · red flags
-    Note over BE: Rule-based floor can only RAISE urgency,<br/>never lower it — even in live mode
-
-    P->>FE: Consent, then capture face
-    FE->>GOV: Face Liveness · hosted capture / eVerify Web SDK
-    FE->>BE: POST /identity/verify
-    BE->>GOV: eVerify · PhilSys demographic match
-    Note over BE: Consent receipt written.<br/>The PII-heavy response is never persisted.
-
-    P->>FE: Book an appointment
-    FE->>BE: POST /appointments
-    BE->>GOV: eMessage · POST /messaging/v1/sms/push
-    Note over BE: Best effort — a failed SMS never fails a booking
-
-    P->>FE: Pay the bill
-    FE->>BE: POST /payments
-    BE->>GOV: eGovPay · hosted checkout + statutory discounts
-    Note over BE: The return callback is non-authoritative.<br/>A forged one gets 202 and writes nothing.
-
-    P->>FE: Open Records
-    BE->>GOV: eGovChain · anchor + verify record hash
-    Note over BE: Hash only — no patient ID, facility<br/>or clinical content reaches the chain
-
-    P->>FE: File a complaint
-    FE->>BE: POST /reports/otp then POST /reports
-    BE->>GOV: eMessage (OTP) → eReport · file, returns a case number
-    Note over BE: Filing is gated on the texted code.<br/>Fails closed in both directions.
+    S1 -.-> A1(["eGovPH SSO"])
+    S2 -.-> A2(["eGov AI"])
+    S3 -.-> A3(["Face Liveness<br/>+ eVerify"])
+    S4 -.-> A4(["eMessage"])
+    S5 -.-> A5(["eGovPay"])
+    S6 -.-> A6(["eGovChain"])
+    S7 -.-> A7(["eReport<br/>+ eMessage"])
 ```
+
+| Step | Call | eGov API | Chosen behaviour |
+|---|---|---|---|
+| 1 | `POST /auth/egov/exchange` | eGovPH SSO `/api/token` then `/api/partner/sso_authentication` | The widget only ever sees `partner_code`. The secret is redeemed server-side; no token reaches the browser |
+| 2 | `POST /triage` | eGov AI generation | A rule-based floor can only **raise** urgency, never lower it, and it stays in force in live mode, so a degraded model cannot downgrade an emergency |
+| 3 | `POST /identity/verify` | Face Liveness capture, then eVerify PhilSys match | A consent receipt is written. The PII-heavy eVerify response is deliberately never persisted |
+| 4 | `POST /appointments` | eMessage `/messaging/v1/sms/push` | Best effort. A failed SMS never fails a booking, but it is logged |
+| 5 | `POST /payments` | eGovPay hosted checkout, statutory discounts applied | The return callback is non-authoritative. A forged one gets `202` and writes nothing |
+| 6 | `GET /records`, `/records/:id/verify` | eGovChain anchor and verify | Hash only. No patient ID, facility or clinical content reaches the chain. Writes fail closed, verification fails safe |
+| 7 | `POST /reports/otp` then `POST /reports` | eMessage for the code, eReport `submit_complaint` | Filing is gated on the texted code and fails closed in both directions. Returns a real case number |
 
 ### Repository layout
 
@@ -252,10 +230,10 @@ frontend/
   src/lib/             API client, eGovPH login widget loader, eVerify SDK loader
   src/i18n/            EN + TL copy in one dictionary
 backend/
-  src/routes/          Express routers — zod validation and rate limits at the edge of each route
+  src/routes/          Express routers. zod validation and rate limits at each route's edge
   src/services/        Business logic, storage, consent and audit writes
   src/integrations/    One adapter per eGov API, each with a mock and a live path
-  src/store/           Pluggable driver — Upstash Redis in prod, in-memory for tests
+  src/store/           Pluggable driver: Upstash Redis in prod, in-memory for tests
   src/lib/             Crypto, HTTP client with the SSRF guard, recipient resolution, logging
   src/config/env.js    Every environment variable, with boot-time validation
   test/                Security regression suite
