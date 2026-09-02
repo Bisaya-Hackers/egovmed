@@ -495,6 +495,7 @@ Liveness, or eGovPay. Those need a public HTTPS origin.
 
 | Doc | What it covers |
 |---|---|
+| [docs/demo-recording-checklist.md](docs/demo-recording-checklist.md) | The 3-minute demo run: which action proves which API |
 | [docs/deploy-staging.md](docs/deploy-staging.md) | Vercel deployment and the per-service go-live order |
 | [docs/security-review-mock-to-live.md](docs/security-review-mock-to-live.md) | Security audit and the reasoning behind each decision |
 | [docs/pentest-handoff.md](docs/pentest-handoff.md) | Penetration testing notes |
