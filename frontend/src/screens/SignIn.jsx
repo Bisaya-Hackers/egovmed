@@ -44,6 +44,11 @@ export default function SignIn({ c, S, A }) {
       // The widget speaks en/fil, and the app already has an EN/TL toggle — hand it the same
       // choice so a Tagalog session doesn't hit an English OTP screen halfway through signing in.
       locale: S.lang === 'tl' ? 'fil' : 'en',
+      // Mobile only. The widget's Email tab is real, but the hackathon SSO credentials only
+      // resolve an identity from a mobile number — every email, sandbox or otherwise, dead-ends on
+      // this deployment. With a single entry the widget drops its Mobile/Email tab strip
+      // altogether, so nobody is offered a path that cannot work.
+      identifierTypes: ['mobile'],
       // Puts eGovPH's sandbox accounts in the widget itself. There is no real PhilSys account to
       // sign in with on this deployment, so without this a tester is staring at a mobile-number
       // field with nothing valid to type into it.
@@ -57,14 +62,14 @@ export default function SignIn({ c, S, A }) {
         mobile: 'Mobile number',
         otp: 'One-time code',
         pin: 'PIN',
-        mobileOnly: 'Sa Mobile number lang gumagana ang mga ito. Walang email sa likod ng sandbox accounts.',
+        mobileOnly: 'Mobile number lang muna. Sa hackathon setup, numero lang ang tinatanggap ng eGovPH SSO, hindi email.',
       } : {
         title: 'Test accounts',
         desc: 'Development only. Sign in with any of these.',
         mobile: 'Mobile number',
         otp: 'One-time code',
         pin: 'PIN',
-        mobileOnly: 'These work on the Mobile number tab only. The sandbox accounts have no email behind them.',
+        mobileOnly: 'Mobile number only for now. On the hackathon setup, eGovPH SSO resolves an account from a number, not an email address.',
       },
       // Redeem immediately. Unlike a code lifted off the landing URL, this one was minted by a
       // deliberate act the citizen just performed, so there is no prefetch to guard against and
@@ -142,17 +147,11 @@ export default function SignIn({ c, S, A }) {
           appearing under it. */}
       {showWidget && (
         <div data-stagger>
+          {/* No test-account note out here. The sign-in screen is the first thing anyone opening
+              eGovMed sees, and a sandbox-credentials card is the wrong first impression of a
+              citizen-facing app. The same guidance now travels with the numbers themselves, on
+              the panel injected into the widget's own modal — see lib/egovTestAccounts.js. */}
           <div className="egov-login-slot" ref={widgetRef} />
-          <div
-            role="note"
-            className="card tint"
-            style={{ marginTop: 12, padding: '12px 14px', color: 'var(--ink)', fontSize: '0.86em', lineHeight: 1.45 }}
-          >
-            <strong>{S.lang === 'tl' ? 'Para sa test accounts:' : 'For test accounts:'}</strong>{' '}
-            {S.lang === 'tl'
-              ? 'Piliin ang Mobile number. Hindi gumagana sa Email address ang ibinigay na sandbox credentials; para lang iyon sa totoong eGovPH account.'
-              : 'Choose Mobile number. The supplied sandbox credentials do not work with Email address; email is only for a real eGovPH account.'}
-          </div>
           {widgetError && (
             <div role="alert" className="card" style={{ marginTop: 12, color: 'var(--red)', fontWeight: 650, fontSize: '0.9em' }}>
               <div>{widgetError}</div>
