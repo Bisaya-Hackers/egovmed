@@ -1,13 +1,10 @@
-# Requested revision
+# Completed visual corrections
 
-The delivered 3:58 cut is a draft pending the following corrections:
+- Replaced the long single-photo opening with six three-second shots using five distinct Philippine General Hospital archive photographs. No overseas clinic stock is used. The last view matches the approved exact-logo O transition.
+- Made the backend a visible blue node, connecting the phone and service paths to its edge ports. A single legible request/response journey uses chevrons on the visible connector geometry; the remaining API adapters are highlighted in groups. Phone entrance and exit positions remain continuous.
+- Raised captions 228 pixels above the lower edge for player-control clearance. During phone scenes, captions use the empty left area so they do not cover typing, key feedback or payment controls.
+- Preserved the current narration script, guide PDF and SRT byte-for-byte, including all cue timings. No voice track was added.
+- Retained the completed liveness and cash-payment flows, natural typing, SF Pro system typography, six notification moments, lo-fi score and SFX-only counterpart. Added restrained sound cues to the opening's photographic reveals.
+- Verified duration, codec/stream metadata, full-file decode, identical picture between variants, SFX-only waveform correspondence, cue timing, narration hashes and final frame/sequence samples. See verification.json and FINAL-REVIEW.md for exact results and limits.
 
-- Capture the liveness flow after the hosted instruction page, including the capture interface, outcome and return to eGovMed where a real participant can complete it.
-- Check all other flows for omitted user actions, provider handoffs, return states and verification requirements. A hosted landing page alone is insufficient coverage of a complete integration.
-- Replace the Arial typography in the iPhone notification, status bar and keyboard with a faithful iOS treatment, and correct notification spacing and hierarchy.
-- Slow the typing and introduce natural pauses while keeping the text, key popups and SFX on the same timeline.
-- Improve continuity between scenes and camera moves, then retime music, SFX, captions and voice-over windows.
-
-Keep Bisaya Hackers as the sole team name, exclude the private deployment URL, and leave voice-over for the team to record. The friend-facing Drive folder contains only the two viewing versions and voice guide. Editing files and internal notes have been moved out of that folder.
-
-Do not fabricate successful biometric verification, payment or SMS delivery. Capture actual steps and outcomes; distinguish incomplete, sandbox and illustrative material.
+The 3:58 draft and the earlier 4:45 export with the disconnected diagram are superseded. Continue using the same delivery folder and file IDs. Team narration, its final mix/sync check and YouTube submission remain later team steps.

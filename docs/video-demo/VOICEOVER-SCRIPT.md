@@ -1,106 +1,103 @@
-# eGovMed - voice-over recording guide
+# eGovMed voice-over script
 
-Final picture length: 3:58. English voice-over, with Tagalog patient input. No synthetic narration is in the video.
+Bisaya Hackers · Picture length 4:45. English narration; Tagalog appears in the patient input. No voice is included in either video.
 
-Speaker A: patient setting, consent, records, reporting and close. Speaker B: app interaction and implementation. These are suggested roles; one person can record the whole script.
+Record each cue separately. The timestamps are speaking windows, not text to read aloud. Use a relaxed delivery and leave the gaps for the picture and sound. All windows were checked against an estimated maximum of 130 spoken words per minute, including acronym expansion and a pause allowance.
 
-Record each chapter separately as a mono 48 kHz WAV, in a quiet room. Read naturally within each IN/OUT window. Leave the marked gaps for the picture and music; do not fill them. Record at a comfortable pace, with no dramatic announcer voice.
-
-For editing, use the silent picture master plus the separate music and SFX stems. The viewing export already has a music/SFX mix and subtitles. If adding voice directly to that file, keep it as the background track and adjust levels under your voice. Do not add the music twice. Re-time subtitles if your words or pace change.
-
-**00:00:00.800 - 00:00:06.700 / Speaker A**
+**00:00.8–00:06.8**
 A hospital visit begins before the consultation.
 
-**00:00:08.500 - 00:00:13.500 / Speaker A**
-Patients have to work through registration, records and payment.
+**00:08.0–00:15.5**
+Patients still have to manage registration, medical records and payment.
 
-**00:00:17.000 - 00:00:21.200 / Speaker B**
-eGovMed brings those first steps together.
+**00:18.5–00:24.8**
+eGovMed brings those steps into one patient journey.
 
-**00:00:22.000 - 00:00:28.500 / Speaker B**
-We’ll show live government integrations, with sample data where marked.
+**00:26.8–00:35.0**
+Sign in through eGovPH using a mobile number and one-time code.
 
-**00:00:29.000 - 00:00:33.800 / Speaker B**
-Sign in through eGovPH with the mobile number and one-time code.
+**00:35.4–00:41.4**
+Enter the six-digit PIN to continue.
 
-**00:00:34.200 - 00:00:39.800 / Speaker B**
-Enter the six-digit PIN to continue into eGovMed.
+**00:42.0–00:48.8**
+The account opens with the patient profile already available.
 
-**00:00:41.000 - 00:00:49.800 / Speaker B**
-The backend exchanges the sign-in code and retrieves the patient profile.
-
-**00:00:54.800 - 00:01:00.800 / Speaker B**
+**00:51.0–00:58.5**
 Describe the concern in everyday language, including Tagalog.
 
-**00:01:01.200 - 00:01:06.000 / Speaker B**
+**00:59.0–01:07.5**
 Here, the patient reports itchy skin and a rash that began yesterday.
 
-**00:01:07.000 - 00:01:12.000 / Speaker B**
-The live eGov AI response suggests Dermatology, with routine urgency.
+**01:09.5–01:16.0**
+This recorded eGov AI response suggests Dermatology.
 
-**00:01:13.000 - 00:01:20.000 / Speaker B**
-A nurse must confirm this result. It is not a diagnosis.
+**01:17.0–01:22.8**
+A nurse must confirm the routing. This is not a diagnosis.
 
-**00:01:23.000 - 00:01:30.000 / Speaker A**
-The app explains what information will be shared before asking for consent.
+**01:24.8–01:31.6**
+The patient gives consent before the app opens Face Liveness.
 
-**00:01:31.000 - 00:01:38.500 / Speaker A**
-eGovMed opens the hosted Face Liveness service. The patient completes the camera check here.
+**01:32.5–01:42.0**
+Follow the camera guide and hold still while the service checks for a live person.
 
-**00:01:45.000 - 00:01:51.000 / Speaker B**
-Choose the hospital, department and an available time.
+**01:46.0–01:54.5**
+After the check, eGovMed receives the result and returns to the verified screen.
 
-**00:01:52.000 - 00:01:56.000 / Speaker B**
-Confirm the appointment and keep its reference number.
+**01:57.0–02:04.0**
+Choose a hospital, department and an available appointment time.
 
-**00:01:57.000 - 00:02:04.500 / Speaker B**
-The eMessage adapter connects confirmations and reminders to SMS delivery.
+**02:06.0–02:15.0**
+The confirmation includes a booking reference and an SMS update.
 
-**00:02:08.000 - 00:02:14.000 / Speaker A**
-Records from different facilities are available together.
+**02:17.0–02:24.5**
+Messages keep the appointment details easy to find.
 
-**00:02:15.000 - 00:02:22.000 / Speaker A**
-Medical content stays encrypted off-chain. eGovChain stores its fingerprint for integrity checks.
+**02:26.8–02:33.0**
+Review records from different facilities in one place.
 
-**00:02:23.000 - 00:02:31.500 / Speaker A**
-The care team can review that history and decide whether a test needs repeating.
+**02:34.0–02:43.0**
+Add a document's details, save the record, and receive a confirmation.
 
-**00:02:35.000 - 00:02:42.000 / Speaker B**
-Here is a sample consultation bill, with its fee breakdown and benefit calculation.
+**02:45.0–02:52.5**
+The backend uses encrypted storage and fingerprints to check record integrity.
 
-**00:02:43.000 - 00:02:49.500 / Speaker B**
-Review the remaining balance, then choose a payment method.
+**02:54.8–03:02.5**
+Activate an available benefit, then review the estimated bill.
 
-**00:02:50.000 - 00:02:56.800 / Speaker B**
-eGovPay opens its hosted checkout, with payment methods for the patient to choose.
+**03:04.0–03:12.0**
+Continue to eGovPay and choose Cash Payments in the test checkout.
 
-**00:03:00.000 - 00:03:06.000 / Speaker A**
-Choose a category and describe the issue clearly.
+**03:13.0–03:21.0**
+For this demo, mark the test payment as paid and return to the app.
 
-**00:03:07.000 - 00:03:13.500 / Speaker A**
-After verification, keep the case reference for follow-up.
+**03:22.0–03:27.2**
+The confirmed status updates the payment record.
 
-**00:03:14.000 - 00:03:20.000 / Speaker A**
-Government updates follow the separate eReport access flow.
+**03:29.0–03:36.0**
+Choose a category and explain what happened.
 
-**00:03:22.000 - 00:03:29.000 / Speaker B**
-React calls an Express backend with separate adapters for the DICT services.
+**03:45.5–03:52.7**
+Verify the phone number using the code sent by SMS.
 
-**00:03:30.000 - 00:03:39.800 / Speaker B**
-They connect sign-in, identity, routing, messages, record proofs, payments and reporting. Credentials stay on the server.
+**03:54.5–04:00.8**
+Keep the case reference and check the report confirmation.
 
-**00:03:43.000 - 00:03:49.500 / Speaker A**
-eGovMed brings these steps into one patient journey.
+**04:03.0–04:10.4**
+The phone sends a request to the eGovMed backend.
 
-**00:03:50.000 - 00:03:55.500 / Speaker A**
+**04:11.0–04:18.8**
+The server calls a government service and sends the result back.
+
+**04:20.0–04:28.7**
+Separate adapters handle sign-in, identity, messages, records, payments and reporting.
+
+**04:36.3–04:42.5**
 Built by Bisaya Hackers for the eGov Hackathon.
 
-## Music-only spaces
+## Recording notes
 
-Leave the first beat before 00:00.8, the brand transition around 00:20, and the gaps between the scripted lines. Finish the last line by 03:55.5. The final 2.5 seconds belong to the musical tail and fade.
+Use headphones while watching so the backing track does not leak into your microphone. Record a clean voice track in a quiet room. WAV at 48 kHz is preferred; a good phone recording is also usable.
 
-## Mix targets
+Finish the final line by 04:42.5. The picture ends at 04:45.0. Keep the test-payment wording: the gateway uses a sandbox Mark as Paid control.
 
-Keep speech clear and comfortably louder than music. Start around -16 LUFS for spoken narration and adjust by ear; music should sit roughly 10-16 dB below speech during dense explanation. The supplied music guide mix already has gentle volume automation around these planned narration windows. SFX should remain subtle.
-
-Before publishing, listen once on headphones and once on a phone speaker. Check names, acronyms, subtitles and the live/sample disclosures.
+The music version already includes the backing track and SFX. The no-music version retains the same SFX. If recording over either export, do not add its existing audio again. Align the subtitles to your final performance if you change the wording or pace.

@@ -1,34 +1,55 @@
-# eGovMed manual editing handoff
+# eGovMed editing handoff
 
-Continue in the current project, or paste this file into a future conversation yourself. No work has been sent to another conversation.
+The current cut is 4:45, 1920 x 1080, 60 fps. It has English subtitles and no voice-over. Bisaya Hackers is the only team name. The deployment URL is private and must remain absent from the picture, captions, voice script and publishing notes.
 
-## Delivery
+The friend-facing Drive folder contains only the music-and-SFX video, the SFX-only video and the voice guide. Source material, subtitle files, credits and internal notes are stored separately. No work has been sent to another conversation; this is a manual handoff file.
 
-The final cut runs 3:58, 1920 x 1080, 60 fps. Both viewing versions have English subtitles and SFX. `eGovMed-demo.mp4` has music; `eGovMed-demo-no-music.mp4` removes only music. Neither contains narration. Record the team's voice using the PDF or `VOICEOVER-SCRIPT.md`, then adjust the mix and captions to the actual performance.
+## Files and editing
 
-The local project root is `C:/Users/matth/Videos/eGovMed-Demo`. Use only `output/remotion` for final deliveries. Earlier exports in `output`, `output/v2`, and `output/motion` are rejected drafts.
+The production workspace is `C:/Users/matth/Videos/eGovMed-Demo`. Final outputs are under `output/remotion`. Earlier files in `output`, `output/v2` and `output/motion` are rejected drafts. The previous 3:58 cut is superseded.
 
-## Editing and rebuilding
+The authoritative timeline, captions, typing tracks and notification events are in `remotion/edit-data.json`, mirrored in `remotion/src/edit.ts`. The main composition is `src/index.tsx`. Dedicated modules are `Opening.tsx`, `IPhone.tsx`, `IPhoneInput.tsx`, `NativeNotifications.tsx` and `Architecture.tsx`. Do not rerun one-off patch scripts blindly; they may duplicate edits or restore older timings.
 
-Extract the editable ZIP, preserve its `eGovMed/remotion`, `eGovMed/assets`, and `eGovMed/output` structure. Install Node.js, Python with NumPy, SciPy and ReportLab, FFmpeg with libass, and Chrome. In `remotion`, run `npm ci`, then `npm run studio`. `node render-film.cjs` produces the clean picture and runs `finish_delivery.py` to make the two delivery versions. The renderer currently points to the standard Windows Chrome path; change `browserExecutable` for another computer. No live API calls occur during rendering.
+Install Node.js, Python with NumPy, SciPy, Pillow and ReportLab, FFmpeg with libass, and Chrome. Run `npm ci` and `npm run studio` inside `remotion`. `node render-film.cjs` renders the silent picture and runs `finish_delivery.py`, which delegates to `finish_delivery_revision.py`. `python sound_design.py` delegates to the revised sound builder. Rendering itself makes no live API calls.
 
-`src/index.tsx` controls scenes and motion, `src/edit.ts` controls scene/caption timing, and `edit-data.json` is the matching data used by the audio/caption finishing scripts. Keep both timing files in sync. `src/IPhone.tsx` and `src/IPhoneKeyboard.tsx` contain the phone, notification and timed typing. The keyboard, text reveal and clicks share a timing specification. After timing changes, run `python sound_design.py` before rendering. The final audio is mixed by `finish_delivery.py`; its mix is authoritative over the Studio guide preview.
+The script currently uses the standard Windows Chrome executable path; adapt it on another computer. Obtain SF Pro fonts separately from Apple's official font resources under their terms and place SF-Pro-Text-Regular.otf and SF-Pro-Text-Semibold.otf in public. Apple font binaries are not included in the reusable skill or shareable source package.
 
-The ZIP contains the prepared source assets and original licensed music. Silent picture, clean viewing export, and WAV stems also remain locally in `output/remotion`. For the supplied raw `SFX.wav`, use gain 0.7 to match the viewing exports; `music-ducked.wav` is already at the intended music level. Do not double the existing mix when adding voice.
+Use the silent picture master and audio stems for a controlled voice mix. The supplied music stem is already volume-automated; use gain 0.7 for the raw SFX.wav stem to match the viewing exports. If adding voice to a viewing MP4, do not add that file's existing music or SFX again. Adjust captions if the final performance differs from the script.
 
-## Preserve these decisions
+## Latest delivery and locked narration
 
-The deployment URL is private. Never put it in the picture, subtitles, voice-over or public publishing notes. The closing uses only the product and team identity.
+Continue using only the existing friend-facing Drive folder and replace its two videos in place. Do not create or move to new delivery folders. Keep the existing voice-over PDF unchanged. This revision keeps the script, 30 cue windows and SRT text byte-identical. The reusable skill contains the new graph and player-control checks.
 
-- Keep the approved blue, red and yellow identity, continuous camera motion and screen-led composition. Do not revert to generic floating cards, slogan pills or slide layouts.
-- Retain subtitles, native-looking keyboard/key popups, correct appointment notification text and sparse synchronized SFX. The notification must never say TEST or please ignore.
-- The patient types the Tagalog skin/rash concern. Do not substitute the original chest-pain example: the tested service returned routine urgency for it; that application issue remains documented in `APP-ISSUES.md`.
-- Live captures include sandbox eGovPH sign-in, an eGov AI response, the hosted Face Liveness entry page, and eGovPay test checkout. No camera verification or payment was completed. Other flows are local samples. The keyboard and notification are editorial visualizations, not proof of native iOS behavior or SMS delivery. Keep these disclosures.
-- No application changes were pushed or deployed. The provider checkout remains a test transaction.
-- Conservative DICT credit reserve: 43. The later additional allowance of 50 calls remains unused. Do not reset quota or spend beyond explicit authorization.
+`render-corrections.cjs` renders changed picture regions and splices them at verified source keyframes. It invokes `finish_delivery.py --preserve-guide` to retain the PDF. Full delivery verification includes locked narration hashes. Do not blindly rerun this one-off correction script on arbitrary future edits without revalidating its source splice points.
 
-## Publishing and future work
+## Preserve the accepted direction
 
-Record voice, align subtitles to the final performance, listen on headphones and a phone speaker, then export the narrated submission. Keep the Scott Buckley CC BY attribution from `YOUTUBE-DESCRIPTION.txt`. The organizing instructions require a public or unlisted YouTube link; these Drive uploads are editing deliveries, and no YouTube upload has been made.
+Keep the exact-logo O transition, gradual background reveal, stable phone framing, deliberate camera moves and readable holds. Use natural typing timings and matching SFX, not fast uniform intervals. Keep all six relevant notification moments outside SSO. The music is lo-fi; do not restore the rejected cinematic track.
 
-The reusable skill is installed at `C:/Users/matth/.codex/skills/video-production/SKILL.md`. Invoke `$video-production` in a future task. Its ZIP includes a general planning, research, capture, motion, sound and review process, plus reusable iPhone overlays and helper scripts.
+The complete Face Liveness and cash-test payment recordings are the evidence for those flows. Preserve the rendered outcomes and returns. Do not replace them with entry pages or make local samples appear to be completed government transactions. The cash gateway's Mark as Paid control is explicitly a sandbox test, and Face Liveness on the fictional SSO account is not a National ID demographic match.
+
+The original chest-pain example was excluded because it was routed as routine. Keep the demonstrated skin/rash query and the nurse-confirmation disclaimer. See APP-ISSUES.md for application findings. This task did not deploy application fixes.
+
+## Budget and next step
+
+The conservative local API reserve is 169. The latest allowance began at 93 and permits up to 100 additional calls, for a reserve ceiling of 193. This includes conservative estimates and provider UI requests; it is not a portal-confirmed charge. No more calls are needed for this edit, and no quota reset was performed.
+
+Record the team narration using the timed guide, align it to the picture, and check the mix on headphones and a phone speaker. The organizing instructions require a public or unlisted YouTube link; no YouTube upload has been made. Keep music licensing information with publication notes.
+
+The reusable skill is installed at `C:/Users/matth/.codex/skills/video-production/SKILL.md`; invoke `$video-production` in a future task. It includes planning, reference study, capture, motion, audio, narration timing, review and reusable phone overlays.
+
+## Capture evidence and exact restore paths
+
+- Final cash capture: captures/cash-final/page@a8ca193e28568bbb3d37ad5f14336b5a.webm. Prepared footage: remotion/public/cash-final.mp4. Timing: source/cash-final-markers.json. Evidence: output/remotion/qa/cash-final-source.json. Reference 4H57FWJAZX. Backend HTTP 200, provider egovpay, status paid, settled balance 300. The final recording waits for rendered Transaction Success and PAID, holds the result, clicks Go Back to Merchant and returns to the settled app.
+- Complete liveness capture: captures/complete-liveness/page@900d897c221e2723d6c6110b81d08cfa.webm. Prepared footage: remotion/public/complete-liveness.mp4. Evidence: source/complete-liveness-evidence.json, HTTP 200 verified true. The user participated at their camera. Preserve the challenge, callback and visible verified result.
+- Sample flow capture: captures/expanded-local/page@eb9a3c60c0ebc6a9c99440fce416d4d0.webm, prepared as remotion/public/expanded-local.mp4, with source/expanded-local-markers.json. Booking PGH-7688-JT, Dermatology Tomorrow 3:30 PM; sample report OTP 864947, case EGM-2026-189722. No actual government complaint was filed.
+- API reserve ledger: source/credit-ledger.json. Do not reset quota or initiate fresh calls for an edit that can use these recordings. The last allowance was 100 additional calls starting at reserve 93; reserve 169 is a conservative estimate, not a portal-confirmed charge.
+- Final verification: output/remotion/qa/final-verification.json. Narration locks: output/remotion/qa/locked-narration.json. Final contact sheet and transition sequences are in that same qa directory.
+- Current entry point: remotion/src/index.tsx. Motion modules: Opening.tsx, Architecture.tsx, IPhone.tsx, IPhoneInput.tsx and NativeNotifications.tsx. Timeline and wording: remotion/edit-data.json plus src/edit.ts.
+- Caption layout: finish_delivery_revision.py defines centered Default and left-side App ASS styles, both with MarginV 228. SRT contents and guide timing remain unchanged. For finishing from the current silent master, run python finish_delivery.py --preserve-guide.
+- Final clean-box regional patch: render-clean-backend.cjs and finish_backend_patch.py. It rendered global frames 14380–17099, preserved the clean master before the verified IDR at 14380, and preserved the viewing export before its verified IDR at 14500. This was a one-off optimization for the current source; verify keyframes again before reusing those exact cut points on another master.
+- Full rebuild: node render-film.cjs, followed by any required finishing with --preserve-guide if narration is still locked. Regenerating a guide PDF can change bytes even with the same text; keep the existing guide when requested.
+- Source packaging: python package_delivery.py. It includes the current source, prepared media, credits and verification. Apple SF Pro binaries are excluded. The general skill is installed in C:/Users/matth/.codex/skills/video-production and packaged locally as video-production-skill.zip.
+- Online application repo for Markdown notes: C:/Users/matth/egovmed-public, origin https://github.com/M4tyu633/egovmed, branch main, docs/video-demo. C:/Users/matth/egovmed is a different checkout; leave its unrelated changes alone.
+
+The original problem storyboard and rejected drafts are historical context only. Do not restore the old music, generic overseas stock, mismatched logo O, disconnected backend arrows, decorative backend strip, fast typing, missing liveness outcome or incomplete payment redirect. No BH Studios branding or deployment URL belongs in the video. The team name is Bisaya Hackers.

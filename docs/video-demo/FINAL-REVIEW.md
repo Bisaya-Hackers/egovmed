@@ -1,25 +1,33 @@
-# Final review and improvement record
+# eGovMed video review
 
-## Changes made after critique
+This 4:45 revision supersedes the earlier 3:58 cut. It uses Bisaya Hackers as the sole team name, excludes the deployment URL, and leaves narration for the team to record.
 
-The film was rebuilt around the approved Remotion storyboard. The rejected navy floating-card treatment and slogan pills were removed. The current cut uses the eGovMed identity, a credited PGH archive photograph, a logo-to-phone transition, camera moves through captured screens, and animated backend connection paths. The introduction was tightened by six seconds, bringing the film to 3:58.
+## Improvements
 
-The phone now has metal edges, a notch, status indicators, side buttons and a home indicator. The camera scale was adjusted to fit the additional hardware. In the typing shot, the camera was moved down so the field and keyboard remain readable. A textarea rollback at a capture boundary was corrected with a clearly labeled typing visualization. The revealed characters, key popups and clicks now use one clock. Analyze is disabled before input, and its tap aligns with the captured loading state.
+The opening now uses six three-second shots built from five verified Philippine General Hospital archive photographs. Each change uses a restrained directional reveal and a quiet matching transition sound. The final photograph matches the approved logo aperture. All overseas stock footage was rejected. PHOTO-CREDITS.md records attribution, archive context and image licenses. The pale background is revealed gradually as the image closes into the actual O cropped from the logo. The remaining letters appear around that same O, eliminating the mismatched-ring crossfade. The previously approved exact-logo transition is retained.
 
-The appointment notification uses the booking's department, time and reference, without TEST or please-ignore text. The camera reaches the upper phone before the banner appears. Its short original chime starts with the notification. The guide soundtrack has a musical ending, a six-second crossfade into that ending, gentle narration-window ducking and a final fade. Sounds suggesting successful identity verification or completed payment were removed because those actions were not completed.
+Camera moves were slowed and tied to actions, reading holds and outcomes. Unnecessary movement of the records screen was removed. Screen changes share the phone's position; the implementation diagram moves its phone into the closing position instead of jumping there. The diagram keeps service names visible and distinguishes requests from returned results.
 
-Actual hosted Face Liveness and eGovPay pages replaced the implied local-success conclusions. Source disclosures were moved to the top so they do not compete with subtitles. The payment close-up prioritizes the amount, transaction state and visible methods while excluding broken decorative provider assets. No transaction information was changed.
+SF Pro Text is used for the iPhone status bar, keyboards and notifications. Typing has varied intervals, word pauses, visible letter popups, numeric keypads, single-field caret focus, stable capitals and synchronized clicks. Input masks preserve captured result evidence and avoid text rolling backward at clip boundaries.
 
-The final privacy revision removes the deployment URL from the closing, subtitles, voice guide and publishing notes. The ending was rerendered from the preceding keyframe, retaining the 238-second duration and all 14,280 frames. The guide review also caught a Windows text-decoding artifact in an apostrophe; all caption and guide data now explicitly load as UTF-8.
+Notifications cover booking, saved records, benefit activation, confirmed payment, report OTP and report filing. No SSO notification was added. SMS-style and in-app-style messages remain distinct. The notification text contains no test/please-ignore prefix. UI effects are custom recreations, not Apple's actual system-sound recordings.
 
-## Practical limits
+The music is now the lo-fi track Sweet September by Arulo, from Mixkit. Its arrangement uses an interior phrase, crossfades and the original ending. Music and SFX remain separate, and the two viewing versions use identical picture and subtitle streams.
 
-Final checks passed for both viewing files: 238 seconds, 1920 x 1080, 60 fps, H.264 video and stereo 48 kHz AAC. Both files decoded fully without errors and have identical compressed video hashes. All 29 SRT cues are within the film and have no overlaps. Peaks are -9.95 dBFS with music and -28.26 dBFS without music. The SFX-only export correlates at 0.999911 with the intended SFX stem at gain 0.7. Reviewed final stills and temporal sequences include typing/key popups, notification entry, hosted pages, the repaired ending boundary and the final fade. The final identity is Bisaya Hackers only.
+The backend is now a visible blue box, with the phone and API connectors attached to its boundary ports. A single slow request/response example uses directional chevrons on the same curve as its connector, followed by grouped adapter highlights. The phone eases from the report scene into the diagram and returns to the exact closing position. Captions are raised 228 pixels; during phone scenes they occupy the unused left area, clear of keyboard and payment controls. The voice-over script, PDF and SRT wording/timing are locked and verified by file hashes.
 
-This is a prototype demonstration with explicit live, hosted and sample scopes. The opening is one credited archive photograph with motion; it is not new hospital documentary footage. The keyboard and notification are illustrative overlays. No biometric verification, payment or SMS delivery is claimed. An application triage issue remains in `APP-ISSUES.md`; it was not fixed or concealed by claiming a successful emergency-routing demonstration.
+## Completed external flows
 
-The final technical verification is recorded in `qa/final-verification.json`. Metadata, decode checks, stills, source timing and audio levels do not replace the team's final listen to its recorded voice on headphones and a phone speaker. The voice guide gives recording windows; the final narration performance may require small subtitle and mix adjustments.
+The user participated in the actual Face Liveness camera step. The footage includes the hosted instructions, camera guide and challenge, the callback and the app's Identity verified screen. The backend returned HTTP 200 with verified true. The fictional eGovPH sandbox account uses Face Liveness; this is not a National ID demographic match.
 
-## Best next improvement
+The payment sequence uses Cash Payments and the gateway's Mark as Paid test control. It includes the visible Transaction Success/PAID state, Go Back to Merchant, and the returned app showing Payment settled for 300 pesos. The backend returned HTTP 200, provider egovpay, status paid and balance 300. No real money was transferred.
 
-Record a calm, natural team voice-over to give the screen holds their intended pace. Let the confirmation, notification and closing moments breathe. Use the supplied SFX-only version if replacing the music, or the separate local picture and audio stems for a fully controlled mix. Keep the implementation and sample-data disclosures and music credit in the narrated submission.
+The first audit found a broken GrabPay test channel and also found that an overly broad polling guard could interrupt the gateway's essential status refresh. The successful capture uses the user-confirmed cash path and bounded necessary requests. Captures now wait for rendered success text and hold it before returning; fixed sleeps had missed the visible success state in an earlier recording.
+
+## Verification and limits
+
+Both exports passed full-file decoding, 4:45 duration, 1920 x 1080 at 60 fps, H.264/AAC validation, identical video-stream hashes and checks for all typing/notification windows. The SFX-only audio correlates at 0.999921 with the intended stem at gain 0.7. All 30 subtitle cues fit the video without overlaps. Audio peaks are -8.87 dBFS with music and -27.84 dBFS without music.
+
+Narration windows were checked using expanded spoken-word estimates at no more than 130 words per minute, with a pause allowance. The final line ends at 04:42.5 and the picture ends at 04:45.0. The three-page voice guide is intended for one narrator recording cues separately.
+
+Booking, record upload and report examples use local sample data. Keyboard and native-style notification overlays are editorial visualizations, not proof of native push support or SMS delivery. Some provider decorative assets remain imperfect in the actual checkout; transaction data and controls have not been repainted. App findings are recorded separately. Final checks include decoded video, frame/sequence inspection, source timing and audio levels; they are not a claim that a human listened to the eventual team voice mix.

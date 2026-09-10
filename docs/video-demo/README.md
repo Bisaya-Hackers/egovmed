@@ -1,26 +1,23 @@
 # eGovMed video demo
 
-Production notes for the 3:58 eGovMed demonstration by Bisaya Hackers.
+Production notes for the current 4:45 eGovMed demonstration by Bisaya Hackers. The two viewing versions share the same 1080p60 picture and English subtitles: one has lo-fi music and SFX, and the other retains SFX without music. Neither contains narration.
 
-**Revision in progress:** this cut passed technical export checks but was subsequently returned for missing liveness steps, an audit of other skipped actions, more faithful iPhone typography, slower typing and improved transitions. See [revision notes](REVISION-NOTES.md). The previous final review records checks on that delivered cut; it does not mean these new requests are complete.
+- [Voice-over script](VOICEOVER-SCRIPT.md): the locked recording text and windows, unchanged by the latest visual corrections.
+- [Editing handoff](HANDOFF.md): accepted decisions, capture evidence, source paths, budget and render commands.
+- [Final review](FINAL-REVIEW.md): completed improvements, validation and limitations.
+- [Storyboard](STORYBOARD.md): the current 4:45 timeline.
+- [App findings](APP-ISSUES.md): observed application and provider behavior.
+- [Photo credits](PHOTO-CREDITS.md): Philippine hospital archive images, adaptations and licensing.
+- [Verification](verification.json): checks on the latest viewing exports.
 
-- [Voice-over script](VOICEOVER-SCRIPT.md): recording windows and suggested speaker roles.
-- [Editing handoff](HANDOFF.md): source layout, rendering steps and accepted decisions.
-- [Final review](FINAL-REVIEW.md): improvements, validation results and remaining limitations.
-- [App findings](APP-ISSUES.md): behavior observed while capturing the demonstration.
-
-The delivered videos are 1920 x 1080 at 60 fps, with English subtitles. One includes music and SFX; the other retains SFX with music removed. Neither contains narration. The deployment URL is private and is excluded from the video and publishing copy.
-
-Video files, editable Remotion assets and verification reports are maintained separately from this application repository. Paths in the handoff refer to that production workspace.
-
-## Music attribution
-
-'A Kind Of Hope' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au
-
-[Track source](https://www.scottbuckley.com.au/library/a-kind-of-hope/) · [CC BY 4.0 license](https://creativecommons.org/licenses/by/4.0/)
-
-The track was edited, crossfaded and volume-automated for the film. Keep the attribution when publishing the music version.
+Keep the existing delivery folder and replace its videos in place. Do not create new folders or put source documents among the friend-facing viewing files. The private deployment URL is excluded from the film and publishing copy.
 
 ## Demonstration scope
 
-The film includes captured eGovPH sandbox sign-in, an eGov AI routing response, the hosted Face Liveness entry page and an eGovPay test checkout. No biometric check or payment was completed. Other flows use local samples; the iPhone keyboard and notification are editorial visualizations. No application fixes were deployed as part of video production.
+The film includes eGovPH sandbox sign-in, a recorded eGov AI result, a completed Face Liveness check with a real participant and app return, and an eGovPay Cash Payments test using Mark as Paid, visible Transaction Success/PAID, merchant return and the settled app balance. These are sandbox flows; no real payment or National ID demographic match is implied. Booking, record upload and report examples use sample data. Native-style keyboards, notifications and UI SFX are editorial recreations; they are not recordings of Apple's system sounds or proof of native push delivery. No application changes were deployed for this production task.
+
+## Music
+
+Sweet September by Arulo, from [Mixkit](https://mixkit.co/free-stock-music/lo-fi-beats/), under the [Mixkit Stock Music Free License](https://mixkit.co/license/#musicFree). The track is edited and volume-automated. The previously rejected soundtrack is not used.
+
+The source project and assets remain in the production workspace described in the handoff. SF Pro font binaries are intentionally excluded from shared source archives; obtain them separately under Apple's terms if rerendering.
