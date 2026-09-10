@@ -1,3 +1,5 @@
+**Latest delivery:** the narrated walkthrough now uses the clean picture and 32 captions matched to the actual recorded voice. The friend's added visual fades are excluded by request. See [current narrated-delivery notes](NARRATED-DELIVERY.md) and [editable captions](narration-matched.srt). The base-video notes below describe the earlier un-narrated deliverables.
+
 # eGovMed video demo
 
 Production notes for the current 4:45 eGovMed demonstration by Bisaya Hackers. The two viewing versions share the same 1080p60 picture and English subtitles: one has lo-fi music and SFX, and the other retains SFX without music. Neither contains narration.

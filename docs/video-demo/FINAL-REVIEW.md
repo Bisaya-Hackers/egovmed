@@ -1,3 +1,5 @@
+**Latest delivery:** the narrated walkthrough now uses the clean picture and 32 captions matched to the actual recorded voice. The friend's added visual fades are excluded by request. See [current narrated-delivery notes](NARRATED-DELIVERY.md) and [editable captions](narration-matched.srt). The base-video notes below describe the earlier un-narrated deliverables.
+
 # eGovMed video review
 
 This 4:45 revision supersedes the earlier 3:58 cut. It uses Bisaya Hackers as the sole team name, excludes the deployment URL, and leaves narration for the team to record.
