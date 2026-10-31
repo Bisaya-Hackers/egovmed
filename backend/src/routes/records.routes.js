@@ -44,17 +44,11 @@ router.post('/', requireAuth,
     res.status(201).json(record);
   }));
 
-// GET /records/:id/verify → "Lab result verified from another hospital ✓" (ownership-scoped, identity-gated like every other record route)
-router.get('/:id/verify', requireAuth, readLimit, validate(idParams, 'params'), asyncHandler(async (req, res) => {
-  await identityService.assertVerified(req.user.sub);
-  const result = await recordService.verifyRecord(req.params.id, req.user.sub);
-  await auditService.log({ actorId: req.user.sub, patientId: req.user.sub, action: 'records.verify', resourceType: 'health_record', resourceId: req.params.id, requestMeta: requestMeta(req) });
-  res.json(result);
-}));
-
 // GET /records/doctor-summary → AI history summary + verified labs (no repeat labs)
-// Tighter than plain reads: this fans out to the eGov AI /ai_assistant/generate endpoint (25s
-// timeout, real model call), so a hot loop here would trash our AI-integration budget.
+// This static route MUST stay above /:id routes or Express treats "doctor-summary" as an id and
+// rejects it against the rec_* schema before the handler runs.
+// Tighter than plain reads: this calls eGov AI once (25s timeout, real model call), so a hot loop
+// here would trash the integration budget. It never fans out eGovChain RPC reads.
 router.get('/doctor-summary', requireAuth,
   rateLimit({ scope: 'records-summary', max: 20, windowMs: 10 * 60_000 }),
   asyncHandler(async (req, res) => {
@@ -63,6 +57,14 @@ router.get('/doctor-summary', requireAuth,
     await auditService.log({ actorId: req.user.sub, patientId: req.user.sub, action: 'records.doctor_summary', resourceType: 'health_record', requestMeta: requestMeta(req) });
     res.json(summary);
   }));
+
+// GET /records/:id/verify → "Lab result verified from another hospital ✓" (ownership-scoped, identity-gated like every other record route)
+router.get('/:id/verify', requireAuth, readLimit, validate(idParams, 'params'), asyncHandler(async (req, res) => {
+  await identityService.assertVerified(req.user.sub);
+  const result = await recordService.verifyRecord(req.params.id, req.user.sub);
+  await auditService.log({ actorId: req.user.sub, patientId: req.user.sub, action: 'records.verify', resourceType: 'health_record', resourceId: req.params.id, requestMeta: requestMeta(req) });
+  res.json(result);
+}));
 
 // GET /records/:id → single record incl. decrypted PHI values (ownership-scoped, 404 on mismatch)
 router.get('/:id', requireAuth, readLimit, validate(idParams, 'params'), asyncHandler(async (req, res) => {

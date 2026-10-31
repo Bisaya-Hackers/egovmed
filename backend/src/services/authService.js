@@ -5,6 +5,7 @@ const { sign } = require('../lib/jwt');
 const { sha256Hex } = require('../lib/crypto');
 const { publicPatient } = require('../lib/presenters');
 const { env } = require('../config/env');
+const { isEgovSandboxPhone } = require('../lib/egovSandbox');
 
 // Deterministic patient id from the eGov uniqid → a concurrent first login can't create two rows.
 const patientIdFor = (egovSub) => 'pat_' + sha256Hex('egovsub:' + egovSub).slice(2, 22);
@@ -38,6 +39,10 @@ async function upsertAndIssue(profile) {
 
   const incoming = {
     egovSub: profile.egovSub,
+    // Immutable provenance derived from the eGovPH SSO response, never from a user-editable field.
+    // The official widget's five test accounts are fictional people; their demographics cannot
+    // match a hackathon tester's real selfie in eVerify.
+    egovSandboxAccount: isEgovSandboxPhone(profile.phone),
     firstName: profile.firstName,
     middleName: profile.middleName,
     lastName: profile.lastName,

@@ -1,0 +1,48 @@
+{
+  "eGovMed-demo.mp4": {
+    "duration": "285.000000",
+    "dimensions": [
+      1920,
+      1080
+    ],
+    "fps": "60/1",
+    "video_codec": "h264",
+    "audio_codec": "aac",
+    "audio_sample_rate": "48000",
+    "decoded_without_errors": true,
+    "video_hash": "SHA256=3c3f388fae958541c512bf825e81d65fd3bff1c0bd2b8ce86b151da5172139b6",
+    "peak_dbfs": -8.87,
+    "size": 57123227
+  },
+  "eGovMed-demo-no-music.mp4": {
+    "duration": "285.000000",
+    "dimensions": [
+      1920,
+      1080
+    ],
+    "fps": "60/1",
+    "video_codec": "h264",
+    "audio_codec": "aac",
+    "audio_sample_rate": "48000",
+    "decoded_without_errors": true,
+    "video_hash": "SHA256=3c3f388fae958541c512bf825e81d65fd3bff1c0bd2b8ce86b151da5172139b6",
+    "peak_dbfs": -27.84,
+    "size": 50686306,
+    "correlation_with_sfx_only_stem": 0.999921,
+    "typing_and_notification_audio_present": true,
+    "checked_sfx_windows": 12,
+    "five_opening_transition_sfx_present": true
+  },
+  "identical_compressed_video_streams": true,
+  "subtitles": {
+    "cue_count": 30,
+    "issues": []
+  },
+  "private_url_absent_from_subtitles": true,
+  "subtitle_utf8_check": true,
+  "narration_windows_fit_estimated_pace": true,
+  "within_submission_duration": true,
+  "locked_narration_and_srt_unchanged": true,
+  "caption_player_clearance_pixels": 228,
+  "phone_captions_use_negative_space": true
+}

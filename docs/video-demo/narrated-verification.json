@@ -1,0 +1,22 @@
+{
+  "duration_seconds": 285.013333,
+  "fps": "60/1",
+  "frames": 17100,
+  "dimensions": [
+    1920,
+    1080
+  ],
+  "audio_hash_matches_friends_recording": "SHA256=4e33d79316ea3a9b44cd2c85f02b33cfd71d2f8bf68ef0f3dad1fedb98196c68",
+  "audio_stream_copied_without_reencoding": true,
+  "caption_count": 32,
+  "one_background_per_caption": true,
+  "maximum_lines": 2,
+  "caption_time_overlaps": 0,
+  "caption_bottom_clearance": 228,
+  "max_speech_start_offset_seconds": 0.12,
+  "max_speech_end_offset_seconds": 0.252,
+  "full_decode_passed": true,
+  "audio_peak_dbfs": -3.75,
+  "picture_source": "Original clean 60fps master; friend visual fades excluded by user request",
+  "size": 61456625
+}

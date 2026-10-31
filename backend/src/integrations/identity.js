@@ -27,7 +27,17 @@ async function everifyToken() {
   const data = res && (res.data || res);
   const token = data && (data.access_token || data.token);
   if (!token) throw new Error('eVerify /api/auth returned no access_token');
-  tokenCache = { token, expiresAt: Date.now() + 50 * 60 * 1000 };
+  // The gateway returns its own `expires_at` (unix seconds, as a string) and it is SHORTER than an
+  // hour — measured at ~42 minutes. A flat 50-minute cache therefore hands out a dead token for the
+  // last several minutes of its life, and every /api/query in that window 401s for no visible
+  // reason. Trust the server's expiry, minus a 60s skew margin, and only fall back to a fixed TTL
+  // when the field is missing. Floored so a stale/skewed clock re-mints instead of caching a
+  // corpse, capped so a wrong-unit value can't pin a token forever.
+  const expiresAtMs = Number(data.expires_at) * 1000;
+  const ttlMs = Number.isFinite(expiresAtMs) && expiresAtMs > 0
+    ? expiresAtMs - Date.now() - 60_000
+    : 50 * 60 * 1000;
+  tokenCache = { token, expiresAt: Date.now() + Math.min(Math.max(ttlMs, 30_000), 60 * 60 * 1000) };
   return token;
 }
 

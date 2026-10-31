@@ -96,6 +96,14 @@ export default function Home({ c, lang, S, A }) {
             </div>
           ))}
         </div>
+      ) : !S.patientSynced ? (
+        // "No upcoming appointments" is an assertion about the patient's record, and until
+        // /appointments has answered we do not have one. Showing it early meant a patient with a
+        // booking read "you have none" and then watched the card appear underneath it.
+        <div data-stagger className="card" role="status" style={{ border: '1.5px dashed var(--border)', background: 'transparent', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--muted)', fontWeight: 600 }}>
+          <span className="spinner" />
+          <span>{lang === 'tl' ? 'Tinitingnan ang iyong mga appointment…' : 'Checking your appointments…'}</span>
+        </div>
       ) : (
         <div data-stagger className="card" style={{ border: '1.5px dashed var(--border)', background: 'transparent', textAlign: 'center' }}>
           <div style={{ fontWeight: 700 }}>{c.noAppts}</div>

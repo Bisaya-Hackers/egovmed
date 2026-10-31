@@ -11,6 +11,13 @@ const isLive = () => cfg.mode === 'live';
 // The mode-prefix (`test_` / `live_`) on the API token is NOT part of the HMAC key; the eGovPay
 // sandbox rejects the digest otherwise (unprocessable_entity "The digest is not valid.").
 const hmacKey = () => String(cfg.token || '').replace(/^(test_|live_)/, '');
+// The portal currently displays the bare sandbox key, while the payment gateway requires the
+// header value to carry a `test_` mode prefix. Preserve an explicit test_/live_ prefix when an
+// operator supplied one; otherwise treat a bare portal key as sandbox-only. The HMAC still uses
+// the bare key above, per the gateway contract.
+const apiTokenForHeader = (token = cfg.token) => /^(test_|live_)/.test(String(token || ''))
+  ? String(token)
+  : `test_${String(token || '')}`;
 const digestFor = (amount, txnid) => crypto.createHmac('sha256', hmacKey()).update(`${amount}|${txnid}`).digest('hex');
 const normalizePaymentStatus = (data = {}) => {
   const value = data.payment_status ?? data.status ?? data.state;
@@ -57,7 +64,7 @@ async function createCheckout({ amount, currency = 'PHP', description, items = [
       description: { purpose: description || 'Hospital services' },
     };
     const res = await http.post(`${cfg.baseUrl}/api/v1/transaction`, body, {
-      headers: { 'X-eGovPay-Token': cfg.token, 'Content-Type': 'application/json; charset=utf-8' },
+      headers: { 'X-eGovPay-Token': apiTokenForHeader(), 'Content-Type': 'application/json; charset=utf-8' },
     });
     const data = (res && (res.data || res)) || {};
     return {
@@ -90,7 +97,7 @@ async function getStatus(reference) {
   if (isLive()) {
     if (!cfg.token) throw new Error('eGovPay live mode requires EGOVPAY_TOKEN');
     const res = await http.get(`${cfg.baseUrl}/api/v1/transaction/${encodeURIComponent(reference)}`, {
-      headers: { 'X-eGovPay-Token': cfg.token, 'Content-Type': 'application/json; charset=utf-8' },
+      headers: { 'X-eGovPay-Token': apiTokenForHeader(), 'Content-Type': 'application/json; charset=utf-8' },
     });
     const data = (res && (res.data || res)) || {};
     return {
@@ -104,4 +111,4 @@ async function getStatus(reference) {
   return { reference, status, paidAt: status === 'paid' ? new Date().toISOString() : null, provider: 'mock' };
 }
 
-module.exports = { createCheckout, getStatus, normalizePaymentStatus };
+module.exports = { createCheckout, getStatus, normalizePaymentStatus, apiTokenForHeader };

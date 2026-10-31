@@ -92,6 +92,14 @@ async function verifyRecord(id, patientId) {
   const onChain = await chain.verifyAnchor(record.anchor?.hash, record.anchor?.txHash);
   const verified = integrityOk && onChain.verified;
 
+  // A successful explicit check is durable: the chain is immutable, so later summary reads can
+  // recompute local integrity and use this last-known confirmation without spending another RPC
+  // credit per lab. Never turn a prior confirmation off for a transient RPC outage.
+  if (onChain.verified && !record.anchor?.verified) {
+    record.anchor = { ...record.anchor, verified: true, verifiedAt: new Date().toISOString() };
+    await store.update(COLLECTIONS.RECORDS, id, { anchor: record.anchor });
+  }
+
   const view = present(record);
   return {
     recordId: id,
@@ -105,18 +113,33 @@ async function verifyRecord(id, patientId) {
   };
 }
 
-/** Doctor view: AI-summarized history + labs that RE-verify against the anchor (not the create-time flag). */
+/**
+ * Doctor view: AI-summarized history plus the labs whose last explicit chain check passed.
+ *
+ * Do not call verifyRecord() in a loop here. In live mode each check is a metered eth_call, and
+ * merely opening Records used to fan out one RPC request per lab. A citizen can still perform a
+ * fresh, single-record check by opening that record; this summary intentionally uses the stored
+ * last-known anchor status and recomputes local integrity without touching the gateway.
+ */
 async function buildDoctorSummary(patientId) {
-  const [records, triage] = await Promise.all([
-    listRecords(patientId),
+  const store = getStore();
+  const [rawRecords, triage] = await Promise.all([
+    store.findAll(COLLECTIONS.RECORDS, (r) => r.patientId === patientId),
     triageService.listForPatient(patientId),
   ]);
+  const records = rawRecords
+    .slice()
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map(present);
   const summary = await egovAi.summarizeHistory({ records, triage });
-  const verifiedLabs = [];
-  for (const lab of records.filter((r) => r.type === 'lab')) {
-    const v = await verifyRecord(lab.id, patientId);
-    if (v.verified) verifiedLabs.push({ id: lab.id, title: lab.title, sourceFacility: lab.sourceFacility });
-  }
+  const verifiedLabs = rawRecords.flatMap((raw) => {
+    if (!raw.anchor?.verified) return [];
+    let integrityOk = false;
+    try { integrityOk = contentHash(raw) === raw.anchor.hash; } catch { integrityOk = false; }
+    if (!integrityOk) return [];
+    const lab = present(raw);
+    return lab.type === 'lab' ? [{ id: lab.id, title: lab.title, sourceFacility: lab.sourceFacility }] : [];
+  });
   return { summary, verifiedLabs, recordCount: records.length, triageCount: triage.length };
 }
 

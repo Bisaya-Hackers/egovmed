@@ -1,0 +1,148 @@
+1
+00:00:01,917 --> 00:00:05,292
+A hospital visit begins before the consultation.
+
+2
+00:00:09,625 --> 00:00:13,833
+Patients still have to manage registration, medical records, and payment.
+
+3
+00:00:19,000 --> 00:00:22,875
+eGovMed brings those steps into one patient journey.
+
+4
+00:00:29,083 --> 00:00:33,333
+Sign in through eGovPH using a
+mobile number and a one-time code.
+
+5
+00:00:36,458 --> 00:00:38,917
+Enter the six-digit PIN to continue.
+
+6
+00:00:42,792 --> 00:00:46,583
+The account opens with the
+patient profile already available.
+
+7
+00:00:52,250 --> 00:00:56,333
+Describe the concern in everyday
+language, including Tagalog.
+
+8
+00:01:00,208 --> 00:01:05,125
+Here, the patient reports itchy skin
+and a rash that began yesterday.
+
+9
+00:01:10,583 --> 00:01:14,833
+This recorded eGov AI response
+suggests Dermatology.
+
+10
+00:01:18,042 --> 00:01:20,042
+A nurse must confirm the routing.
+
+11
+00:01:20,292 --> 00:01:22,083
+This is not a diagnosis.
+
+12
+00:01:26,792 --> 00:01:30,208
+The patient gives consent before
+the app opens Face Liveness.
+
+13
+00:01:34,375 --> 00:01:39,042
+Follow the camera guide and hold still
+while the service checks for a live person.
+
+14
+00:01:46,375 --> 00:01:52,542
+After the check, eGovMed receives the
+results and returns to the verified screen.
+
+15
+00:01:58,250 --> 00:02:03,000
+Choose a hospital, department,
+and an available appointment time.
+
+16
+00:02:07,167 --> 00:02:11,833
+The confirmation includes a booking
+reference and an SMS update.
+
+17
+00:02:18,458 --> 00:02:21,750
+Messages keep the
+appointment details easy to find.
+
+18
+00:02:28,167 --> 00:02:32,125
+Review records from different
+facilities in one place.
+
+19
+00:02:35,250 --> 00:02:40,542
+Add a document's details, save the
+record, and receive a confirmation.
+
+20
+00:02:45,542 --> 00:02:51,167
+The backend uses encrypted storage and
+fingerprints to check record integrity.
+
+21
+00:02:55,417 --> 00:02:59,833
+Activate an available benefit,
+then review the estimated bill.
+
+22
+00:03:05,333 --> 00:03:10,000
+Continue to eGovPay and choose
+cash payments in the test checkout.
+
+23
+00:03:14,250 --> 00:03:19,042
+For this demo, mark the test payment
+as paid and return to the app.
+
+24
+00:03:23,500 --> 00:03:26,625
+The confirmed status
+updates the payment record.
+
+25
+00:03:30,208 --> 00:03:33,667
+Choose a category and
+explain what happened.
+
+26
+00:03:46,542 --> 00:03:49,958
+Verify the phone number using
+the code sent by the SMS.
+
+27
+00:03:55,583 --> 00:03:59,042
+Keep the case reference and
+check the report confirmation.
+
+28
+00:04:03,750 --> 00:04:07,083
+The phone sends a request to the eGovMed backend.
+
+29
+00:04:11,667 --> 00:04:15,958
+The server calls a government service and sends the result back.
+
+30
+00:04:20,292 --> 00:04:22,458
+Separate adapters handle sign-in,
+
+31
+00:04:22,625 --> 00:04:28,458
+identity, messages, records, payments, and reporting.
+
+32
+00:04:35,417 --> 00:04:40,042
+eGovMed, built by Bisaya Hackers for the eGov hackathon.

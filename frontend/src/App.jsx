@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { DICT, CONST, CHANNELS, HOSPITALS, randomSlots } from './i18n/dict.js';
-import { api, getToken, setToken, demoExchangeCode } from './lib/api.js';
+import { api, getToken, setToken, demoExchangeCode, DEMO_MODE } from './lib/api.js';
 import { fallbackTriage } from './lib/triageFallback.js';
-import { runEverifyLivenessCapture, EVERIFY_CANCELLED } from './lib/everifySdk.js';
+import { runEverifyLivenessCapture, usesEverifySdk, EVERIFY_CANCELLED } from './lib/everifySdk.js';
+import { cameraLikelyBlocked, detectInAppBrowser } from './lib/inAppBrowser.js';
 import { makeRefNo } from './lib/refNo.js';
 import { Gear, Bell, Check } from './components/Icons.jsx';
 
@@ -34,19 +35,30 @@ const initial = () => ({
   lang: 'en', screen: 'signin', stack: [], textScale: 0,
   signingIn: false, signinErr: false,
   authMode: 'loading', authLaunchUrl: null, authCallbackUrl: null, everifyPubKey: null, flowError: null,
+  // "Login as eGov" widget config, served by GET /auth/config. partnerCode is the only credential
+  // the browser is allowed to hold; both are null unless the backend is in live SSO mode.
+  ssoPartnerCode: null, ssoHost: null,
   // An eGovPH exchange code lifted off the landing URL, held until the citizen taps sign-in.
   // In memory on purpose: see the mount effect for why it must never reach storage.
   pendingExchangeCode: null,
   // Names the dict entry behind flowError when there is one, so the message can be re-read in the
   // other language after the fact. null means flowError is already the only wording we have.
   flowErrorKey: null,
-  patientName: null, patientPhone: null, verificationMethod: 'face-liveness',
+  patientName: null, patientPhone: null, sandboxAccount: false, verificationMethod: 'face-liveness',
   symptom: '', recording: false, recSec: 0, thinking: false,
   emergency: false, liveness: 'idle', livenessSessionId: null,
+  // Names the chat app whose embedded browser is showing this page, when the face check is about
+  // to be run somewhere the camera cannot work. null in a real browser.
+  livenessBrowserName: null,
   // The server's own identityVerified, not the local capture state. null while /patients/me
   // has not answered yet, so a screen that gates on it can tell "unverified" from "don't know".
   // verifyReturnTo names the screen to land on once verification passes; null means booking.
   identityVerified: null, verifyReturnTo: null,
+  // False until syncPatientState has come back once. Screens use it to avoid asserting a fact
+  // they cannot know yet — "no upcoming appointments" is a claim, and rendering it before the
+  // server has answered means the page contradicts itself a second later. Same class of bug as
+  // the one Records had.
+  patientSynced: false,
   triage: null,
   booking: false, booked: false, slotLabel: '', refNo: makeRefNo(CONST.hospital),
   // One entry per department being booked this session. Starts with just the triaged
@@ -100,8 +112,10 @@ export default function App() {
   // after a liveness pass. Declared as a callback rather than inline in `A` because the resume
   // effect below needs it too, and `A` is rebuilt on every render so the effect can't close over it.
   const onPatientUpdated = useCallback((p) => set((prev) => ({
+    patientSynced: DEMO_MODE ? true : prev.patientSynced,
     patientName: p?.firstName || null,
     patientPhone: p?.phone || null,
+    sandboxAccount: typeof p?.sandboxAccount === 'boolean' ? p.sandboxAccount : prev.sandboxAccount,
     // A caller that doesn't carry the flag must not be read as "unverified".
     identityVerified: typeof p?.identityVerified === 'boolean' ? p.identityVerified : prev.identityVerified,
     ...(p?.identityVerified ? { liveness: 'verified' } : {}),
@@ -188,11 +202,13 @@ export default function App() {
       ]);
       const identityVerified = !!me?.identityVerified;
       // Home greeted a hardcoded "Rosa" from the dictionary regardless of who was signed in.
-      if (me?.firstName) set({ patientName: me.firstName });
-      if (me?.phone) set({ patientPhone: me.phone });
+      if (me) onPatientUpdated(me);
       // Records gates on this server-side. The mirrored liveness flag can't stand in for it:
       // it stays 'idle' for an unverified patient, which is indistinguishable from "not asked yet".
       if (me) set({ identityVerified });
+      // Set regardless of whether `me` came back: on a backend outage the screens still have to
+      // stop waiting and show their empty states rather than spinning forever.
+      set({ patientSynced: true });
       if (identityVerified) set({ liveness: 'verified' });
       if (Array.isArray(msgs)) set({ messages: msgs });
       if (Array.isArray(appts) && appts.length) {
@@ -241,6 +257,8 @@ export default function App() {
           // as EVERIFY_PUBKEY there is the single source of truth (see acceptConsent below).
           everifyPubKey: auth?.everifyPubKey || null,
           verificationMethod: auth?.verificationMethod || 'face-liveness',
+          ssoPartnerCode: auth?.ssoPartnerCode || null,
+          ssoHost: auth?.ssoHost || null,
         });
 
         const current = new URL(window.location.href);
@@ -345,6 +363,37 @@ export default function App() {
     })();
   }, [set, onPatientUpdated]);
 
+  // Spends an eGovPH exchange code for an eGovMed session. Shared by the two ways a code can
+  // arrive: parked off the landing URL by the mount effect (in-app launch), and handed over by the
+  // "Login as eGov" widget (browser sign-in). Both are single-use and short-lived, so the only
+  // difference between them is who supplies the string.
+  const redeemExchangeCode = useCallback(async (code) => {
+    if (!code) {
+      set({ signinErr: true, flowError: 'eGovPH did not return a sign-in code' });
+      return;
+    }
+    set({ signingIn: true, signinErr: false, flowError: null, flowErrorKey: null });
+    try {
+      const res = await api.login(code);
+      if (!res?.token) throw new Error('eGovPH returned no session token');
+      setToken(res.token);
+      const me = res.patient || await tryApi(api.me());
+      if (me) onPatientUpdated(me);
+      set({ pendingExchangeCode: null, signingIn: false, screen: 'home', stack: [], flowError: null });
+    } catch (err) {
+      const flowErrorKey = err?.data?.error?.code === 'egov_exchange_code_invalid' ? 'ssoCodeExpired' : null;
+      set((p) => ({
+        // Only a code eGovPH itself rejected gets dropped, so the button falls back to its
+        // normal job instead of re-spending something already dead. A network blip keeps it.
+        pendingExchangeCode: flowErrorKey ? null : p.pendingExchangeCode,
+        signingIn: false,
+        signinErr: true,
+        flowErrorKey,
+        flowError: (flowErrorKey && DICT[p.lang]?.[flowErrorKey]) || err.message || 'The eGovPH sign-in failed',
+      }));
+    }
+  }, [set, onPatientUpdated]);
+
   const A = {
     setLang: (l) => set({ lang: l }),
     cycleText: () => set((p) => ({ textScale: (p.textScale + 1) % 3 })),
@@ -364,34 +413,18 @@ export default function App() {
       // A code already in hand outranks the launch redirect: sending the citizen back to eGovPH
       // for a second code would strand the one they arrived with.
       if (S.pendingExchangeCode) {
-        set({ signingIn: true, signinErr: false, flowError: null, flowErrorKey: null });
-        try {
-          const res = await api.login(S.pendingExchangeCode);
-          if (!res?.token) throw new Error('eGovPH returned no session token');
-          setToken(res.token);
-          const me = res.patient || await tryApi(api.me());
-          if (me) onPatientUpdated(me);
-          set({ pendingExchangeCode: null, signingIn: false, screen: 'home', stack: [], flowError: null });
-        } catch (err) {
-          const flowErrorKey = err?.data?.error?.code === 'egov_exchange_code_invalid' ? 'ssoCodeExpired' : null;
-          set((p) => ({
-            // Only a code eGovPH itself rejected gets dropped, so the button falls back to its
-            // normal job instead of re-spending something already dead. A network blip keeps it.
-            pendingExchangeCode: flowErrorKey ? null : p.pendingExchangeCode,
-            signingIn: false,
-            signinErr: true,
-            flowErrorKey,
-            flowError: (flowErrorKey && DICT[p.lang]?.[flowErrorKey]) || err.message || 'The eGovPH sign-in failed',
-          }));
-        }
+        await redeemExchangeCode(S.pendingExchangeCode);
         return;
       }
 
       if (S.authMode === 'live') {
+        // An explicit partner launch URL still wins when one is configured — that is the in-app
+        // path, and it costs the citizen no OTP. Otherwise the sign-in screen renders the widget
+        // itself, so this button is not the way in and there is nothing to do here.
         if (S.authLaunchUrl && /^https:\/\//i.test(S.authLaunchUrl)) {
           window.location.assign(S.authLaunchUrl);
-        } else {
-          set({ signinErr: true, flowError: 'Open eGovMed from the eGovPH app, or configure EGOVPH_LAUNCH_URL.' });
+        } else if (!S.ssoPartnerCode) {
+          set({ signinErr: true, flowError: 'eGovPH sign-in is not configured on the server.' });
         }
         return;
       }
@@ -419,6 +452,11 @@ export default function App() {
     setSymptom: (v) => set({ symptom: v }),
     addChip: (t) => set((p) => { const s = p.symptom.trim(); return { symptom: s ? s.replace(/[.,]$/, '') + ', ' + t.toLowerCase() : t }; }),
     toggleRec: () => {
+      if (DEMO_MODE) {
+        set({ symptom: S.lang === 'tl' ? 'May ubo ako simula kahapon.' : 'I have had a mild cough since yesterday.' });
+        toast(S.lang === 'tl' ? 'Halimbawang sintomas lamang; walang microphone na ginamit.' : 'Sample symptoms added. No microphone was used.');
+        return;
+      }
       if (S.recording) {
         if (recTimer.current) { clearInterval(recTimer.current); recTimer.current = null; }
         if (recognizer.current) { try { recognizer.current.stop(); } catch { /* already stopped */ } recognizer.current = null; }
@@ -509,7 +547,8 @@ export default function App() {
         ? c.recordsLockedDeclined
         : (S.lang === 'tl' ? 'Kailangan ang pag-verify para makapag-book ng appointment' : "You'll need to verify your identity to book an appointment"));
     },
-    acceptConsent: async () => {
+    // `force` skips the in-app-browser gate below — the patient chose "try anyway".
+    acceptConsent: async ({ force = false } = {}) => {
       // retryLiveness() re-enters here from the Liveness screen itself — only push 'consent' onto
       // the back stack when we're actually arriving from it, or repeated retries pile up duplicate
       // entries and Back takes as many presses as the patient made attempts.
@@ -519,6 +558,16 @@ export default function App() {
         liveness: 'capturing',
         flowError: null,
       }));
+      // Most citizens arrive from a link in Messenger or Facebook, which opens the app inside the
+      // chat app's own webview. That webview has no usable camera grant, so the eVerify iframe
+      // dead-ends on "Camera is not accessible" with no permission prompt to accept and nothing
+      // on screen to do about it. Say it up front, while there is still a screen to say it on —
+      // once the SDK's full-screen overlay is up, the only way out is its X button.
+      // The check is UA-based, so it can be wrong: 'try anyway' has to stay one tap away.
+      if (!force && usesEverifySdk(S) && cameraLikelyBlocked()) {
+        set({ liveness: 'blocked', livenessBrowserName: detectInAppBrowser(), flowError: null });
+        return;
+      }
       // Records gates on the server's identityVerified, not on this local flag, so pull the
       // patient back down before the screen offers to continue — otherwise verification passes
       // and the list we return to is still locked.
@@ -533,9 +582,9 @@ export default function App() {
         // eVerify's /api/query. Off by default — see docs on VITE_EVERIFY_SDK_ENABLED.
         // The backend owns this switch (VERIFICATION_METHOD) so flipping providers is one env var
         // in one place rather than two kept in sync across two Vercel projects. The build-time flag
-        // remains an override for local development.
-        const useEverifySdk = import.meta.env.VITE_EVERIFY_SDK_ENABLED === 'true' || S.verificationMethod === 'everify';
-        if (useEverifySdk) {
+        // remains an override for local development. Shared with the Liveness screen, which has to
+        // reach the same answer to know whether the camera is ours or the SDK's.
+        if (usesEverifySdk(S)) {
           // Backend /auth/config first (one place to set and rotate the key, no frontend rebuild);
           // VITE_EVERIFY_PUBKEY stays as a local/offline override when the backend has none.
           const sid = await runEverifyLivenessCapture(S.everifyPubKey || import.meta.env.VITE_EVERIFY_PUBKEY);
@@ -575,7 +624,10 @@ export default function App() {
     // Account edits patient fields through its own local state, so without this the header
     // greeting and phone kept showing the pre-edit values until a full reload.
     onPatientUpdated,
+    redeemExchangeCode,
     retryLiveness: () => A.acceptConsent(),
+    // "Try anyway" from the in-app-browser card: run the capture despite the UA check.
+    forceLiveness: () => A.acceptConsent({ force: true }),
 
     // Booking + eMessage
     goBook: () => {
@@ -691,7 +743,7 @@ export default function App() {
             : p.appointments,
         }));
         if (paid) {
-          toast(S.lang === 'tl' ? 'Ipinadala ang resibo sa SMS' : 'Receipt texted to you');
+          toast(DEMO_MODE ? 'Demo receipt created. No SMS was sent.' : S.lang === 'tl' ? 'Ipinadala ang resibo sa SMS' : 'Receipt texted to you');
           A.pushNotification('payment_confirmed', { amount, apptId: S.payingApptId });
         }
       } catch (err) {
@@ -821,6 +873,7 @@ export default function App() {
 
   return (
     <div className="device" style={{ fontSize: FONT[S.textScale] }}>
+      {DEMO_MODE && <aside className="offline-demo-banner" aria-label="Demo notice"><strong>Interactive demo</strong><span>This build runs without the government APIs. Sample data only; identity, bookings, messages and payments are simulated.</span></aside>}
       {/* utility strip */}
       <header className="util">
         <Wordmark height={20} />

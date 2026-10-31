@@ -38,7 +38,7 @@ Set every row **for `Production` environment**. Values come straight from your l
 NODE_ENV=production
 PORT=4000                    # Vercel ignores this but env.js still reads it
 STORE_DRIVER=kv
-APP_URL=<paste after frontend deploy>   ← e.g. https://egovmed.vercel.app
+APP_URL=<paste after frontend deploy>   ← e.g. https://egovmed-frontend.vercel.app
 API_PUBLIC_URL=<self URL>               ← e.g. https://egovmed-backend.vercel.app
 JWT_SECRET=<your 64-hex from .env>
 PHI_ENCRYPTION_KEY=<your 64-hex from .env>

@@ -6,6 +6,7 @@ const { getStore, COLLECTIONS } = require('../store');
 const { randomId, sha256Hex, timingSafeEqualStr } = require('../lib/crypto');
 const { badRequest, notFound } = require('../lib/errors');
 const logger = require('../lib/logger');
+const { smsRecipientFor } = require('../lib/recipient');
 
 /**
  * One-time SMS codes, shaped after the liveness session in identityService: patient-bound,
@@ -59,11 +60,21 @@ async function requestOtp({ patientId, purpose }) {
   const store = getStore();
   const patient = await store.findById(COLLECTIONS.PATIENTS, patientId);
   if (!patient) throw notFound('Patient not found');
-  // Always the number ON THE RECORD, never one supplied in the request — otherwise "prove you
+  // Always a number ON THE RECORD, never one supplied in the request — otherwise "prove you
   // control this phone" collapses into "type any number and read your own code back". A patient
-  // with no phone on file has nothing to prove control of, so the flow stops here and the client
+  // with nothing textable has nothing to prove control of, so the flow stops here and the client
   // sends them to Account rather than filing something unverified in their name.
-  if (!patient.phone) {
+  //
+  // Deliberate, and weaker than it looks on a demo deployment: when NOTIFY_DEFAULT_PHONE is set,
+  // an unedited SSO persona's code goes to that shared handset instead of "their" number, so the
+  // challenge proves control of the demo phone rather than of the patient's. That is accepted
+  // because the alternative is worse — the sandbox +63909... numbers cannot receive SMS at all, so
+  // without it no code is ever delivered and report filing, which is gated on this, is
+  // uncompletable end to end. A patient who sets their own number in Account is back to the real
+  // guarantee (recipientFor puts an edited number ahead of the default), and the default is
+  // refused at boot in a non-mock production deployment.
+  const { to: otpTo } = smsRecipientFor(patient);
+  if (!otpTo) {
     throw badRequest('Add your mobile number in Account first — we text a 6-digit code to confirm it is you.');
   }
 
@@ -74,7 +85,7 @@ async function requestOtp({ patientId, purpose }) {
   // to verify against, so a complaint can never be filed on the strength of a code that was never
   // delivered. eMessage.send logs its own failure reason without `to` or the auth token.
   await eMessage.send({
-    to: patient.phone,
+    to: otpTo,
     channel: 'sms',
     subject: 'eGovMed verification code',
     body: `${code} is your eGovMed code to file a report. It expires in 5 minutes. Do not share it with anyone.`,
@@ -97,7 +108,10 @@ async function requestOtp({ patientId, purpose }) {
   return {
     challengeId,
     expiresInSeconds: TTL_MS / 1000,
-    maskedPhone: maskPhone(patient.phone),
+    // The number the code actually went to, not the one on the profile — masking the profile
+    // number while texting a different handset tells the patient to check a phone that will
+    // never ring.
+    maskedPhone: maskPhone(otpTo),
     // In mock mode no SMS actually leaves the process, so without this the flow is uncompletable
     // offline and on staging (EMESSAGE_MODE=mock there). Gated on the adapter's own mode rather
     // than NODE_ENV: a live-credentialed deployment must never hand the code back over the API,

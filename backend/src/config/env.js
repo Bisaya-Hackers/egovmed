@@ -70,7 +70,7 @@ const env = {
   egovph: {
     mode: modeFor('EGOVPH'),
     // SSO host (per apidocumentation/eGovPH-SSO-API.md). Token endpoint: {baseUrl}/api/token
-    baseUrl: process.env.EGOVPH_BASE_URL || 'https://hackathon-sso.e.gov.ph',
+    baseUrl: process.env.EGOVPH_BASE_URL || 'https://platforms-api.e.gov.ph/egov-sso',
     partnerCode: process.env.EGOVPH_PARTNER_CODE || process.env.EGOVPH_CLIENT_ID || '',
     partnerSecret: process.env.EGOVPH_PARTNER_SECRET || process.env.EGOVPH_CLIENT_SECRET || '',
     scope: process.env.EGOVPH_SCOPE || 'SSO_AUTHENTICATION',
@@ -79,14 +79,14 @@ const env = {
   egovAi: {
     mode: modeFor('EGOV_AI'),
     // per apidocumentation/eGov-AI-API.md: POST /api/v1/egov/integration/token (access_code) → Bearer, then /ai_assistant/generate
-    baseUrl: process.env.EGOV_AI_BASE_URL || '',
+    baseUrl: process.env.EGOV_AI_BASE_URL || 'https://platforms-api.e.gov.ph/egov-ai',
     accessCode: process.env.EGOV_AI_ACCESS_CODE || '',
     category: process.env.EGOV_AI_CATEGORY || 'PH',
   },
   everify: {
     mode: modeFor('EVERIFY'),
     // NIDAS eVerify (per apidocumentation/eVerify-NationalID-API.md): /api/auth → /api/query
-    baseUrl: process.env.EVERIFY_BASE_URL || 'https://hackathon-everify-api.e.gov.ph',
+    baseUrl: process.env.EVERIFY_BASE_URL || 'https://platforms-api.e.gov.ph/everify',
     clientId: process.env.EVERIFY_CLIENT_ID || '',
     clientSecret: process.env.EVERIFY_CLIENT_SECRET || '',
     pubKey: process.env.EVERIFY_PUBKEY || '', // eVerify liveness widget public key (client-side; optional)
@@ -110,19 +110,25 @@ const env = {
     callbackUrl: process.env.FACE_LIVENESS_CALLBACK_URL || '',
     minConfidence: int(process.env.FACE_LIVENESS_MIN_CONFIDENCE, 95),
   },
+  // Where notifications actually land. eGovPH's sandbox hands back +63909000000N personas whose
+  // numbers no carrier will ever deliver to, so on a demo deployment every SMS the app "sends"
+  // disappears. NOTIFY_DEFAULT_PHONE is the one reachable handset that stands in for them; unset
+  // (the production default) the behaviour is exactly what it was before.
+  notify: {
+    defaultPhone: (process.env.NOTIFY_DEFAULT_PHONE || '').trim(),
+  },
   eMessage: {
     mode: modeFor('EMESSAGE'),
     // per apidocumentation/eMessage-API.md: POST /messaging/v1/sms/push, X-EMESSAGE-Auth header
-    baseUrl: process.env.EMESSAGE_BASE_URL || 'https://ws-message.e.gov.ph',
+    baseUrl: process.env.EMESSAGE_BASE_URL || 'https://platforms-api.e.gov.ph/emessage',
     authToken: process.env.EMESSAGE_AUTH_TOKEN || process.env.EMESSAGE_API_KEY || '',
     senderId: process.env.EMESSAGE_SENDER_ID || 'eGovMed',
   },
   egovChain: {
     mode: modeFor('EGOVCHAIN'),
-    // per apidocumentation/eGovChain-API.md: Hyperledger Besu QBFT, zero-fee (gasPrice 0), chainId 13371
+    // Live portal: credential base_url + / + token, Hyperledger Besu QBFT, gasPrice 0, chain 13371.
     rpcUrl: process.env.EGOVCHAIN_RPC_URL || 'https://hackathon-blockchain.e.gov.ph',
     chainId: int(process.env.EGOVCHAIN_CHAIN_ID, 13371),
-    contractAddress: process.env.EGOVCHAIN_CONTRACT_ADDRESS || '',
     // .trim() collapses the most common paste-error path (trailing newline / space / CR).
     // Without this, ethers.getBytes rejects the whitespaced value and echoes the FULL
     // still-valid key into err.message — which the anchorHash catch block would then log.
@@ -204,12 +210,19 @@ function warnIfMisconfigured(log) {
   if (env.egovChain.mode === 'live' && !/^0x[0-9a-fA-F]{64}$/.test(env.egovChain.privateKey)) {
     throw new Error('EGOVCHAIN_PRIVATE_KEY must be "0x" + 64 hex chars (check for trailing whitespace, quotes, or CRLF from a paste).');
   }
-  // Same rationale as the private-key check above, gated the same way: without this, EGOVCHAIN_MODE=live
-  // with an empty/malformed contract address boots successfully, then every POST /records 500s (anchoring
-  // is fail-closed) and every existing record's verify badge silently goes grey (verifyAnchor fail-safes
-  // to unverified) — the failure only surfaces on the first real write, not at boot.
-  if (env.egovChain.mode === 'live' && !/^0x[0-9a-fA-F]{40}$/.test(env.egovChain.contractAddress)) {
-    throw new Error('EGOVCHAIN_CONTRACT_ADDRESS must be "0x" + 40 hex chars when EGOVCHAIN_MODE=live.');
+  // eMessage rejects anything that is not E.164, and it does so at send time — which for the OTP
+  // path is inside a fail-closed block, so a typo here would surface as "report filing is broken"
+  // rather than "that env var is malformed". Check it at boot instead.
+  if (env.notify.defaultPhone && !/^\+63\d{10}$/.test(env.notify.defaultPhone)) {
+    throw new Error('NOTIFY_DEFAULT_PHONE must be E.164 Philippine mobile: "+63" followed by 10 digits.');
+  }
+  // Loud, but not fatal. This redirects every unedited patient's SMS to one handset, which is
+  // indefensible in a real citizen-facing deployment — and also the only way an evaluator watching
+  // a demo ever sees a message arrive, because eGovPH's sandbox personas carry undialable numbers.
+  // A hard throw would take the whole backend down mid-demo over a variable somebody set on
+  // purpose, so this warns at every boot instead and the README says to unset it before launch.
+  if (env.notify.defaultPhone && env.isProd) {
+    log.warn('NOTIFY_DEFAULT_PHONE is set: every notification for a patient who has not set their own number in Account goes to that one handset. Demo affordance — unset it for a real deployment.');
   }
   if (env.isProd && !env.allowMockInProduction) {
     // All eight eGov integrations must be live + credentialed once the mock escape hatch is off.
@@ -226,7 +239,7 @@ function warnIfMisconfigured(log) {
       [env.eReport.mode === 'live' && env.eReport.baseUrl && env.eReport.accessCode
         && env.eReport.location.regionCode && env.eReport.location.provinceCode
         && env.eReport.location.municipalityCode && env.eReport.location.barangayCode, 'eReport'],
-      [env.egovChain.mode === 'live' && env.egovChain.contractAddress && env.egovChain.privateKey, 'eGovChain'],
+      [env.egovChain.mode === 'live' && env.egovChain.rpcUrl && env.egovChain.privateKey, 'eGovChain'],
       [env.egovAi.mode === 'live' && env.egovAi.accessCode && env.egovAi.baseUrl, 'eGov AI'],
     ];
     const missing = requirements.filter(([ok]) => !ok).map(([, name]) => name);
