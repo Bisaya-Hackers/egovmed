@@ -9,17 +9,20 @@ stack. Pilot target: Philippine General Hospital (PGH).
 
 | | |
 |---|---|
-| **Live app** | **https://egovmed.vercel.app** |
-| **API** | https://egovmed-api.vercel.app/health |
-| **Repository** | https://github.com/M4tyu633/egovmed |
-| **Team** | Bisaya-Hackers. Matthew Labrador, Clarence Pagaduan, Paul Recio, Harry Gomez, Hans Lao, Javier Mendoza |
-| **Event** | eGov Hackathon PH 2026 |
+| **Live app** | **https://egovmed-frontend.vercel.app** (backend: https://egovmed-backend.vercel.app/health) |
+| **Second deployment** | https://egovmed.vercel.app, deployed by Matthew from [M4tyu633/egovmed](https://github.com/M4tyu633/egovmed), with real eGovPH SSO |
+| **Team** | Bisaya-Hackers (UP Manila) |
+| **Result** | Top 5 winner, eGovPH Hackathon 2026. Announced for implementation in the eGovPH Super App (announced, not yet shipped) |
 | **Stack** | React 18 + Vite · Node/Express · Upstash Redis · Hyperledger Besu · Vercel |
 
 ### Try it in 30 seconds
 
-Open **https://egovmed.vercel.app**, tap **Login via eGovPH**, and sign in with a sandbox
-account. The dialog lists all five and keeps them on screen through every step:
+Open **https://egovmed-frontend.vercel.app** and tap sign in. SSO runs in mock mode on this
+deployment on purpose, so there is no account to create. Each device gets its own demo patient
+with seeded records.
+
+To see the real eGovPH sign-in, open https://egovmed.vercel.app, tap **Login via eGovPH**, and use
+a sandbox account:
 
 | Mobile number | One-time code | PIN |
 |---|---|---|
@@ -27,9 +30,6 @@ account. The dialog lists all five and keeps them on screen through every step:
 
 Mobile number only. On the hackathon SSO credentials an account resolves from a number rather
 than an email address, so the widget is configured to offer just that one path.
-
-All eight eGov APIs run **live** against the API Developer Portal gateway
-(`https://platforms-api.e.gov.ph/<service>`). No legacy `hackathon-*` host is in use.
 
 ---
 
@@ -62,23 +62,30 @@ All eight eGov APIs run **live** against the API Developer Portal gateway
 ## Integration status
 
 Every integration runs in one of two modes, `mock` or `live`, selected per service by an
-environment variable. This is deliberate: development costs no API credits, and the demo stays
-functional when a government endpoint is down. No integration was flipped to `live` until its
-credentials and response shape had been verified against the real API.
+environment variable. Development costs no API credits, and the demo stays functional when a
+government endpoint is down.
 
-**All eight are live in production.** `GET /integrations/status` (admin-keyed) reports the
-running state at any moment; the table below is what it returns today.
+Status as of Oct 31, 2026. Only the SSO row can be read publicly, from `GET /auth/config`. The other
+rows are the last value written down, with its date, until someone with the admin key re-reads them.
 
-| eGov API | Prod mode | Gateway base | What it does here |
-|---|---|---|---|
-| **eGovPH SSO** | **live** | `platforms-api.e.gov.ph/egov-sso` | Login as eGov widget → `exchange_code` → session, profile auto-fill |
-| **eGov AI** | **live** | `platforms-api.e.gov.ph/egov-ai` | Symptom triage, EN/TL/Taglish → `{specialty, urgency, red_flags}` |
-| **eVerify** | **live** | `platforms-api.e.gov.ph/everify` | PhilSys demographic match under recorded consent; gates record access |
-| **Face Liveness** | **live** | `platforms-api.e.gov.ph/face-liveness` | Live-person capture during ID verification |
-| **eMessage** | **live** | `platforms-api.e.gov.ph/emessage` | Appointment confirmations, reminders, report-filing OTP |
-| **eGovChain** | **live** | `platforms-api.e.gov.ph/egovchain/{token}` | Hash-only record anchoring on Besu (calldata strategy) |
-| **eGovPay** | **live** | `platforms-api.e.gov.ph/egovpay` | Hosted checkout with statutory discounts applied |
-| **eReport** | **live** | `platforms-api.e.gov.ph/ereport` | File and track complaints by case number, auto-escalate stale ones |
+| Integration | This repo's deployment (`egovmed-backend`) | Matthew's deployment (`egovmed-api`) |
+|---|---|---|
+| eGovPH SSO | **mock, on purpose** (checked Oct 31) | **live** (checked Oct 31) |
+| eVerify | not in use: verification method is `face-liveness` (checked Oct 31) | verification method is `everify` (checked Oct 31). Mode recorded live, Sept 2026 |
+| Face Liveness | recorded live, Aug 2026 | recorded live, Sept 2026 |
+| eGov AI | recorded live, Aug 2026. Falls back to the rule-based classifier if upstream is down | recorded live, Sept 2026 |
+| eGovPay | recorded live, Aug 2026 | recorded live, Sept 2026 |
+| eGovChain | recorded live, Aug 2026 | recorded live, Sept 2026 |
+| eMessage | recorded mock, Aug 2026 | recorded live, Sept 2026 |
+| eReport | recorded mock, Aug 2026 | recorded live, Sept 2026 |
+
+Production SSO stays mock because no launch URL was issued, and live mode would leave a visitor
+at a sign-in button that goes nowhere ([docs/state-of-play.md](docs/state-of-play.md)). The running
+state of every integration comes from the admin-keyed route:
+
+```bash
+curl -sS -H "x-admin-key: $ADMIN_KEY" https://egovmed-backend.vercel.app/integrations/status
+```
 
 `ALLOW_MOCK_IN_PRODUCTION` is the guard that stops a mocked integration serving fake data to a
 real citizen: with it off, the backend refuses to boot unless all eight are live **and**
@@ -111,8 +118,8 @@ went here rather than into features.
 **Protecting health data**
 - PHI is encrypted at rest with a versioned envelope. The decryptor reads both v1 and v2 records
   so a format change never orphans existing data.
-- On-chain anchoring is hash-only. `anchorLive` strips payloads down to `{type, anchoredAt}`
-  before submission, so no patient ID, facility, or clinical content ever reaches the chain
+- On-chain anchoring is hash-only. `anchorLive` writes only the record's SHA-256 hash into
+  transaction calldata, so no patient ID, facility, or clinical content ever reaches the chain
   (Data Privacy Act 2012).
 - Identity verification writes an auditable consent receipt. The eVerify response carries heavy
   PII that is deliberately never persisted beyond the fields the service already stores.
@@ -150,7 +157,7 @@ went here rather than into features.
   payment data to a real patient.
 
 **Verification**
-- 59 backend tests, security regression suite included, required to pass before merge.
+- 66 backend tests, security regression suite included, required to pass before merge.
 - CI runs backend tests, dependency audits on both packages, CodeQL `security-extended`, and a
   TruffleHog secret scan.
 - Branch protection on `main` with those checks required and force-push blocked.
@@ -178,7 +185,7 @@ flowchart LR
     end
 
     KV[("Upstash Redis<br/>sessions · encrypted PHI")]
-    GOV["<b>platforms-api.e.gov.ph</b><br/>all 8 eGov APIs, live"]
+    GOV["<b>platforms-api.e.gov.ph</b><br/>the 8 eGov APIs"]
 
     W -.->|"exchange_code"| UI
     UI -->|"HTTPS · Bearer · CORS pinned"| R
@@ -259,12 +266,13 @@ credentials at all. That is what makes the demo resilient to sandbox outages.
 | **openssl** | any | To generate the three local secrets below. Git Bash on Windows includes it |
 
 No eGov credentials are needed to run the app. `INTEGRATION_MODE=mock` (the default) runs the
-whole product with zero gateway calls.
+whole product with zero gateway calls. For a build with no backend at all, set
+`VITE_DEMO_MODE=true` on the frontend: sample data, no network, with a banner saying so.
 
 ### Setup
 
 ```bash
-git clone https://github.com/M4tyu633/egovmed.git
+git clone https://github.com/Bisaya-Hackers/egovmed.git
 cd egovmed
 ```
 
@@ -297,7 +305,7 @@ openssl rand -hex 32
 cd backend && npm test
 ```
 
-59 tests, including the security regression suite. Then:
+66 tests, including the security regression suite. Then:
 
 ```bash
 cd frontend && npm run build
@@ -423,8 +431,8 @@ Two Vercel projects from one repository:
 
 | Project | Root | Notes |
 |---|---|---|
-| `egovmed` | `frontend/` | Static build. The CSP lives in `frontend/vercel.json` |
-| `egovmed-api` | `backend/` | Serverless function, region `sin1`, `maxDuration` 30s |
+| `egovmed-frontend` | `frontend/` | Static build. The CSP lives in `frontend/vercel.json` |
+| `egovmed-backend` | `backend/` | Serverless function, region `sin1`, `maxDuration` 30s |
 
 Set the backend variables in the Vercel dashboard as **Sensitive**, which makes them unreadable
 after they are set. Preview deployments intentionally cannot boot, so no preview build can reach
