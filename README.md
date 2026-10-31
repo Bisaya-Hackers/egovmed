@@ -9,20 +9,15 @@ stack. Pilot target: Philippine General Hospital (PGH).
 
 | | |
 |---|---|
-| **Live app** | **https://egovmed-frontend.vercel.app** (backend: https://egovmed-backend.vercel.app/health) |
-| **Second deployment** | https://egovmed.vercel.app, deployed by Matthew from [M4tyu633/egovmed](https://github.com/M4tyu633/egovmed), with real eGovPH SSO |
+| **Live app** | **https://egovmed.vercel.app** (API: https://egovmed-api.vercel.app/health) |
+| **Deployed from** | [M4tyu633/egovmed](https://github.com/M4tyu633/egovmed), Matthew's copy of this code |
 | **Team** | Bisaya-Hackers (UP Manila) |
 | **Result** | Top 5 winner, eGovPH Hackathon 2026. Announced for implementation in the eGovPH Super App (announced, not yet shipped) |
 | **Stack** | React 18 + Vite · Node/Express · Upstash Redis · Hyperledger Besu · Vercel |
 
 ### Try it in 30 seconds
 
-Open **https://egovmed-frontend.vercel.app** and tap sign in. SSO runs in mock mode on this
-deployment on purpose, so there is no account to create. Each device gets its own demo patient
-with seeded records.
-
-To see the real eGovPH sign-in, open https://egovmed.vercel.app, tap **Login via eGovPH**, and use
-a sandbox account:
+Open **https://egovmed.vercel.app**, tap **Login via eGovPH**, and sign in with a sandbox account:
 
 | Mobile number | One-time code | PIN |
 |---|---|---|
@@ -65,26 +60,24 @@ Every integration runs in one of two modes, `mock` or `live`, selected per servi
 environment variable. Development costs no API credits, and the demo stays functional when a
 government endpoint is down.
 
-Status as of Oct 31, 2026. Only the SSO row can be read publicly, from `GET /auth/config`. The other
-rows are the last value written down, with its date, until someone with the admin key re-reads them.
+Status of https://egovmed.vercel.app as of Oct 31, 2026. SSO and the verification method can be
+read publicly from `GET /auth/config`. The rest are the last recorded values, from September 2026.
 
-| Integration | This repo's deployment (`egovmed-backend`) | Matthew's deployment (`egovmed-api`) |
+| Integration | Mode | How we know |
 |---|---|---|
-| eGovPH SSO | **mock, on purpose** (checked Oct 31) | **live** (checked Oct 31) |
-| eVerify | not in use: verification method is `face-liveness` (checked Oct 31) | verification method is `everify` (checked Oct 31). Mode recorded live, Sept 2026 |
-| Face Liveness | recorded live, Aug 2026 | recorded live, Sept 2026 |
-| eGov AI | recorded live, Aug 2026. Falls back to the rule-based classifier if upstream is down | recorded live, Sept 2026 |
-| eGovPay | recorded live, Aug 2026 | recorded live, Sept 2026 |
-| eGovChain | recorded live, Aug 2026 | recorded live, Sept 2026 |
-| eMessage | recorded mock, Aug 2026 | recorded live, Sept 2026 |
-| eReport | recorded mock, Aug 2026 | recorded live, Sept 2026 |
+| eGovPH SSO | **live** | Checked Oct 31, `/auth/config` |
+| eVerify | recorded live | Verification method `everify` checked Oct 31. Mode recorded Sept 2026 |
+| Face Liveness | recorded live | Recorded Sept 2026 |
+| eGov AI | recorded live | Recorded Sept 2026 |
+| eMessage | recorded live | Recorded Sept 2026 |
+| eGovChain | recorded live | Recorded Sept 2026 |
+| eGovPay | recorded live | Recorded Sept 2026 |
+| eReport | recorded live | Recorded Sept 2026 |
 
-Production SSO stays mock because no launch URL was issued, and live mode would leave a visitor
-at a sign-in button that goes nowhere ([docs/state-of-play.md](docs/state-of-play.md)). The running
-state of every integration comes from the admin-keyed route:
+The running state of every integration comes from the admin-keyed route:
 
 ```bash
-curl -sS -H "x-admin-key: $ADMIN_KEY" https://egovmed-backend.vercel.app/integrations/status
+curl -sS -H "x-admin-key: $ADMIN_KEY" https://egovmed-api.vercel.app/integrations/status
 ```
 
 `ALLOW_MOCK_IN_PRODUCTION` is the guard that stops a mocked integration serving fake data to a
@@ -431,8 +424,8 @@ Two Vercel projects from one repository:
 
 | Project | Root | Notes |
 |---|---|---|
-| `egovmed-frontend` | `frontend/` | Static build. The CSP lives in `frontend/vercel.json` |
-| `egovmed-backend` | `backend/` | Serverless function, region `sin1`, `maxDuration` 30s |
+| `egovmed` | `frontend/` | Static build. The CSP lives in `frontend/vercel.json` |
+| `egovmed-api` | `backend/` | Serverless function, region `sin1`, `maxDuration` 30s |
 
 Set the backend variables in the Vercel dashboard as **Sensitive**, which makes them unreadable
 after they are set. Preview deployments intentionally cannot boot, so no preview build can reach
