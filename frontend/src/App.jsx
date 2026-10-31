@@ -873,7 +873,7 @@ export default function App() {
 
   return (
     <div className="device" style={{ fontSize: FONT[S.textScale] }}>
-      {DEMO_MODE && <aside className="offline-demo-banner" aria-label="Demo notice"><strong>Interactive demo</strong><span>The hackathon APIs are offline. Sample data only; identity, bookings, messages and payments are simulated.</span></aside>}
+      {DEMO_MODE && <aside className="offline-demo-banner" aria-label="Demo notice"><strong>Interactive demo</strong><span>This build runs without the government APIs. Sample data only; identity, bookings, messages and payments are simulated.</span></aside>}
       {/* utility strip */}
       <header className="util">
         <Wordmark height={20} />

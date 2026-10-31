@@ -1,7 +1,7 @@
 // Thin client for the eGovMed backend. Base URL from VITE_API_BASE_URL (default /api, proxied in dev).
 // The session token from login is attached as a Bearer on every authed call.
 import { demoRequest } from './demo.js';
-export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE !== 'false';
+export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 const BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const SESSION_KEY = 'egovmed.session';

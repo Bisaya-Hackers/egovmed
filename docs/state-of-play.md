@@ -11,8 +11,10 @@ technical team's evaluation. The draft reply is in the "Judge access" section be
 
 | | URL | Deploys from |
 | --- | --- | --- |
-| Production frontend | https://egovmed.vercel.app | `main`, automatic |
-| Production backend | https://egovmed-api.vercel.app | `main`, automatic |
+| Production frontend | https://egovmed-frontend.vercel.app | `main`, automatic |
+| Production backend | https://egovmed-backend.vercel.app | `main`, automatic |
+| Matthew's deployment, frontend | https://egovmed.vercel.app | `M4tyu633/egovmed`, not this repo |
+| Matthew's deployment, backend | https://egovmed-api.vercel.app | `M4tyu633/egovmed`, not this repo |
 | Staging frontend | https://egovmed-frontend-git-staging-starrayxs-projects.vercel.app | `staging` branch |
 | Staging backend | https://egovmed-backend-git-staging-starrayxs-projects.vercel.app | `staging` branch |
 

@@ -1,6 +1,6 @@
 eGovMed brings the public-hospital patient journey into one app. Patients can describe symptoms, find a department, verify their identity, book a visit, pay, and access their medical records. The interface supports English and Tagalog, with symptom input in Taglish too.
 
-Built by Bisaya-Hackers, a Top 30 team in eGov Hackathon 2026, the prototype is designed around a proposed Philippine General Hospital (PGH) pilot.
+Built by Bisaya-Hackers, a Top 5 winner of the eGovPH Hackathon 2026, the prototype is designed around a proposed Philippine General Hospital (PGH) pilot.
 
 ## System architecture
 
@@ -75,7 +75,7 @@ sequenceDiagram
 
 The public repository includes the application source, setup instructions, environment examples, architecture diagrams, API integration notes, and backend tests. It runs locally in mock mode by default, so reviewers do not need government API credentials or credits.
 
-[View the public repository](https://github.com/M4tyu633/egovmed-showcase)
+[View the public repository](https://github.com/Bisaya-Hackers/egovmed)
 
 ## Prototype scope
 
